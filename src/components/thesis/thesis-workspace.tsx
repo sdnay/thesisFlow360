@@ -1,84 +1,70 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ThesisDashboardSection } from "./thesis-dashboard-section";
-import { BrainDumpSection } from "./brain-dump-section";
-import { DailyPlanSection } from "./daily-plan-section";
-import { PomodoroSection } from "./pomodoro-section";
-import { SourceLibrarySection } from "./source-library-section";
-import { AiTaskManagerPage } from "@/components/thesis/ai-task-manager-page"; // Importation du gestionnaire de tâches
-import { LayoutDashboard, Brain, Target, Timer, Library, ListTodo } from 'lucide-react'; // Ajout de ListTodo
-import { ScrollArea } from "@/components/ui/scroll-area";
+// Ce composant n'est plus utilisé comme conteneur d'onglets principal
+// suite à la restructuration vers des pages dédiées.
+// Vous pouvez le supprimer ou le réutiliser pour un autre usage si besoin.
+// Pour l'instant, je le laisse avec un contenu minimal pour éviter des erreurs d'importation
+// si d'autres fichiers y faisaient encore référence (ce qui ne devrait plus être le cas
+// après la refonte de src/app/(app)/page.tsx).
 
-const workspaceTabs = [
-  { value: "dashboard", label: "Tableau de Bord", Icon: LayoutDashboard, Component: ThesisDashboardSection },
-  { value: "tasks", label: "Gestion Tâches", Icon: ListTodo, Component: AiTaskManagerPage }, // Nouvel onglet
-  { value: "brain-dump", label: "Vide-Cerveau", Icon: Brain, Component: BrainDumpSection },
-  { value: "daily-plan", label: "Plan du Jour", Icon: Target, Component: DailyPlanSection },
-  { value: "pomodoro", label: "Pomodoro", Icon: Timer, Component: PomodoroSection },
-  { value: "sources", label: "Sources", Icon: Library, Component: SourceLibrarySection },
-];
+// import { useState, useEffect } from "react";
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// import { ThesisDashboardSection } from "./thesis-dashboard-section";
+// import { BrainDumpSection } from "./brain-dump-section";
+// import { DailyPlanSection } from "./daily-plan-section";
+// import { PomodoroSection } from "./pomodoro-section";
+// import { SourceLibrarySection } from "./source-library-section";
+// import { AiTaskManagerPage } from "@/components/thesis/ai-task-manager-page";
+// import { LayoutDashboard, Brain, Target, Timer, Library, ListTodo } from 'lucide-react';
+// import { ScrollArea } from "@/components/ui/scroll-area";
 
-export function ThesisWorkspace() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+// const workspaceTabs = [
+//   { value: "dashboard", label: "Tableau de Bord", Icon: LayoutDashboard, Component: ThesisDashboardSection },
+//   { value: "tasks", label: "Gestion Tâches", Icon: ListTodo, Component: AiTaskManagerPage },
+//   { value: "brain-dump", label: "Vide-Cerveau", Icon: Brain, Component: BrainDumpSection },
+//   { value: "daily-plan", label: "Plan du Jour", Icon: Target, Component: DailyPlanSection },
+//   { value: "pomodoro", label: "Pomodoro", Icon: Timer, Component: PomodoroSection },
+//   { value: "sources", label: "Sources", Icon: Library, Component: SourceLibrarySection },
+// ];
 
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hashValue = window.location.hash.replace("#", "");
-      const targetTab = workspaceTabs.find(tab => tab.value === hashValue);
+export function ThesisWorkspace_DEPRECATED() {
+  // const [activeTab, setActiveTab] = useState("dashboard");
 
-      if (targetTab) {
-        setActiveTab(targetTab.value);
-      } else {
-        // Default to "dashboard" if hash is empty, "#", or an invalid tab value
-        // Also ensures that if the URL is just `/`, dashboard is selected.
-        setActiveTab("dashboard");
-        if (window.location.hash && window.location.hash !== "#" && window.location.hash !== "#dashboard") {
-          // If there was an invalid hash, redirect to dashboard visually
-          // window.location.hash = "dashboard"; // Avoids loop if already on dashboard
-        } else if (!window.location.hash || window.location.hash === "#") {
-           // If at root or just '#', explicitly set hash to dashboard for consistency
-           // if (activeTab !== "dashboard") window.location.hash = "dashboard"; // Avoids loop
-        }
-      }
-    };
+  // useEffect(() => {
+  //   const handleHashChange = () => {
+  //     const hashValue = window.location.hash.replace("#", "");
+  //     const targetTab = workspaceTabs.find(tab => tab.value === hashValue);
 
-    handleHashChange(); // Set initial tab based on hash
-    window.addEventListener('hashchange', handleHashChange, false);
+  //     if (targetTab) {
+  //       setActiveTab(targetTab.value);
+  //     } else {
+  //       setActiveTab("dashboard");
+  //       if (window.location.hash && window.location.hash !== "#" && window.location.hash !== "#dashboard") {
+  //         // window.location.hash = "dashboard"; 
+  //       } else if (!window.location.hash || window.location.hash === "#") {
+  //         // if (activeTab !== "dashboard") window.location.hash = "dashboard"; 
+  //       }
+  //     }
+  //   };
 
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange, false);
-    };
-  }, []); // Empty dependency array is correct here as workspaceTabs is stable.
+  //   handleHashChange(); 
+  //   window.addEventListener('hashchange', handleHashChange, false);
 
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    window.location.hash = value; // Update hash on tab click
-  };
+  //   return () => {
+  //     window.removeEventListener('hashchange', handleHashChange, false);
+  //   };
+  // }, []);
+
+  // const handleTabChange = (value: string) => {
+  //   setActiveTab(value);
+  //   window.location.hash = value; 
+  // };
 
   return (
-    <div className="flex flex-col h-full p-1 md:p-2 bg-background">
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-grow flex flex-col overflow-hidden">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 mb-1 md:mb-2 sticky top-0 bg-background z-10 p-1 rounded-lg shadow-sm">
-          {workspaceTabs.map(tab => (
-            <TabsTrigger key={tab.value} value={tab.value} className="text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 data-[state=active]:shadow-md">
-              <tab.Icon className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        
-        <ScrollArea className="flex-grow rounded-md border bg-card shadow-inner">
-          {workspaceTabs.map(tab => (
-            <TabsContent key={tab.value} value={tab.value} className="mt-0">
-              {/* Render component only if it's the active tab to avoid unnecessary loads */}
-              {activeTab === tab.value && <tab.Component />}
-            </TabsContent>
-          ))}
-        </ScrollArea>
-      </Tabs>
+    <div className="p-4 text-center text-muted-foreground">
+      <p>L&apos;ancien espace de travail a été remplacé par des pages dédiées.</p>
+      <p>Veuillez utiliser la navigation latérale.</p>
     </div>
   );
 }

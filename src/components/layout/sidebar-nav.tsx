@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+// useEffect et useState pour currentHash ne sont plus nécessaires
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -17,48 +17,32 @@ import {
   Target,
   Timer,
   Library,
-  HomeIcon, // Conserver HomeIcon pour le lien principal vers l'espace de travail
+  // HomeIcon n'est plus utilisé de la même manière
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Définition des éléments de navigation de la barre latérale
+// Définition des éléments de navigation de la barre latérale avec les nouvelles routes
 const navItems = [
-  { href: '/', label: 'Espace de Travail', icon: HomeIcon, tooltip: 'Vue d\'ensemble de l\'espace de travail' },
-  { href: '/#dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
-  { href: '/#tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
-  { href: '/#brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
-  { href: '/#daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
-  { href: '/#pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
-  { href: '/#sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
+  { href: '/dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
+  { href: '/tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
+  { href: '/brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
+  { href: '/daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
+  { href: '/pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
+  { href: '/sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { state: sidebarState } = useSidebar();
-  const [currentHash, setCurrentHash] = useState('');
-
-  useEffect(() => {
-    const updateHash = () => {
-      setCurrentHash(window.location.hash);
-    };
-
-    updateHash(); // Set initial hash
-    window.addEventListener('hashchange', updateHash, false);
-    return () => {
-      window.removeEventListener('hashchange', updateHash, false);
-    };
-  }, []);
+  // currentHash et son useEffect sont supprimés
 
   return (
     <ScrollArea className="flex-1">
       <SidebarMenu>
         {navItems.map((item) => {
-          // Le lien principal '/' est actif si le pathname est '/'.
-          // Les liens d'ancre sont actifs si le pathname est '/' ET que le hash correspond.
-          const isActive = item.href === '/' 
-            ? pathname === '/' && (currentHash === '' || currentHash === '#') // Actif si à la racine sans hash spécifique (ou # seul)
-            : pathname === '/' && item.href.substring(1) === currentHash; // Comparer l'ancre
+          // La logique isActive est simplifiée pour correspondre au pathname exact
+          const isActive = pathname === item.href;
 
           return (
             <SidebarMenuItem key={item.href}>
