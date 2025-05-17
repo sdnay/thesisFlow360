@@ -3,7 +3,6 @@
 "use client";
 
 import { useState, type FC, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,19 +11,19 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListTree, Save, ExternalLink, Eye } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListTree, Save } from 'lucide-react';
 import type { Chapter } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 
-interface ChapterCardProps {
+interface ChapterCardItemProps {
   chapter: Chapter;
   onEdit: (chapter: Chapter) => void;
   onDelete: (chapterId: string) => void;
-  onAddCommentRequest: (chapterId: string) => void; // Renamed
+  onAddCommentRequest: (chapterId: string) => void;
   isLoadingActions: boolean;
 }
 
-const ChapterCardItem: FC<ChapterCardProps> = ({ chapter, onEdit, onDelete, onAddCommentRequest, isLoadingActions }) => { // Renamed component
+const ChapterCardItem: FC<ChapterCardItemProps> = ({ chapter, onEdit, onDelete, onAddCommentRequest, isLoadingActions }) => {
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
       <CardHeader className="pb-3">
@@ -91,8 +90,8 @@ export default function ManageThesisPlanPage() {
       let detailedMessage = "Une erreur inconnue est survenue lors du chargement des chapitres.";
       if (e && typeof e === 'object') {
         if ('message' in e && typeof e.message === 'string') detailedMessage = e.message;
-        const supabaseErrorDetails = e.details ? `Détails: ${e.details}` : '';
-        const supabaseErrorCode = e.code ? `Code: ${e.code}` : '';
+        const supabaseErrorDetails = (e as any).details ? `Détails: ${(e as any).details}` : '';
+        const supabaseErrorCode = (e as any).code ? `Code: ${(e as any).code}` : '';
         console.error(`Erreur fetchChapters: ${detailedMessage}`, supabaseErrorDetails, supabaseErrorCode, "Objet d'erreur complet:", e);
       } else {
         console.error("Erreur fetchChapters non-objet:", e);
@@ -143,7 +142,7 @@ export default function ManageThesisPlanPage() {
         name: currentChapter.name.trim(),
         progress: currentChapter.progress || 0,
         status: currentChapter.status?.trim() || 'Non commencé',
-        supervisor_comments: currentChapter.supervisor_comments || [], // Keep existing comments if editing
+        supervisor_comments: currentChapter.supervisor_comments || [],
       };
 
       if (currentChapter.id) {
@@ -157,7 +156,6 @@ export default function ManageThesisPlanPage() {
       }
       setIsEditModalOpen(false);
       setCurrentChapter(null);
-      // fetchChapters(); // Realtime listener will handle update
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -172,7 +170,6 @@ export default function ManageThesisPlanPage() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      // fetchChapters(); // Realtime listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -193,13 +190,9 @@ export default function ManageThesisPlanPage() {
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
       setNewCommentText('');
-      // fetchChapters(); // Realtime listener
-      // Optimistically update local state for immediate feedback if needed, or rely on realtime
       const updatedChapter = { ...chapterForComment, supervisor_comments: updatedComments };
       setChapterForComment(updatedChapter); 
       setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
-
-
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleSaveComment:", e);
@@ -221,10 +214,9 @@ export default function ManageThesisPlanPage() {
               .eq('id', chapterId);
           if (error) throw error;
           toast({ title: "Commentaire supprimé" });
-          // fetchChapters(); // Realtime
            const updatedChapter = { ...chapterToUpdate, supervisor_comments: updatedComments };
-           setChapterForComment(updatedChapter);
-           setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
+           setChapterForComment(updatedChapter); // Update the state for the modal
+           setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch)); // Update the main list
       } catch (e:any) {
           toast({ title: "Erreur de suppression du commentaire", description: e.message, variant: "destructive" });
       } finally {
@@ -278,7 +270,6 @@ export default function ManageThesisPlanPage() {
         </div>
       )}
 
-      {/* Edit/Add Chapter Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={(open) => {if (!isFormLoading) setIsEditModalOpen(open)}}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -293,6 +284,7 @@ export default function ManageThesisPlanPage() {
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="ex : Introduction, Revue de Littérature..."
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
             <div>
@@ -305,6 +297,7 @@ export default function ManageThesisPlanPage() {
                 value={currentChapter?.progress === undefined ? '' : currentChapter.progress}
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, progress: e.target.value === '' ? undefined : parseInt(e.target.value, 10) || 0 }))}
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
             <div>
@@ -315,6 +308,7 @@ export default function ManageThesisPlanPage() {
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, status: e.target.value }))}
                 placeholder="ex : Non commencé, En cours, Terminé"
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
           </div>
@@ -328,7 +322,6 @@ export default function ManageThesisPlanPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Comments Modal */}
       <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -358,6 +351,7 @@ export default function ManageThesisPlanPage() {
                 placeholder="Écrivez votre commentaire ici..."
                 rows={3}
                 disabled={isLoadingChapterActions}
+                className="text-sm"
               />
             </div>
           </div>

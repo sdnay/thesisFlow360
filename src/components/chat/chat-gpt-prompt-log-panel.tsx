@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry } from '@/types';
 import { processUserRequest, type ThesisAgentInput, type ThesisAgentOutput } from '@/ai/flows/thesis-agent-flow';
-import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, ThumbsUp, ThumbsDown, Edit } from 'lucide-react';
+import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, Edit } from 'lucide-react'; // Thumbs up/down removed for now
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -112,7 +112,7 @@ interface AgentMessage {
   text: string;
   timestamp: Date;
   actions?: ThesisAgentOutput['actionsTaken'];
-  isLoading?: boolean; // For agent's streaming-like placeholder
+  isLoading?: boolean;
 }
 
 export function ChatGPTPromptLogPanel() {
@@ -133,7 +133,7 @@ export function ChatGPTPromptLogPanel() {
         .from('prompt_log_entries')
         .select('*')
         .order('timestamp', { ascending: false })
-        .limit(10); 
+        .limit(5); // Limit to 5 recent logs for brevity in this panel
 
       if (supabaseError) throw supabaseError;
       setPromptLogs(data || []);
@@ -148,7 +148,6 @@ export function ChatGPTPromptLogPanel() {
 
   useEffect(() => {
     fetchPromptLogs();
-    // Optional: Setup realtime listener for prompt logs
      const channel = supabase
       .channel('db-promptlogs-panel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries' }, fetchPromptLogs)
@@ -167,7 +166,6 @@ export function ChatGPTPromptLogPanel() {
       text: currentUserRequest,
       timestamp: new Date(),
     };
-    // Add user message and a temporary loading message for agent
     setConversation(prev => [...prev, userMessage, { id: `agent-loading-${Date.now()}`, type: 'agent', text: 'L\'assistant réfléchit...', timestamp: new Date(), isLoading: true }]);
     
     const requestTextForAgent = currentUserRequest;
@@ -186,20 +184,7 @@ export function ChatGPTPromptLogPanel() {
         timestamp: new Date(),
         actions: result.actionsTaken,
       };
-      // Replace loading message with actual agent response
       setConversation(prev => [...prev.filter(m => !m.isLoading), agentResponseMessage]);
-
-      if (result.actionsTaken?.some(action => action.toolName === 'refinePromptTool' && action.toolOutput?.success)) {
-        // fetchPromptLogs(); // Realtime listener should handle this
-      }
-      // Toast only for significant actions or errors, not every message
-      if (result.actionsTaken && result.actionsTaken.length > 0) {
-        const actionSummary = result.actionsTaken.map(a => a.toolOutput?.message || a.toolName).join(', ');
-        // toast({ title: "Assistant IA", description: `Action(s) effectuée(s) : ${actionSummary}` });
-      } else if (!result.responseMessage.toLowerCase().includes("désolé") && !result.responseMessage.toLowerCase().includes("erreur")) {
-        // toast({ title: "Assistant IA", description: result.responseMessage });
-      }
-
 
     } catch (e: any) {
       console.error("Erreur avec l'agent IA:", e);
@@ -248,7 +233,7 @@ export function ChatGPTPromptLogPanel() {
               )}
               {conversation.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-2.5 rounded-lg text-sm shadow-sm ${msg.type === 'user' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-card text-foreground border rounded-bl-none'}`}>
+                  <div className={`max-w-[85%] p-2.5 rounded-lg text-sm shadow-sm ${msg.type === 'user' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-card text-card-foreground border rounded-bl-none'}`}>
                     {msg.isLoading ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> 
@@ -258,7 +243,7 @@ export function ChatGPTPromptLogPanel() {
                       <p className="whitespace-pre-wrap">{msg.text}</p>
                     )}
                     {msg.actions && msg.actions.length > 0 && (
-                      <details className="mt-1.5 text-xs opacity-80 pt-1 border-t border-dashed">
+                      <details className="mt-1.5 text-xs opacity-80 pt-1 border-t border-border/50">
                         <summary className="cursor-pointer font-medium">Détails des actions ({msg.actions.length})</summary>
                         <ul className="list-disc pl-4 mt-1 space-y-0.5">
                         {msg.actions.map((action, index) => (
@@ -276,7 +261,7 @@ export function ChatGPTPromptLogPanel() {
             </div>
           </ScrollArea>
 
-          <div className="space-y-2 border-t pt-3 mt-auto"> {/* Input area at the bottom */}
+          <div className="space-y-2 border-t pt-3 mt-auto">
             <Textarea
               id="agent-input-textarea"
               value={currentUserRequest}
@@ -305,7 +290,7 @@ export function ChatGPTPromptLogPanel() {
           
           <details className="border-t pt-3">
             <summary className="text-sm font-medium flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-              <History className="h-4 w-4" /> Historique des Prompts Affinés
+              <History className="h-4 w-4" /> Historique des Prompts Affinés (5 derniers)
             </summary>
             <div className="mt-2 flex-grow overflow-hidden flex flex-col">
               {isFetchingLogs ? (

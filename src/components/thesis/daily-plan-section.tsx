@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { DailyObjective } from '@/types';
-import { PlusCircle, Trash2, Edit3, Loader2, Target, Check, Save } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, Loader2, Target, Save } from 'lucide-react'; // Removed Check
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +25,7 @@ const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, 
   return (
     <div className={cn(
       "flex items-center justify-between p-3 rounded-lg border transition-colors duration-150",
-      objective.completed ? "bg-green-50 border-green-200 hover:bg-green-100" : "bg-card hover:bg-muted/30"
+      objective.completed ? "bg-green-50 border-green-300 hover:bg-green-100" : "bg-card hover:bg-muted/30"
     )}>
       <div className="flex items-center gap-3 flex-grow min-w-0">
         <Checkbox
@@ -63,7 +63,7 @@ export function DailyPlanSection() {
   const [newObjectiveText, setNewObjectiveText] = useState('');
   const [editingObjective, setEditingObjective] = useState<DailyObjective | null>(null);
   const [isFormLoading, setIsFormLoading] = useState(false);
-  const [isItemLoading, setIsItemLoading] = useState<string | null>(null); // For toggle/delete on individual items
+  const [isItemLoading, setIsItemLoading] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
@@ -105,7 +105,7 @@ export function DailyPlanSection() {
         setEditingObjective(null);
         toast({ title: "Objectif mis à jour" });
       } else {
-        if (objectives.filter(obj => !obj.completed).length >= 5) { // Allow up to 5 active objectives
+        if (objectives.filter(obj => !obj.completed).length >= 5) {
           toast({title: "Limite d'objectifs actifs", description: "Concentrez-vous sur 5 objectifs majeurs maximum par jour.", variant: "default"});
           setIsFormLoading(false);
           return;
@@ -164,9 +164,8 @@ export function DailyPlanSection() {
   const handleEditObjective = (objective: DailyObjective) => {
     setEditingObjective(objective);
     setNewObjectiveText(objective.text);
-    // Scroll to form for editing
     const formCard = document.getElementById('add-objective-card');
-    if (formCard) formCard.scrollIntoView({ behavior: 'smooth' });
+    if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   
   const completedCount = objectives.filter(obj => obj.completed).length;
@@ -191,7 +190,7 @@ export function DailyPlanSection() {
               value={newObjectiveText}
               onChange={(e) => setNewObjectiveText(e.target.value)}
               placeholder="ex : Finaliser le chapitre méthodologie"
-              className="flex-grow"
+              className="flex-grow text-sm"
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrUpdateObjective()}
               disabled={isFormLoading || isFetching}
               aria-label="Texte de l'objectif"
@@ -225,7 +224,7 @@ export function DailyPlanSection() {
             </CardContent>
         </Card>
         {objectives.length === 0 ? (
-            <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
                 <Target className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
                 <p className="text-muted-foreground">Aucun objectif défini pour aujourd'hui.</p>
                 <p className="text-xs text-muted-foreground">Ajoutez-en pour structurer votre journée !</p>

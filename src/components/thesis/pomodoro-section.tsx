@@ -5,20 +5,21 @@ import { useState, useEffect, useRef, type FC, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
-import { Play, Pause, RotateCcw, ListChecks, Trash2, Loader2, Timer, Save } from 'lucide-react';
+import { Play, Pause, RotateCcw, Trash2, Loader2, Timer } from 'lucide-react'; // Removed ListChecks, Save
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Label } from '@/components/ui/label'; // Added import
+
 
 const DEFAULT_SESSION_DURATION = 25; 
 const MAX_SESSION_DURATION = 120; 
-const MIN_SESSION_DURATION = 5; // Minimum 5 minutes
+const MIN_SESSION_DURATION = 5; 
 
 interface PomodoroLogItemProps {
   session: PomodoroSession;
@@ -66,7 +67,7 @@ export function PomodoroSection() {
         .from('pomodoro_sessions')
         .select('*')
         .order('start_time', { ascending: false })
-        .limit(20); // Fetch last 20 sessions
+        .limit(20);
       if (error) throw error;
       setPomodoroLog(data || []);
     } catch (e: any) {
@@ -79,7 +80,6 @@ export function PomodoroSection() {
 
   useEffect(() => {
     fetchPomodoroLog();
-    // Optional: Setup realtime listener for logs
     const channel = supabase
       .channel('db-pomodoro-page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pomodoro_sessions' }, fetchPomodoroLog)
@@ -99,8 +99,8 @@ export function PomodoroSection() {
     try {
       const actualDurationUsed = durationMinutes - Math.floor(timeLeft / 60);
       const newSessionPayload: Omit<PomodoroSession, 'id'> = {
-        start_time: new Date(Date.now() - (actualDurationUsed * 60 * 1000)).toISOString(), // Approximate start time
-        duration: actualDurationUsed > 0 ? actualDurationUsed : durationMinutes, // Log actual duration if reset early
+        start_time: new Date(Date.now() - (actualDurationUsed * 60 * 1000)).toISOString(),
+        duration: actualDurationUsed > 0 ? actualDurationUsed : durationMinutes,
         notes: sessionNotes || (completed ? `Session de ${durationMinutes} min terminée` : `Session de ${durationMinutes} min interrompue`),
       };
       const { error } = await supabase.from('pomodoro_sessions').insert(newSessionPayload);
@@ -168,7 +168,7 @@ export function PomodoroSection() {
   };
   
   const deleteLogItem = async (id: string) => {
-    setIsLogging(true); // Use general logging state for this simple operation
+    setIsLogging(true);
     try {
       const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id);
       if (error) throw error;
@@ -190,9 +190,10 @@ export function PomodoroSection() {
   const progressPercentage = ((durationMinutes * 60 - timeLeft) / (durationMinutes * 60)) * 100;
 
   useEffect(() => {
-    // Précharger l'audio pour éviter les délais au premier play
-    audioRef.current = new Audio('/sounds/notification.mp3'); // Assurez-vous que ce chemin est correct
-    audioRef.current.load();
+    if (typeof window !== "undefined") {
+      audioRef.current = new Audio('/sounds/notification.mp3'); 
+      audioRef.current.load();
+    }
   }, []);
 
 
@@ -223,7 +224,7 @@ export function PomodoroSection() {
               onChange={handleDurationChange}
               min={MIN_SESSION_DURATION}
               max={MAX_SESSION_DURATION}
-              className="w-full sm:w-24 text-center"
+              className="w-full sm:w-24 text-center text-sm"
               disabled={isActive || isLogging}
               aria-label="Durée de la session en minutes"
             />
@@ -233,7 +234,8 @@ export function PomodoroSection() {
             value={sessionNotes}
             onChange={(e) => setSessionNotes(e.target.value)}
             rows={2}
-            disabled={isLogging} // Can edit notes even if timer is active but not while logging
+            className="text-sm"
+            disabled={isLogging}
           />
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 p-4 md:p-6">

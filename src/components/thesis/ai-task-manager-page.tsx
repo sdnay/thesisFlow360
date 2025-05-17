@@ -20,11 +20,11 @@ import { useToast } from '@/hooks/use-toast';
 
 
 const taskTypeColors: Record<TaskType, string> = {
-  urgent: "border-red-400 bg-red-50 text-red-700",
-  important: "border-orange-400 bg-orange-50 text-orange-700",
-  reading: "border-green-400 bg-green-50 text-green-700",
-  chatgpt: "border-blue-400 bg-blue-50 text-blue-700",
-  secondary: "border-gray-400 bg-gray-50 text-gray-700",
+  urgent: "border-red-400 bg-red-50 text-red-700 hover:bg-red-100",
+  important: "border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100",
+  reading: "border-green-400 bg-green-50 text-green-700 hover:bg-green-100",
+  chatgpt: "border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100",
+  secondary: "border-gray-400 bg-gray-50 text-gray-700 hover:bg-gray-100",
 };
 
 const taskTypeLabels: Record<TaskType, string> = {
@@ -83,7 +83,7 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
 const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string, completed: boolean) => void, onDelete: (id: string) => void, onSetType: (id: string, type: TaskType) => void, onEdit: (task: Task) => void, isLoading: boolean }> = ({ task, onToggle, onDelete, onSetType, onEdit, isLoading }) => {
   return (
     <div className={cn(
-      "flex items-center justify-between p-3 rounded-lg border transition-all duration-150 hover:shadow-md",
+      "flex items-center justify-between p-3 rounded-lg border transition-all duration-150",
       taskTypeColors[task.type],
       task.completed && "opacity-70"
     )}>
@@ -310,7 +310,8 @@ export function AiTaskManagerPage() {
     setEditingTask(task);
     setManualTaskText(task.text);
     setManualTaskType(task.type);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top for edit form
+    const formCard = document.getElementById('manual-task-card');
+    if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -335,7 +336,7 @@ export function AiTaskManagerPage() {
             onChange={(e) => setInstructions(e.target.value)}
             placeholder="Entrez les instructions pour l'IA..."
             rows={3}
-            className="mb-3"
+            className="mb-3 text-sm"
             disabled={isAiLoading || isFetchingTasks}
           />
         </CardContent>
@@ -358,7 +359,7 @@ export function AiTaskManagerPage() {
         </Card>
       )}
 
-       <Card className="shadow-md">
+       <Card className="shadow-md" id="manual-task-card">
         <CardHeader>
           <CardTitle className="text-lg md:text-xl">{editingTask ? 'Modifier la Tâche' : 'Ajouter une Tâche Manuellement'}</CardTitle>
         </CardHeader>
@@ -367,7 +368,7 @@ export function AiTaskManagerPage() {
             value={manualTaskText}
             onChange={(e) => setManualTaskText(e.target.value)}
             placeholder="Description de la tâche..."
-            className="flex-grow"
+            className="flex-grow text-sm"
             disabled={isManualTaskLoading}
             aria-label="Description de la tâche"
           />

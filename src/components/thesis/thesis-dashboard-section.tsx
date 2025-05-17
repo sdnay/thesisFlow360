@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import * as DialogComponents from '@/components/ui/dialog';
 import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession, TaskType } from '@/types';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle, ExternalLink, Eye } from 'lucide-react';
+import { PlusCircle, Edit3, Eye, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -27,12 +27,12 @@ const taskTypeLabels: Record<TaskType, string> = {
   secondary: "Secondaire",
 };
 
-const taskTypeColors: Record<TaskType, string> = {
-  urgent: "border-red-500/50 bg-red-50 text-red-700",
-  important: "border-orange-500/50 bg-orange-50 text-orange-700",
-  reading: "border-green-500/50 bg-green-50 text-green-700",
-  chatgpt: "border-blue-500/50 bg-blue-50 text-blue-700",
-  secondary: "border-gray-500/50 bg-gray-50 text-gray-700",
+const taskTypeColorsShort: Record<TaskType, string> = {
+  urgent: "bg-red-500",
+  important: "bg-orange-500",
+  reading: "bg-green-500",
+  chatgpt: "bg-blue-500",
+  secondary: "bg-gray-500",
 };
 
 
@@ -60,7 +60,7 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEditModa
           <div className="mt-3">
             <h4 className="text-xs font-semibold text-muted-foreground mb-1">Commentaires récents :</h4>
             <ul className="list-disc list-inside text-xs space-y-0.5 max-h-16 overflow-y-auto custom-scrollbar pr-1">
-              {chapter.supervisor_comments.slice(-3).map((c, index) => ( 
+              {chapter.supervisor_comments.slice(-2).map((c, index) => ( 
                 <li key={index} className="truncate" title={c}>{c}</li>
               ))}
             </ul>
@@ -164,7 +164,7 @@ export function ThesisDashboardSection() {
   useEffect(() => {
     fetchAllData();
     const channel = supabase
-      .channel('db-changes-dashboard-section') // Unique channel name
+      .channel('db-changes-dashboard-section')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, fetchAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objectives' }, fetchAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchAllData)
@@ -270,7 +270,7 @@ export function ThesisDashboardSection() {
   }
 
   return (
-    <div className="p-3 md:p-4 space-y-4 md:space-y-6"> {/* Removed h-full overflow-y-auto */}
+    <div className="p-3 md:p-4 space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Tableau de Bord ThesisFlow</h1>
         <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter} size="sm">
@@ -285,7 +285,7 @@ export function ThesisDashboardSection() {
         </div>
       ) : (
         <>
-          <Card className="shadow-lg border-primary/20 bg-gradient-to-br from-card to-background">
+          <Card className="shadow-lg border-primary/20 bg-gradient-to-br from-card to-muted/20">
             <CardHeader>
               <CardTitle className="flex items-center text-primary text-lg md:text-xl">
                 <TrendingUp className="mr-2 h-5 w-5" />
@@ -393,24 +393,38 @@ export function ThesisDashboardSection() {
                       {tasksPending.length} en attente / {allTasks.length} au total.
                    </CardDescription>
                 </CardHeader>
-                <CardContent className="max-h-40 overflow-y-auto custom-scrollbar pr-1 text-xs">
+                <CardContent className="max-h-48 overflow-y-auto custom-scrollbar pr-1 text-xs">
                   {isLoadingTasks ? (
                     <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : (
-                    <div className="space-y-1.5">
-                      <p>En attente : <span className="font-semibold text-orange-600">{tasksPending.length}</span></p>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-semibold">En attente : </span>
+                        <span className="font-bold text-orange-600">{tasksPending.length}</span>
+                      </div>
                       {tasksPending.length > 0 && (
-                        <div className="pl-3 space-y-0.5">
+                        <div className="pl-2 space-y-1">
                           {Object.entries(taskTypeLabels).map(([type, label]) => {
                               const count = tasksPendingByType[type as TaskType] || 0;
                               if (count > 0) {
-                                  return <div key={type} className={cn("flex justify-between items-center", taskTypeColors[type as TaskType], "px-1.5 py-0.5 rounded-sm text-xs")}><span>{label}:</span> <Badge variant="secondary" className="text-xs h-5 px-1.5">{count}</Badge></div>;
+                                  return (
+                                    <div key={type} className="flex justify-between items-center text-xs">
+                                      <div className="flex items-center">
+                                        <span className={cn("w-2 h-2 rounded-full mr-1.5", taskTypeColorsShort[type as TaskType])}></span>
+                                        {label}:
+                                      </div>
+                                      <span className="font-semibold">{count}</span>
+                                    </div>
+                                  );
                               }
                               return null;
                           })}
                         </div>
                       )}
-                       <p className="pt-1">Terminées : <span className="font-semibold text-green-600">{tasksCompletedCount}</span></p>
+                       <div className="pt-1">
+                        <span className="font-semibold">Terminées : </span>
+                        <span className="font-bold text-green-600">{tasksCompletedCount}</span>
+                       </div>
                     </div>
                   )}
                 </CardContent>
@@ -486,11 +500,11 @@ export function ThesisDashboardSection() {
         </>
       )}
 
-      <Dialog open={isChapterModalOpen} onOpenChange={(open) => {if (!isSavingChapter) setIsChapterModalOpen(open)}}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{currentChapterForModal?.id ? 'Modifier le Chapitre' : 'Ajouter un Nouveau Chapitre'}</DialogTitle>
-          </DialogHeader>
+      <DialogComponents.Dialog open={isChapterModalOpen} onOpenChange={(open) => {if (!isSavingChapter) setIsChapterModalOpen(open)}}>
+        <DialogComponents.DialogContent>
+          <DialogComponents.DialogHeader>
+            <DialogComponents.DialogTitle>{currentChapterForModal?.id ? 'Modifier le Chapitre' : 'Ajouter un Nouveau Chapitre'}</DialogComponents.DialogTitle>
+          </DialogComponents.DialogHeader>
           <div className="space-y-4 py-4">
             <div>
               <Label htmlFor="dashChapterName" className="block text-sm font-medium mb-1">Nom du Chapitre</Label>
@@ -525,17 +539,15 @@ export function ThesisDashboardSection() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogComponents.DialogFooter>
             <Button variant="outline" onClick={() => {if(!isSavingChapter) setIsChapterModalOpen(false)}} disabled={isSavingChapter}>Annuler</Button>
             <Button onClick={handleSaveChapter} disabled={isSavingChapter || !currentChapterForModal?.name?.trim()}>
               {isSavingChapter ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4"/>}
               {isSavingChapter ? 'Enregistrement...' : (currentChapterForModal?.id ? 'Mettre à Jour' : 'Ajouter')}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DialogComponents.DialogFooter>
+        </DialogComponents.DialogContent>
+      </DialogComponents.Dialog>
     </div>
   );
 }
-
-    

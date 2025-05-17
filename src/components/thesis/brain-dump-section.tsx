@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { BrainDumpEntry } from '@/types';
-import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, CheckSquare, ArchiveRestore } from 'lucide-react';
+import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore } from 'lucide-react'; // Removed CheckSquare as ListChecks is used for 'task'
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -25,7 +25,7 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
   captured: {
     label: 'Capturé',
     icon: Zap,
-    color: 'bg-blue-50 border-blue-200 text-blue-700',
+    color: 'bg-blue-50 border-blue-300 text-blue-700',
     actions: [
       { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
       { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
@@ -35,7 +35,7 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
   task: {
     label: 'Tâche',
     icon: ListChecks,
-    color: 'bg-amber-50 border-amber-200 text-amber-700',
+    color: 'bg-amber-50 border-amber-300 text-amber-700',
     actions: [
       { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
       { toStatus: 'discarded', label: 'Écarter', icon: Archive },
@@ -44,7 +44,7 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
   idea: {
     label: 'Idée',
     icon: Lightbulb,
-    color: 'bg-lime-50 border-lime-200 text-lime-700',
+    color: 'bg-lime-50 border-lime-300 text-lime-700',
     actions: [
       { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
       { toStatus: 'discarded', label: 'Écarter', icon: Archive },
@@ -64,10 +64,10 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
 const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading }) => {
   const config = statusConfig[entry.status];
   return (
-    <Card className={cn("shadow-sm hover:shadow-lg transition-shadow flex flex-col", config.color)}>
+    <Card className={cn("shadow-sm hover:shadow-lg transition-shadow flex flex-col", config.color, "border")}>
       <CardHeader className="pb-2 pt-3">
         <div className="flex justify-between items-center">
-            <Badge variant="secondary" className={cn("text-xs", config.color, "border")}>
+            <Badge variant="outline" className={cn("text-xs", config.color, "border-current")}>
                 <config.icon className="mr-1.5 h-3.5 w-3.5" />
                 {config.label}
             </Badge>
@@ -214,7 +214,7 @@ export function BrainDumpSection() {
             onChange={(e) => setNewDumpText(e.target.value)}
             placeholder="Écrivez ici..."
             rows={3}
-            className="mb-3"
+            className="mb-3 text-sm"
             disabled={isAddingLoading || isFetching}
           />
         </CardContent>
@@ -231,7 +231,7 @@ export function BrainDumpSection() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : brainDumps.length === 0 && !newDumpText ? (
-         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
             <Brain className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
             <p className="text-muted-foreground">Votre esprit est clair !</p>
             <p className="text-xs text-muted-foreground">Utilisez le formulaire ci-dessus pour commencer à décharger vos pensées.</p>
@@ -241,12 +241,12 @@ export function BrainDumpSection() {
           {statusOrder.map(statusKey => {
             const entries = groupedDumps[statusKey] || [];
             const config = statusConfig[statusKey];
-            if (entries.length === 0 && statusKey !== 'captured') return null; // Don't show empty sections other than 'captured' initially
+            if (entries.length === 0 && statusKey !== 'captured' && statusKey !== 'idea' && statusKey !== 'task') return null; 
 
             return (
               <div key={statusKey}>
                 <h2 className="text-base md:text-lg font-semibold mb-2 flex items-center gap-2">
-                  <config.icon className={cn("h-5 w-5", config.color.replace('bg-', 'text-').replace('-50', '-600'))} />
+                  <config.icon className={cn("h-5 w-5", config.color.replace(/bg-(\w+)-50/, 'text-$1-600'))} />
                   {config.label} ({entries.length})
                 </h2>
                 {entries.length > 0 ? (

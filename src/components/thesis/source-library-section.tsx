@@ -5,25 +5,27 @@ import { useState, type FC, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import type { Source } from '@/types';
-import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save } from 'lucide-react'; // Renamed Link to LinkIconLucide
+import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
-import Link from 'next/link'; // Next.js Link
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-const SourceTypeIcon: FC<{ type: Source['type'] }> = ({ type }) => {
+const SourceTypeIcon: FC<{ type: Source['type'], className?: string }> = ({ type, className }) => {
+  const iconProps = { className: cn("h-4 w-4", className) };
   switch (type) {
-    case 'pdf': return <FileText className="h-4 w-4 text-red-600" />;
-    case 'website': return <LinkIconLucide className="h-4 w-4 text-blue-600" />;
-    case 'interview': return <Mic className="h-4 w-4 text-green-600" />;
-    case 'field_notes': return <BookOpen className="h-4 w-4 text-orange-600" />;
-    default: return <FileText className="h-4 w-4 text-gray-500" />;
+    case 'pdf': return <FileText {...iconProps} />;
+    case 'website': return <LinkIconLucide {...iconProps} />;
+    case 'interview': return <Mic {...iconProps} />;
+    case 'field_notes': return <BookOpen {...iconProps} />;
+    default: return <FileText {...iconProps} />;
   }
 };
 
@@ -46,7 +48,7 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-2">
           <div className="flex items-center gap-2 flex-grow min-w-0">
-            <SourceTypeIcon type={source.type} />
+            <SourceTypeIcon type={source.type} className="text-primary shrink-0" />
             <CardTitle className="text-base md:text-lg truncate" title={source.title}>{source.title}</CardTitle>
           </div>
           <div className="flex gap-1 shrink-0">
@@ -59,7 +61,7 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
           </div>
         </div>
         <CardDescription className="text-xs pt-1">
-          Type : {sourceTypeText(source.type)} | Ajouté le : {format(new Date(source.created_at), "d MMMM yyyy", { locale: fr })}
+          Type : {sourceTypeText(source.type)} | Ajouté le : {format(new Date(source.created_at), "d MMM yyyy", { locale: fr })}
         </CardDescription>
       </CardHeader>
       <CardContent className="text-xs md:text-sm flex-grow space-y-2 py-2">
@@ -92,7 +94,7 @@ export function SourceLibrarySection() {
   const [currentSource, setCurrentSource] = useState<Partial<Source> & { id?: string } | null>(null);
   const sourceTypes: Source['type'][] = ["pdf", "website", "interview", "field_notes", "other"];
   const [isFormLoading, setIsFormLoading] = useState(false);
-  const [isCardActionLoading, setIsCardActionLoading] = useState<string|null>(null); // For delete operations on cards
+  const [isCardActionLoading, setIsCardActionLoading] = useState<string|null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
@@ -125,7 +127,7 @@ export function SourceLibrarySection() {
   }, [fetchSources]);
 
   const openModalForNew = () => {
-    setCurrentSource({ title: '', type: 'website', source_link_or_path: '', notes: '' }); // Default to website for convenience
+    setCurrentSource({ title: '', type: 'website', source_link_or_path: '', notes: '' });
     setIsModalOpen(true);
   };
 
@@ -198,7 +200,7 @@ export function SourceLibrarySection() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : sources.length === 0 ? (
-        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
             <Library className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
             <p className="text-muted-foreground">Aucune source ajoutée pour le moment.</p>
             <p className="text-xs text-muted-foreground">Commencez à construire votre bibliothèque de références !</p>
@@ -231,6 +233,7 @@ export function SourceLibrarySection() {
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="ex : Article de revue, Nom du livre..."
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
             <div>
@@ -240,12 +243,12 @@ export function SourceLibrarySection() {
                 onValueChange={(value) => setCurrentSource(prev => ({ ...prev, type: value as Source['type'] }))}
                 disabled={isFormLoading}
               >
-                <SelectTrigger id="sourceType" aria-label="Type de source">
+                <SelectTrigger id="sourceType" aria-label="Type de source" className="text-sm">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
                   {sourceTypes.map(type => (
-                    <SelectItem key={type} value={type}>{sourceTypeText(type)}</SelectItem>
+                    <SelectItem key={type} value={type} className="text-sm">{sourceTypeText(type)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -258,6 +261,7 @@ export function SourceLibrarySection() {
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, source_link_or_path: e.target.value }))}
                 placeholder="ex : https://exemple.com ou /docs/document.pdf"
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
             <div>
@@ -269,6 +273,7 @@ export function SourceLibrarySection() {
                 placeholder="Points clés, citations, idées principales..."
                 rows={4}
                 disabled={isFormLoading}
+                className="text-sm"
               />
             </div>
           </div>
