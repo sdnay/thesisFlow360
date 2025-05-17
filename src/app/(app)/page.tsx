@@ -7,9 +7,14 @@ import { ChatGPTPromptLogPanel } from '@/components/chat/chat-gpt-prompt-log-pan
 
 export default function HomePage() {
   return (
-    <div className="h-[calc(100vh-theme(space.16))]"> {/* Ajusté pour la hauteur du header (h-16 = 4rem) */}
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full rounded-lg border">
-        <ResizablePanel defaultSize={65} minSize={30} className="flex flex-col overflow-y-auto">
+    // Assurez-vous que ce div parent a une hauteur définie pour que 'h-full' sur ResizablePanelGroup fonctionne.
+    // h-16 est la hauteur typique d'un header.
+    <div className="h-[calc(100vh-theme(space.16))] w-full"> 
+      <ResizablePanelGroup 
+        direction="horizontal" 
+        className="h-full w-full rounded-lg border"
+      >
+        <ResizablePanel defaultSize={65} minSize={40} className="flex flex-col overflow-y-auto">
           <ThesisDashboardSection />
         </ResizablePanel>
         <ResizableHandle withHandle />

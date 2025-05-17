@@ -8,14 +8,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession } from '@/types';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon } from 'lucide-react';
+import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession, TaskType } from '@/types';
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+
+const taskTypeLabels: Record<TaskType, string> = {
+  urgent: "Urgent",
+  important: "Important",
+  reading: "Lecture",
+  chatgpt: "ChatGPT",
+  secondary: "Secondaire",
+};
 
 interface ChapterProgressCardProps {
   chapter: Chapter;
@@ -101,7 +110,7 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
 export function ThesisDashboardSection() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [dailyObjectives, setDailyObjectives] = useState<DailyObjective[]>([]);
-  const [tasksSummary, setTasksSummary] = useState<{ total: number, pending: number, completed: number }>({ total: 0, pending: 0, completed: 0 });
+  const [allTasks, setAllTasks] = useState<Task[]>([]); // Store all tasks for detailed summary
   const [recentBrainDumps, setRecentBrainDumps] = useState<BrainDumpEntry[]>([]);
   const [recentPomodoros, setRecentPomodoros] = useState<PomodoroSession[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -117,44 +126,77 @@ export function ThesisDashboardSection() {
   const [isSavingChapter, setIsSavingChapter] = useState(false);
   const [isLoadingCardActions, setIsLoadingCardActions] = useState(false);
   const [isLoadingObjectiveToggle, setIsLoadingObjectiveToggle] = useState<string | null>(null);
-
+  const [errorLoading, setErrorLoading] = useState<string | null>(null);
 
   const { toast } = useToast();
 
-  const fetchChapters = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     setIsLoadingChapters(true);
+    setIsLoadingObjectives(true);
+    setIsLoadingTasks(true);
+    setIsLoadingBrainDumps(true);
+    setIsLoadingPomodoros(true);
+    setErrorLoading(null);
+
     try {
-      const { data, error } = await supabase.from('chapters').select('*').order('name');
-      if (error) throw error;
-      setChapters(data || []);
-      if (data && data.length > 0) {
-        const totalProgress = data.reduce((sum, chapter) => sum + chapter.progress, 0);
-        setOverallProgress(Math.round(totalProgress / data.length));
+      const [
+        chaptersRes,
+        objectivesRes,
+        tasksRes,
+        brainDumpsRes,
+        pomodorosRes,
+      ] = await Promise.all([
+        supabase.from('chapters').select('*').order('name'),
+        supabase.from('daily_objectives').select('*').order('text'),
+        supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+        supabase.from('brain_dump_entries').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('pomodoro_sessions').select('*').order('start_time', { ascending: false }).limit(5),
+      ]);
+
+      if (chaptersRes.error) throw new Error(`Chapitres: ${chaptersRes.error.message}`);
+      setChapters(chaptersRes.data || []);
+      if (chaptersRes.data && chaptersRes.data.length > 0) {
+        const totalProgress = chaptersRes.data.reduce((sum, chapter) => sum + chapter.progress, 0);
+        setOverallProgress(Math.round(totalProgress / chaptersRes.data.length));
       } else {
         setOverallProgress(0);
       }
-    } catch (e: any) {
-      toast({ title: "Erreur Chapitres", description: "Impossible de charger les chapitres.", variant: "destructive" });
-      console.error("Erreur fetchChapters:", e);
-    } finally {
       setIsLoadingChapters(false);
+
+      if (objectivesRes.error) throw new Error(`Objectifs: ${objectivesRes.error.message}`);
+      setDailyObjectives(objectivesRes.data || []);
+      setIsLoadingObjectives(false);
+
+      if (tasksRes.error) throw new Error(`Tâches: ${tasksRes.error.message}`);
+      setAllTasks(tasksRes.data || []);
+      setIsLoadingTasks(false);
+
+      if (brainDumpsRes.error) throw new Error(`Vide-cerveau: ${brainDumpsRes.error.message}`);
+      setRecentBrainDumps(brainDumpsRes.data || []);
+      setIsLoadingBrainDumps(false);
+
+      if (pomodorosRes.error) throw new Error(`Pomodoros: ${pomodorosRes.error.message}`);
+      setRecentPomodoros(pomodorosRes.data || []);
+      setIsLoadingPomodoros(false);
+
+    } catch (e: any) {
+      console.error("Erreur fetchAllData:", e);
+      setErrorLoading(e.message || "Une erreur est survenue lors du chargement des données du tableau de bord.");
+      toast({ title: "Erreur de chargement", description: e.message, variant: "destructive" });
+      // Set all loading states to false in case of partial failure
+      setIsLoadingChapters(false);
+      setIsLoadingObjectives(false);
+      setIsLoadingTasks(false);
+      setIsLoadingBrainDumps(false);
+      setIsLoadingPomodoros(false);
     }
   }, [toast]);
 
-  const fetchDailyObjectives = useCallback(async () => {
-    setIsLoadingObjectives(true);
-    try {
-      // Fetch all objectives, not just completed:false
-      const { data, error } = await supabase.from('daily_objectives').select('*').order('text');
-      if (error) throw error;
-      setDailyObjectives(data || []);
-    } catch (e: any) {
-      toast({ title: "Erreur Objectifs", description: "Impossible de charger les objectifs du jour.", variant: "destructive" });
-      console.error("Erreur fetchDailyObjectives:", e);
-    } finally {
-      setIsLoadingObjectives(false);
-    }
-  }, [toast]);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
 
   const handleToggleObjective = async (id: string, completed: boolean) => {
     setIsLoadingObjectiveToggle(id);
@@ -164,7 +206,6 @@ export function ThesisDashboardSection() {
         .update({ completed })
         .eq('id', id);
       if (error) throw error;
-      // Re-fetch or update local state
       setDailyObjectives(prev => prev.map(obj => obj.id === id ? {...obj, completed} : obj));
       toast({ title: "Objectif mis à jour" });
     } catch (e: any) {
@@ -174,67 +215,6 @@ export function ThesisDashboardSection() {
        setIsLoadingObjectiveToggle(null);
     }
   };
-
-
-  const fetchTasksSummary = useCallback(async () => {
-    setIsLoadingTasks(true);
-    try {
-      const { data, error, count } = await supabase.from('tasks').select('*', { count: 'exact' });
-      if (error) throw error;
-      const pending = data?.filter(t => !t.completed).length || 0;
-      const completed = data?.filter(t => t.completed).length || 0;
-      setTasksSummary({ total: count || 0, pending, completed });
-    } catch (e: any) {
-      toast({ title: "Erreur Tâches", description: "Impossible de charger le résumé des tâches.", variant: "destructive" });
-      console.error("Erreur fetchTasksSummary:", e);
-    } finally {
-      setIsLoadingTasks(false);
-    }
-  }, [toast]);
-
-  const fetchRecentBrainDumps = useCallback(async () => {
-    setIsLoadingBrainDumps(true);
-    try {
-      const { data, error } = await supabase
-        .from('brain_dump_entries')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(3);
-      if (error) throw error;
-      setRecentBrainDumps(data || []);
-    } catch (e: any) {
-      toast({ title: "Erreur Vide-Cerveau", description: "Impossible de charger les notes récentes.", variant: "destructive" });
-      console.error("Erreur fetchRecentBrainDumps:", e);
-    } finally {
-      setIsLoadingBrainDumps(false);
-    }
-  }, [toast]);
-
-  const fetchRecentPomodoros = useCallback(async () => {
-    setIsLoadingPomodoros(true);
-    try {
-      const { data, error } = await supabase
-        .from('pomodoro_sessions')
-        .select('*')
-        .order('start_time', { ascending: false })
-        .limit(3);
-      if (error) throw error;
-      setRecentPomodoros(data || []);
-    } catch (e: any) {
-      toast({ title: "Erreur Pomodoro", description: "Impossible de charger les sessions récentes.", variant: "destructive" });
-      console.error("Erreur fetchRecentPomodoros:", e);
-    } finally {
-      setIsLoadingPomodoros(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchChapters();
-    fetchDailyObjectives();
-    fetchTasksSummary();
-    fetchRecentBrainDumps();
-    fetchRecentPomodoros();
-  }, [fetchChapters, fetchDailyObjectives, fetchTasksSummary, fetchRecentBrainDumps, fetchRecentPomodoros]);
 
   const openModalForNewChapter = () => {
     setCurrentChapter({ name: '', progress: 0, status: 'Non commencé', supervisor_comments: [] });
@@ -271,7 +251,7 @@ export function ThesisDashboardSection() {
       }
       setIsModalOpen(false);
       setCurrentChapter(null);
-      await fetchChapters(); // Refetch to update overall progress too
+      await fetchAllData(); // Refetch all data to update dashboard
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -286,7 +266,7 @@ export function ThesisDashboardSection() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      await fetchChapters(); // Refetch to update overall progress
+      await fetchAllData(); // Refetch to update overall progress
     } catch (e: any)      {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -308,7 +288,7 @@ export function ThesisDashboardSection() {
         .eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
-      await fetchChapters();
+      await fetchAllData(); // Refetch
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddCommentToChapter:", e);
@@ -317,28 +297,58 @@ export function ThesisDashboardSection() {
     }
   };
 
-  const isLoadingAny = isLoadingChapters || isLoadingObjectives || isLoadingTasks || isLoadingBrainDumps || isLoadingPomodoros;
+  const isLoadingAnyData = isLoadingChapters || isLoadingObjectives || isLoadingTasks || isLoadingBrainDumps || isLoadingPomodoros;
 
+  // KPIs Calculation
+  const objectivesCompletedCount = dailyObjectives.filter(obj => obj.completed).length;
+  const objectivesTotalCount = dailyObjectives.length;
+  const objectivesCompletionPercentage = objectivesTotalCount > 0 ? Math.round((objectivesCompletedCount / objectivesTotalCount) * 100) : 0;
+
+  const tasksPending = allTasks.filter(t => !t.completed);
+  const tasksCompletedCount = allTasks.length - tasksPending.length;
+  const tasksPendingByType = tasksPending.reduce((acc, task) => {
+    acc[task.type] = (acc[task.type] || 0) + 1;
+    return acc;
+  }, {} as Record<TaskType, number>);
+
+  const brainDumpsToProcessCount = recentBrainDumps.filter(d => d.status === 'captured').length;
+  const pomodoroTotalMinutesRecent = recentPomodoros.reduce((sum, pomo) => sum + pomo.duration, 0);
+
+
+  if (errorLoading) {
+    return (
+      <div className="p-4 md:p-6 flex flex-col items-center justify-center h-full text-center">
+        <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-semibold text-destructive mb-2">Erreur de Chargement du Tableau de Bord</h2>
+        <p className="text-muted-foreground mb-4">{errorLoading}</p>
+        <Button onClick={fetchAllData} disabled={isLoadingAnyData}>
+          {isLoadingAnyData ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Réessayer de charger
+        </Button>
+      </div>
+    );
+  }
+  
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6"> {/* Removed h-full and overflow-y-auto here */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h2>
-        <Button onClick={openModalForNewChapter} disabled={isLoadingAny || isSavingChapter}>
+        <h1 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h1>
+        <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter}>
           <PlusCircle className="mr-2 h-4 w-4" /> Ajouter un Chapitre
         </Button>
       </div>
 
-      {isLoadingAny && !chapters.length && !dailyObjectives.length ? (
+      {isLoadingAnyData && !chapters.length && !dailyObjectives.length ? (
         <div className="flex justify-center items-center py-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="ml-2">Chargement du tableau de bord...</p>
         </div>
       ) : (
         <>
-          <Card>
+          <Card className="shadow-lg border-primary/50">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="mr-2 h-6 w-6 text-primary" />
+              <CardTitle className="flex items-center text-primary">
+                <TrendingUp className="mr-2 h-6 w-6" />
                 Progression Globale de la Thèse
               </CardTitle>
             </CardHeader>
@@ -348,15 +358,16 @@ export function ThesisDashboardSection() {
               ) : (
                 <>
                   <Progress value={overallProgress} className="w-full h-4 mb-2" />
-                  <p className="text-center text-lg font-semibold">{overallProgress}%</p>
+                  <p className="text-center text-xl font-semibold">{overallProgress}%</p>
+                  <p className="text-center text-xs text-muted-foreground">{chapters.length} chapitre(s) suivi(s)</p>
                 </>
               )}
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {/* Chapters Section */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 xl:col-span-3"> {/* Full width on large, span 3 on xl */}
               <CardHeader>
                 <CardTitle>Progression des Chapitres</CardTitle>
                 <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
@@ -367,7 +378,7 @@ export function ThesisDashboardSection() {
                 ) : chapters.length === 0 ? (
                   <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
                 ) : (
-                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2"> {/* Internal scroll for chapters list if too long */}
                     {chapters.map((chapter) => (
                       <ChapterProgressCard
                         key={chapter.id}
@@ -388,13 +399,16 @@ export function ThesisDashboardSection() {
               </CardFooter>
             </Card>
 
-            {/* Other Summaries Column */}
-            <div className="space-y-6">
+            {/* KPIs Column */}
+            <div className="space-y-6 md:col-span-2 xl:col-span-1"> {/* Full width on md, 1 col on xl */}
               {/* Daily Objectives Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center"><TargetIcon className="mr-2 h-5 w-5 text-green-600" />Objectifs du Jour</CardTitle>
-                  <CardDescription>Vos priorités pour aujourd'hui.</CardDescription>
+                   <CardDescription>
+                     {isLoadingObjectives ? <Loader2 className="h-4 w-4 animate-spin" /> : 
+                      `${objectivesCompletedCount} / ${objectivesTotalCount} complété(s) (${objectivesCompletionPercentage}%)`}
+                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingObjectives ? (
@@ -438,20 +452,33 @@ export function ThesisDashboardSection() {
               <Card>
                 <CardHeader>
                   <CardTitle>Résumé des Tâches</CardTitle>
-                  <CardDescription>Votre charge de travail actuelle.</CardDescription>
+                   <CardDescription>
+                     {isLoadingTasks ? <Loader2 className="h-4 w-4 animate-spin" /> : 
+                      `${allTasks.length} tâches au total.`}
+                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingTasks ? (
                     <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : (
-                    <div className="space-y-1 text-sm">
-                      <p>Total des tâches : <span className="font-semibold">{tasksSummary.total}</span></p>
-                      <p>En attente : <span className="font-semibold text-orange-600">{tasksSummary.pending}</span></p>
-                      <p>Terminées : <span className="font-semibold text-green-600">{tasksSummary.completed}</span></p>
+                    <div className="space-y-2 text-sm">
+                      <p>En attente : <span className="font-semibold text-orange-600">{tasksPending.length}</span></p>
+                      <div className="pl-4 text-xs space-y-0.5">
+                        {Object.entries(taskTypeLabels).map(([type, label]) => {
+                            const count = tasksPendingByType[type as TaskType] || 0;
+                            if (count > 0) {
+                                return <p key={type}>{label}: <span className="font-medium">{count}</span></p>;
+                            }
+                            return null;
+                        })}
+                         {Object.keys(tasksPendingByType).length === 0 && tasksPending.length > 0 && <p className="text-muted-foreground">Aucune tâche en attente par type spécifique.</p>}
+
+                      </div>
+                      <p>Terminées : <span className="font-semibold text-green-600">{tasksCompletedCount}</span></p>
                     </div>
                   )}
                 </CardContent>
-                <CardFooter>
+                 <CardFooter>
                   <Button asChild variant="outline" size="sm">
                       <Link href="/tasks"><ListChecks className="mr-2 h-4 w-4" /> Gérer les Tâches</Link>
                   </Button>
@@ -461,8 +488,11 @@ export function ThesisDashboardSection() {
               {/* Recent Brain Dumps */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Notes Récentes (Vide-Cerveau)</CardTitle>
-                  <CardDescription>Vos dernières idées et pensées.</CardDescription>
+                  <CardTitle>Vide-Cerveau</CardTitle>
+                   <CardDescription>
+                     {isLoadingBrainDumps ? <Loader2 className="h-4 w-4 animate-spin" /> : 
+                      `${brainDumpsToProcessCount} note(s) "capturée(s)" à traiter.`}
+                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingBrainDumps ? (
@@ -471,9 +501,9 @@ export function ThesisDashboardSection() {
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
                   ) : (
                     <ul className="space-y-2 text-sm">
-                      {recentBrainDumps.map(dump => (
+                      {recentBrainDumps.slice(0,3).map(dump => ( // Show max 3 for summary
                         <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
-                          {dump.text} <span className="text-xs text-muted-foreground ml-1">({dump.status})</span>
+                          {dump.text} <Badge variant={dump.status === 'captured' ? 'default' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
                         </li>
                       ))}
                     </ul>
@@ -489,8 +519,11 @@ export function ThesisDashboardSection() {
               {/* Recent Pomodoro Sessions */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Sessions Pomodoro Récentes</CardTitle>
-                  <CardDescription>Votre historique de travail focus.</CardDescription>
+                  <CardTitle>Sessions Pomodoro</CardTitle>
+                  <CardDescription>
+                    {isLoadingPomodoros ? <Loader2 className="h-4 w-4 animate-spin" /> : 
+                     `${recentPomodoros.length} sessions récentes (${pomodoroTotalMinutesRecent} min).`}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingPomodoros ? (
@@ -499,8 +532,8 @@ export function ThesisDashboardSection() {
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
                   ) : (
                     <ul className="space-y-2 text-sm">
-                      {recentPomodoros.map(pomo => (
-                        <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
+                      {recentPomodoros.slice(0,3).map(pomo => ( // Show max 3 for summary
+                         <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
                           <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
                           {pomo.notes && <p className="text-xs text-muted-foreground truncate">Notes: {pomo.notes}</p>}
                         </li>
@@ -570,3 +603,4 @@ export function ThesisDashboardSection() {
     </div>
   );
 }
+
