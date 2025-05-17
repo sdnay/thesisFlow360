@@ -10,10 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import type { Source } from '@/types';
 import { PlusCircle, Edit3, Trash2, LinkIcon, FileText, Mic, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const initialSources: Source[] = [
-  { id: 's1', title: 'The Structure of Scientific Revolutions', type: 'pdf', sourceLinkOrPath: 'kuhn_structure.pdf', notes: 'Key text on paradigm shifts.', createdAt: new Date().toISOString() },
-  { id: 's2', title: 'Stanford Encyclopedia of Philosophy - Epistemology', type: 'website', sourceLinkOrPath: 'https://plato.stanford.edu/entries/epistemology/', createdAt: new Date().toISOString() },
+  { id: 's1', title: 'La Structure des Révolutions Scientifiques', type: 'pdf', sourceLinkOrPath: 'kuhn_structure.pdf', notes: 'Texte clé sur les changements de paradigme.', createdAt: new Date().toISOString() },
+  { id: 's2', title: 'Stanford Encyclopedia of Philosophy - Épistémologie', type: 'website', sourceLinkOrPath: 'https://plato.stanford.edu/entries/epistemology/', createdAt: new Date().toISOString() },
 ];
 
 const SourceTypeIcon: FC<{ type: Source['type'] }> = ({ type }) => {
@@ -26,6 +27,18 @@ const SourceTypeIcon: FC<{ type: Source['type'] }> = ({ type }) => {
   }
 };
 
+const sourceTypeText = (type: Source['type']): string => {
+    switch (type) {
+        case 'pdf': return 'PDF';
+        case 'website': return 'Site Web';
+        case 'interview': return 'Entretien';
+        case 'field_notes': return 'Notes de Terrain';
+        case 'other': return 'Autre';
+        default: return type;
+    }
+}
+
+
 const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onDelete: (id: string) => void }> = ({ source, onEdit, onDelete }) => {
   return (
     <Card className="shadow-sm hover:shadow-md transition-shadow">
@@ -36,25 +49,25 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
             <CardTitle className="text-base">{source.title}</CardTitle>
           </div>
           <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onEdit(source)} aria-label="Edit source">
+            <Button variant="ghost" size="icon" onClick={() => onEdit(source)} aria-label="Modifier la source">
               <Edit3 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => onDelete(source.id)} aria-label="Delete source" className="text-destructive hover:text-destructive/80">
+            <Button variant="ghost" size="icon" onClick={() => onDelete(source.id)} aria-label="Supprimer la source" className="text-destructive hover:text-destructive/80">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
         <CardDescription className="text-xs">
-          Type: {source.type} | Added: {format(new Date(source.createdAt), "MMM d, yyyy")}
+          Type : {sourceTypeText(source.type)} | Ajouté : {format(new Date(source.createdAt), "d MMM yyyy", { locale: fr })}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {source.sourceLinkOrPath && (
           <p className="text-xs truncate mb-1">
-            Path/Link: <a href={source.sourceLinkOrPath.startsWith('http') ? source.sourceLinkOrPath : '#'} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{source.sourceLinkOrPath}</a>
+            Chemin/Lien : <a href={source.sourceLinkOrPath.startsWith('http') ? source.sourceLinkOrPath : '#'} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{source.sourceLinkOrPath}</a>
           </p>
         )}
-        {source.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap">Notes: {source.notes}</p>}
+        {source.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap">Notes : {source.notes}</p>}
       </CardContent>
     </Card>
   );
@@ -79,9 +92,9 @@ export function SourceLibrarySection() {
   const handleSaveSource = () => {
     if (!currentSource || !currentSource.title || !currentSource.type) return; 
 
-    if (currentSource.id) { // Editing existing source
+    if (currentSource.id) { 
       setSources(sources.map(s => s.id === currentSource.id ? currentSource as Source : s));
-    } else { // Adding new source
+    } else { 
       const newSource: Source = {
         ...currentSource,
         id: Date.now().toString(),
@@ -100,16 +113,16 @@ export function SourceLibrarySection() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">Source Library</h2>
+        <h2 className="text-2xl font-semibold">Bibliothèque de Sources</h2>
         <Button onClick={openModalForNew}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Source
+          <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Source
         </Button>
       </div>
 
       {sources.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">No sources added yet. Start building your library!</p>
+            <p className="text-muted-foreground text-center">Aucune source ajoutée pour le moment. Commencez à construire votre bibliothèque !</p>
           </CardContent>
         </Card>
       ) : (
@@ -128,16 +141,16 @@ export function SourceLibrarySection() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{currentSource?.id ? 'Edit Source' : 'Add New Source'}</DialogTitle>
+            <DialogTitle>{currentSource?.id ? 'Modifier la Source' : 'Ajouter une Nouvelle Source'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <label htmlFor="sourceTitle" className="block text-sm font-medium mb-1">Title</label>
+              <label htmlFor="sourceTitle" className="block text-sm font-medium mb-1">Titre</label>
               <Input
                 id="sourceTitle"
                 value={currentSource?.title || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="e.g., Journal Article Name"
+                placeholder="ex : Nom de l'article de revue"
               />
             </div>
             <div>
@@ -147,38 +160,38 @@ export function SourceLibrarySection() {
                 onValueChange={(value) => setCurrentSource(prev => ({ ...prev, type: value as Source['type'] }))}
               >
                 <SelectTrigger id="sourceType">
-                  <SelectValue placeholder="Select type" />
+                  <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
                   {sourceTypes.map(type => (
-                    <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}</SelectItem>
+                    <SelectItem key={type} value={type}>{sourceTypeText(type)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
              <div>
-              <label htmlFor="sourceLinkOrPath" className="block text-sm font-medium mb-1">Link or File Path (Optional)</label>
+              <label htmlFor="sourceLinkOrPath" className="block text-sm font-medium mb-1">Lien ou Chemin du Fichier (Optionnel)</label>
               <Input
                 id="sourceLinkOrPath"
                 value={currentSource?.sourceLinkOrPath || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, sourceLinkOrPath: e.target.value }))}
-                placeholder="e.g., https://example.com/article or /docs/my_paper.pdf"
+                placeholder="ex : https://exemple.com/article ou /docs/mon_document.pdf"
               />
             </div>
             <div>
-              <label htmlFor="sourceNotes" className="block text-sm font-medium mb-1">Notes (Optional)</label>
+              <label htmlFor="sourceNotes" className="block text-sm font-medium mb-1">Notes (Optionnel)</label>
               <Textarea
                 id="sourceNotes"
                 value={currentSource?.notes || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Key takeaways, quotes, etc."
+                placeholder="Points clés, citations, etc."
                 rows={3}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveSource}>Save Source</Button>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveSource}>Enregistrer la Source</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

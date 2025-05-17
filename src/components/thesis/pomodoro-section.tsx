@@ -8,10 +8,11 @@ import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
 import { Play, Pause, RotateCcw, ListChecks, Trash2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-const DEFAULT_SESSION_DURATION = 25; // Default to 25 minutes
-const MAX_SESSION_DURATION = 120; // Max 2 hours
-const MIN_SESSION_DURATION = 1; // Min 1 minute
+const DEFAULT_SESSION_DURATION = 25; 
+const MAX_SESSION_DURATION = 120; 
+const MIN_SESSION_DURATION = 1; 
 
 interface PomodoroLogItemProps {
   session: PomodoroSession;
@@ -23,11 +24,11 @@ const PomodoroLogItem: FC<PomodoroLogItemProps> = ({ session, onDelete }) => {
     <li className="flex justify-between items-center p-3 border rounded-md bg-card hover:bg-muted/50">
       <div>
         <p className="text-sm font-medium">
-          {session.duration} min session - {format(new Date(session.startTime), "MMM d, HH:mm")}
+          Session de {session.duration} min - {format(new Date(session.startTime), "d MMM, HH:mm", { locale: fr })}
         </p>
-        {session.notes && <p className="text-xs text-muted-foreground mt-1">Notes: {session.notes}</p>}
+        {session.notes && <p className="text-xs text-muted-foreground mt-1">Notes : {session.notes}</p>}
       </div>
-       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Delete session" className="text-destructive hover:text-destructive/80">
+       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive hover:text-destructive/80">
         <Trash2 className="h-4 w-4" />
       </Button>
     </li>
@@ -54,10 +55,8 @@ export function PomodoroSection() {
           if (prevTime <= 1) {
             clearInterval(timerRef.current!);
             setIsActive(false);
-            // Log session automatically when timer finishes
             logSession(true); 
-            // TODO: Add notification (e.g., sound or browser notification)
-            alert("Pomodoro session finished!");
+            alert("Session Pomodoro terminée !");
             return 0;
           }
           return prevTime - 1;
@@ -67,7 +66,7 @@ export function PomodoroSection() {
       clearInterval(timerRef.current!);
     }
     return () => clearInterval(timerRef.current!);
-  }, [isActive, isPaused]);
+  }, [isActive, isPaused, durationMinutes]); // Added durationMinutes to dependency array
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isActive) return;
@@ -79,17 +78,17 @@ export function PomodoroSection() {
   };
 
   const toggleTimer = () => {
-    if (!isActive) { // Starting a new session
+    if (!isActive) { 
       setIsActive(true);
       setIsPaused(false);
-      setTimeLeft(durationMinutes * 60); // Reset time to current duration
-    } else { // Timer is active
+      setTimeLeft(durationMinutes * 60); 
+    } else { 
       setIsPaused(!isPaused);
     }
   };
 
   const resetTimer = () => {
-    if (isActive) { // If timer was running, log it as incomplete
+    if (isActive) { 
         logSession(false);
     }
     setIsActive(false);
@@ -101,12 +100,12 @@ export function PomodoroSection() {
   const logSession = (completed: boolean) => {
     const newSession: PomodoroSession = {
       id: Date.now().toString(),
-      startTime: new Date(Date.now() - (durationMinutes * 60 - timeLeft) * 1000).toISOString(), // Approximate start time
+      startTime: new Date(Date.now() - (durationMinutes * 60 - timeLeft) * 1000).toISOString(), 
       duration: durationMinutes,
-      notes: completed ? (sessionNotes || `Completed ${durationMinutes} min session`) : `Incomplete ${durationMinutes} min session (reset)`,
+      notes: completed ? (sessionNotes || `Session de ${durationMinutes} min terminée`) : `Session de ${durationMinutes} min incomplète (réinitialisée)`,
     };
     setPomodoroLog(prevLog => [newSession, ...prevLog]);
-    setSessionNotes(''); // Clear notes after logging
+    setSessionNotes(''); 
   };
 
   const deleteLogItem = (id: string) => {
@@ -123,7 +122,7 @@ export function PomodoroSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Pomodoro Timer & Log</h2>
+      <h2 className="text-2xl font-semibold">Minuteur & Journal Pomodoro</h2>
 
       <Card className="shadow-lg">
         <CardHeader>
@@ -131,13 +130,13 @@ export function PomodoroSection() {
             {formatTime(timeLeft)}
           </CardTitle>
           <CardDescription className="text-center">
-            Set your deep work session duration (1-120 minutes).
+            Définissez la durée de votre session de travail profond (1-120 minutes).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Progress value={isActive ? progressPercentage : 0} className="w-full h-3" />
           <div className="flex items-center gap-2">
-            <label htmlFor="duration" className="text-sm font-medium">Duration (min):</label>
+            <label htmlFor="duration" className="text-sm font-medium">Durée (min) :</label>
             <Input
               id="duration"
               type="number"
@@ -150,7 +149,7 @@ export function PomodoroSection() {
             />
           </div>
           <Input
-            placeholder="Optional: What are you working on?"
+            placeholder="Optionnel : Sur quoi travaillez-vous ?"
             value={sessionNotes}
             onChange={(e) => setSessionNotes(e.target.value)}
             disabled={!isActive}
@@ -159,10 +158,10 @@ export function PomodoroSection() {
         <CardFooter className="flex justify-center gap-3">
           <Button onClick={toggleTimer} size="lg" className="w-32">
             {isActive && !isPaused ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
-            {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Resume' : 'Start')}
+            {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Reprendre' : 'Démarrer')}
           </Button>
           <Button onClick={resetTimer} variant="outline" size="lg">
-            <RotateCcw className="mr-2 h-5 w-5" /> Reset
+            <RotateCcw className="mr-2 h-5 w-5" /> Réinitialiser
           </Button>
         </CardFooter>
       </Card>
@@ -170,12 +169,12 @@ export function PomodoroSection() {
       {pomodoroLog.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Session Log</CardTitle>
-            <CardDescription>History of your deep work sessions.</CardDescription>
+            <CardTitle>Journal des Sessions</CardTitle>
+            <CardDescription>Historique de vos sessions de travail profond.</CardDescription>
           </CardHeader>
           <CardContent>
             {pomodoroLog.length === 0 ? (
-              <p className="text-muted-foreground text-center">No sessions logged yet.</p>
+              <p className="text-muted-foreground text-center">Aucune session enregistrée pour le moment.</p>
             ) : (
               <ul className="space-y-3 max-h-96 overflow-y-auto">
                 {pomodoroLog.map((session) => (

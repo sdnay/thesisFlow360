@@ -7,10 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import type { BrainDumpEntry } from '@/types';
 import { Lightbulb, ListChecks, Trash2, Archive, Save } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 const initialBrainDumps: BrainDumpEntry[] = [
-  { id: 'bd1', text: 'Explore Foucault\'s concept of power in relation to social media.', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), status: 'captured' },
-  { id: 'bd2', text: 'Quote: "The limits of my language mean the limits of my world." - Wittgenstein. Check original source.', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), status: 'idea' },
+  { id: 'bd1', text: 'Explorer le concept de pouvoir de Foucault par rapport aux médias sociaux.', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), status: 'captured' },
+  { id: 'bd2', text: 'Citation : "Les limites de mon langage signifient les limites de mon monde." - Wittgenstein. Vérifier la source originale.', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), status: 'idea' },
 ];
 
 const BrainDumpItemCard: FC<{ entry: BrainDumpEntry, onUpdateStatus: (id: string, status: BrainDumpEntry['status']) => void, onDelete: (id: string) => void }> = ({ entry, onUpdateStatus, onDelete }) => {
@@ -20,22 +21,22 @@ const BrainDumpItemCard: FC<{ entry: BrainDumpEntry, onUpdateStatus: (id: string
         <p className="text-sm whitespace-pre-wrap">{entry.text}</p>
       </CardContent>
       <CardFooter className="flex justify-between items-center text-xs text-muted-foreground pt-2">
-        <span>{formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })} - Status: <span className="font-medium">{entry.status}</span></span>
+        <span>{formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true, locale: fr })} - Statut : <span className="font-medium">{entry.status === "captured" ? "Capturé" : entry.status === "idea" ? "Idée" : entry.status === "task" ? "Tâche" : "Écarté"}</span></span>
         <div className="flex gap-1">
           {entry.status === 'captured' && (
             <>
-              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'task')} title="Mark as Task">
+              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'task')} title="Marquer comme Tâche">
                 <ListChecks className="h-4 w-4 text-blue-500" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'idea')} title="Mark as Idea">
+              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'idea')} title="Marquer comme Idée">
                 <Lightbulb className="h-4 w-4 text-yellow-500" />
               </Button>
             </>
           )}
-          <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'discarded')} title="Discard">
+          <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'discarded')} title="Écarter">
              <Archive className="h-4 w-4 text-gray-500" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)} title="Delete Permanently" className="text-destructive hover:text-destructive/80">
+          <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)} title="Supprimer Définitivement" className="text-destructive hover:text-destructive/80">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -77,25 +78,25 @@ export function BrainDumpSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Brain Dump</h2>
+      <h2 className="text-2xl font-semibold">Vide-Cerveau</h2>
       
       <Card>
         <CardHeader>
-          <CardTitle>Capture New Idea</CardTitle>
-          <CardDescription>Jot down any thoughts, quotes, or tasks that come to mind.</CardDescription>
+          <CardTitle>Capturer une Nouvelle Idée</CardTitle>
+          <CardDescription>Notez toutes les pensées, citations ou tâches qui vous viennent à l'esprit.</CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             value={newDumpText}
             onChange={(e) => setNewDumpText(e.target.value)}
-            placeholder="Type your thoughts here..."
+            placeholder="Écrivez vos pensées ici..."
             rows={4}
             className="mb-2"
           />
         </CardContent>
         <CardFooter>
           <Button onClick={handleAddDump} disabled={!newDumpText.trim()}>
-            <Save className="mr-2 h-4 w-4" /> Save Dump
+            <Save className="mr-2 h-4 w-4" /> Enregistrer la Note
           </Button>
         </CardFooter>
       </Card>
@@ -103,14 +104,14 @@ export function BrainDumpSection() {
       {brainDumps.length === 0 && !newDumpText && (
          <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">Your mind is clear! Or, start dumping your thoughts above.</p>
+            <p className="text-muted-foreground text-center">Votre esprit est clair ! Ou commencez à décharger vos pensées ci-dessus.</p>
           </CardContent>
         </Card>
       )}
 
       {capturedDumps.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium mb-2">To Clarify ({capturedDumps.length})</h3>
+          <h3 className="text-lg font-medium mb-2">À Clarifier ({capturedDumps.length})</h3>
           <div className="space-y-3">
             {capturedDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} />)}
           </div>
@@ -119,7 +120,7 @@ export function BrainDumpSection() {
 
       {ideaDumps.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium mb-2">Useful Ideas ({ideaDumps.length})</h3>
+          <h3 className="text-lg font-medium mb-2">Idées Utiles ({ideaDumps.length})</h3>
            <div className="space-y-3">
             {ideaDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} />)}
           </div>
@@ -128,7 +129,7 @@ export function BrainDumpSection() {
       
       {taskDumps.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium mb-2">Tasks ({taskDumps.length})</h3>
+          <h3 className="text-lg font-medium mb-2">Tâches ({taskDumps.length})</h3>
            <div className="space-y-3">
             {taskDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} />)}
           </div>
@@ -137,7 +138,7 @@ export function BrainDumpSection() {
 
       {discardedDumps.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium mb-2">Discarded ({discardedDumps.length})</h3>
+          <h3 className="text-lg font-medium mb-2">Écartées ({discardedDumps.length})</h3>
            <div className="space-y-3">
             {discardedDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} />)}
           </div>

@@ -22,20 +22,20 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
-  { href: '/', label: 'Home', icon: HomeIcon, tooltip: 'Home / Split View' },
-  { href: '/tasks', label: 'AI Task Manager', icon: ListTodo, tooltip: 'AI Powered Task Management' },
-  // The following items are part of the split view on the main page,
-  // but could be deep-linked or have their own pages in a future iteration.
-  // For now, they represent sections in the left pane of the split view.
-  // { href: '/#dashboard', label: 'Dashboard', icon: LayoutDashboard, tooltip: 'Thesis Dashboard' },
-  // { href: '/#brain-dump', label: 'Brain Dump', icon: Brain, tooltip: 'Capture Ideas' },
-  // { href: '/#daily-plan', label: 'Daily Plan', icon: Target, tooltip: 'Daily Objectives' },
-  // { href: '/#pomodoro', label: 'Pomodoro Log', icon: Timer, tooltip: 'Deep Work Sessions' },
-  // { href: '/#sources', label: 'Source Library', icon: Library, tooltip: 'Manage Sources' },
+  { href: '/', label: 'Accueil', icon: HomeIcon, tooltip: 'Accueil / Vue Partagée' },
+  { href: '/tasks', label: 'Gestionnaire IA', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
+  // Les éléments suivants font partie de la vue partagée sur la page principale,
+  // mais pourraient être des liens profonds ou avoir leurs propres pages dans une future itération.
+  // Pour l'instant, ils représentent des sections dans le volet gauche de la vue partagée.
+  // { href: '/#dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
+  // { href: '/#brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
+  // { href: '/#daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
+  // { href: '/#pomodoro', label: 'Journal Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
+  // { href: '/#sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
 ];
 
-// The ChatGPT Prompts log is part of the split view's right panel on '/'
-// { href: '/#prompts', label: 'ChatGPT Prompts', icon: Sparkles, tooltip: 'Prompt Engineering Log' },
+// Le journal des Prompts ChatGPT fait partie du panneau droit de la vue partagée sur '/'
+// { href: '/#prompts', label: 'Prompts ChatGPT', icon: Sparkles, tooltip: 'Journal d\'Ingénierie de Prompt' },
 
 
 export function SidebarNav() {

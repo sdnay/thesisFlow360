@@ -26,9 +26,9 @@ const taskTypeColors: Record<TaskType, string> = {
 const taskTypeLabels: Record<TaskType, string> = {
   urgent: "Urgent",
   important: "Important",
-  reading: "Reading",
+  reading: "Lecture",
   chatgpt: "ChatGPT",
-  secondary: "Secondary",
+  secondary: "Secondaire",
 };
 
 
@@ -45,8 +45,8 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
       </PopoverTrigger>
       <PopoverContent className="w-[120px] p-0">
         <Command>
-          <CommandInput placeholder="Search type..." className="h-8 text-xs" />
-          <CommandEmpty>No type found.</CommandEmpty>
+          <CommandInput placeholder="Rechercher type..." className="h-8 text-xs" />
+          <CommandEmpty>Aucun type trouvé.</CommandEmpty>
           <CommandList>
             <CommandGroup>
               {Object.entries(taskTypeLabels).map(([type, label]) => (
@@ -145,21 +145,19 @@ export function AiTaskManagerPage() {
     try {
       const input: ModifyTaskListInput = {
         instructions,
-        taskList: tasks.map(t => `${t.text} (Completed: ${t.completed}, Type: ${t.type})`),
+        taskList: tasks.map(t => `${t.text} (Terminé: ${t.completed}, Type: ${t.type})`),
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
       
-      // Basic parsing of modified task list. This is a simplification.
-      // A more robust solution would involve the AI returning structured task data.
       const newTasks: Task[] = result.modifiedTaskList.map((taskText, index) => {
-        const existingTask = tasks.find(t => taskText.includes(t.text)); // Very naive matching
-        const completedMatch = taskText.match(/Completed: (true|false)/i);
-        const typeMatch = taskText.match(/Type: (urgent|important|reading|chatgpt|secondary)/i);
+        const existingTask = tasks.find(t => taskText.includes(t.text));
+        const completedMatch = taskText.match(/(?:Completed|Terminé): (true|false|vrai|faux)/i);
+        const typeMatch = taskText.match(/(?:Type|Type): (urgent|important|reading|chatgpt|secondary)/i);
 
         return {
           id: existingTask?.id || Date.now().toString() + index,
-          text: taskText.replace(/\s*\((Completed: (true|false)|Type: \w+)\)/gi, '').trim(),
-          completed: completedMatch ? completedMatch[1].toLowerCase() === 'true' : (existingTask?.completed || false),
+          text: taskText.replace(/\s*\((?:Completed|Terminé): (?:true|false|vrai|faux)|Type: \w+\)/gi, '').trim(),
+          completed: completedMatch ? (completedMatch[1].toLowerCase() === 'true' || completedMatch[1].toLowerCase() === 'vrai') : (existingTask?.completed || false),
           type: typeMatch ? typeMatch[1].toLowerCase() as TaskType : (existingTask?.type || 'secondary'),
           createdAt: existingTask?.createdAt || new Date().toISOString(),
         };
@@ -169,8 +167,8 @@ export function AiTaskManagerPage() {
       setAiReasoning(result.reasoning);
       setInstructions('');
     } catch (e) {
-      console.error("Error modifying task list:", e);
-      setError("Failed to modify task list with AI. Please try again.");
+      console.error("Erreur lors de la modification de la liste des tâches:", e);
+      setError("Échec de la modification de la liste des tâches avec l'IA. Veuillez réessayer.");
     } finally {
       setIsLoading(false);
     }
@@ -221,23 +219,22 @@ export function AiTaskManagerPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
-      <h1 className="text-2xl font-semibold tracking-tight">AI Task Manager</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Gestionnaire de Tâches IA</h1>
       
-      {/* AI Task Modification */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Bot className="h-6 w-6 text-primary" /> AI-Powered Task Modification
+            <Bot className="h-6 w-6 text-primary" /> Modification de Tâches Assistée par IA
           </CardTitle>
           <CardDescription>
-            Instruct the AI to manage your tasks (e.g., "Add a task to write chapter 1", "Mark 'review literature' as urgent and complete").
+            Donnez des instructions à l'IA pour gérer vos tâches (ex : "Ajouter une tâche pour écrire le chapitre 1", "Marquer 'revoir la littérature' comme urgent et terminé").
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
-            placeholder="Enter instructions for the AI..."
+            placeholder="Entrez les instructions pour l'IA..."
             rows={3}
             className="mb-2"
           />
@@ -247,7 +244,7 @@ export function AiTaskManagerPage() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleAiModifyTasks} disabled={isLoading || !instructions.trim()}>
-            {isLoading ? 'Processing...' : 'Submit to AI'}
+            {isLoading ? 'Traitement...' : 'Soumettre à l\'IA'}
           </Button>
         </CardFooter>
       </Card>
@@ -255,7 +252,7 @@ export function AiTaskManagerPage() {
       {aiReasoning && (
         <Card className="bg-blue-50 border-blue-200">
           <CardHeader>
-            <CardTitle className="text-sm text-blue-700">AI Reasoning</CardTitle>
+            <CardTitle className="text-sm text-blue-700">Raisonnement de l'IA</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-blue-600 whitespace-pre-wrap">{aiReasoning}</p>
@@ -263,42 +260,40 @@ export function AiTaskManagerPage() {
         </Card>
       )}
 
-      {/* Manual Task Input */}
        <Card>
         <CardHeader>
-          <CardTitle>{editingTask ? 'Edit Task' : 'Add New Task Manually'}</CardTitle>
+          <CardTitle>{editingTask ? 'Modifier la Tâche' : 'Ajouter une Nouvelle Tâche Manuellement'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <Input
             value={manualTaskText}
             onChange={(e) => setManualTaskText(e.target.value)}
-            placeholder="Enter task description..."
+            placeholder="Entrez la description de la tâche..."
             className="flex-grow"
           />
           <div className="flex items-center gap-2">
             <TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} />
             <Button onClick={handleAddOrUpdateManualTask} className="flex-shrink-0">
               {editingTask ? <Edit2 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              {editingTask ? 'Update Task' : 'Add Task'}
+              {editingTask ? 'Mettre à Jour la Tâche' : 'Ajouter la Tâche'}
             </Button>
             {editingTask && (
                 <Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');}}>
-                    Cancel Edit
+                    Annuler la Modification
                 </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Task List */}
       <Card className="flex-grow flex flex-col overflow-hidden">
         <CardHeader>
-          <CardTitle>Your Tasks</CardTitle>
-          <CardDescription>{tasks.length} task(s)</CardDescription>
+          <CardTitle>Vos Tâches</CardTitle>
+          <CardDescription>{tasks.length} tâche(s)</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 pr-1">
           {tasks.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No tasks yet. Add some manually or use the AI!</p>
+            <p className="text-muted-foreground text-center py-8">Aucune tâche pour le moment. Ajoutez-en manuellement ou utilisez l'IA !</p>
           ) : (
             tasks.map((task) => (
               <TaskItemDisplay 

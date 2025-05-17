@@ -2,23 +2,23 @@
 'use server';
 
 /**
- * @fileOverview Generates a chapter outline for a given topic.
+ * @fileOverview Génère un plan de chapitre pour un sujet donné.
  *
- * - generateChapterOutline - A function that generates a chapter outline.
- * - GenerateChapterOutlineInput - The input type for the generateChapterOutline function.
- * - GenerateChapterOutlineOutput - The return type for the generateChapterOutline function.
+ * - generateChapterOutline - Une fonction qui génère un plan de chapitre.
+ * - GenerateChapterOutlineInput - Le type d'entrée pour la fonction generateChapterOutline.
+ * - GenerateChapterOutlineOutput - Le type de retour pour la fonction generateChapterOutline.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateChapterOutlineInputSchema = z.object({
-  topic: z.string().describe('The topic for which to generate a chapter outline.'),
+  topic: z.string().describe('Le sujet pour lequel générer un plan de chapitre.'),
 });
 export type GenerateChapterOutlineInput = z.infer<typeof GenerateChapterOutlineInputSchema>;
 
 const GenerateChapterOutlineOutputSchema = z.object({
-  outline: z.string().describe('The generated chapter outline.'),
+  outline: z.string().describe('Le plan de chapitre généré.'),
 });
 export type GenerateChapterOutlineOutput = z.infer<typeof GenerateChapterOutlineOutputSchema>;
 
@@ -30,11 +30,11 @@ const prompt = ai.definePrompt({
   name: 'generateChapterOutlinePrompt',
   input: {schema: GenerateChapterOutlineInputSchema},
   output: {schema: GenerateChapterOutlineOutputSchema},
-  prompt: `You are an expert in structuring content for academic papers.
+  prompt: `Vous êtes un expert en structuration de contenu pour les articles académiques.
 
-  Based on the topic provided, generate a detailed chapter outline.
+  En fonction du sujet fourni, générez un plan de chapitre détaillé.
 
-  Topic: {{{topic}}}
+  Sujet : {{{topic}}}
   `,
 });
 

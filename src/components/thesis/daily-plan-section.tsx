@@ -10,8 +10,8 @@ import { PlusCircle, Trash2, Edit3, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const initialObjectives: DailyObjective[] = [
-  { id: 'do1', text: 'Write 500 words for Chapter 2', completed: false },
-  { id: 'do2', text: 'Review feedback from supervisor on Introduction', completed: true },
+  { id: 'do1', text: 'Écrire 500 mots pour le Chapitre 2', completed: false },
+  { id: 'do2', text: 'Relire les commentaires du superviseur sur l\'Introduction', completed: true },
 ];
 
 interface DailyObjectiveItemProps {
@@ -32,7 +32,7 @@ const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, 
           id={`obj-${objective.id}`}
           checked={objective.completed}
           onCheckedChange={() => onToggle(objective.id)}
-          aria-label={objective.completed ? 'Mark as incomplete' : 'Mark as complete'}
+          aria-label={objective.completed ? 'Marquer comme non terminé' : 'Marquer comme terminé'}
         />
         <label
           htmlFor={`obj-${objective.id}`}
@@ -45,10 +45,10 @@ const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, 
         </label>
       </div>
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={() => onEdit(objective)} aria-label="Edit objective">
+        <Button variant="ghost" size="icon" onClick={() => onEdit(objective)} aria-label="Modifier l'objectif">
           <Edit3 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(objective.id)} aria-label="Delete objective" className="text-destructive hover:text-destructive/80">
+        <Button variant="ghost" size="icon" onClick={() => onDelete(objective.id)} aria-label="Supprimer l'objectif" className="text-destructive hover:text-destructive/80">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -73,8 +73,7 @@ export function DailyPlanSection() {
       setEditingObjective(null);
     } else {
       if (objectives.filter(obj => !obj.completed).length >= 3) {
-        // Optionally, show a toast notification here
-        alert("You can have a maximum of 3 active major objectives per day.");
+        alert("Vous ne pouvez avoir que 3 objectifs majeurs actifs par jour au maximum.");
         return;
       }
       const newObjective: DailyObjective = {
@@ -113,28 +112,28 @@ export function DailyPlanSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Daily Plan</h2>
+      <h2 className="text-2xl font-semibold">Plan du Jour</h2>
       
       <Card>
         <CardHeader>
-          <CardTitle>{editingObjective ? 'Edit Objective' : 'Add New Objective'}</CardTitle>
-          <CardDescription>Set 1 to 3 major objectives for the day.</CardDescription>
+          <CardTitle>{editingObjective ? "Modifier l'Objectif" : 'Ajouter un Nouvel Objectif'}</CardTitle>
+          <CardDescription>Définissez 1 à 3 objectifs majeurs pour la journée.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <Input
               value={newObjectiveText}
               onChange={(e) => setNewObjectiveText(e.target.value)}
-              placeholder="e.g., Finalize methodology chapter"
+              placeholder="ex : Finaliser le chapitre méthodologie"
               className="flex-grow"
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrUpdateObjective()}
             />
             <Button onClick={handleAddOrUpdateObjective}>
               {editingObjective ? <Edit3 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              {editingObjective ? 'Update' : 'Add'}
+              {editingObjective ? 'Mettre à Jour' : 'Ajouter'}
             </Button>
             {editingObjective && (
-              <Button variant="outline" onClick={() => { setEditingObjective(null); setNewObjectiveText(''); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setEditingObjective(null); setNewObjectiveText(''); }}>Annuler</Button>
             )}
           </div>
         </CardContent>
@@ -143,17 +142,17 @@ export function DailyPlanSection() {
       {objectives.length === 0 ? (
          <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">No objectives set for today. Add some to get started!</p>
+            <p className="text-muted-foreground text-center">Aucun objectif défini pour aujourd'hui. Ajoutez-en pour commencer !</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Today's Objectives</CardTitle>
+            <CardTitle>Objectifs du Jour</CardTitle>
             <CardDescription>
-              {pendingCount > 0 && <>{pendingCount} pending</>}
+              {pendingCount > 0 && <>{pendingCount} en attente</>}
               {pendingCount > 0 && completedCount > 0 && ", "}
-              {completedCount > 0 && <>{completedCount} completed</>}
+              {completedCount > 0 && <>{completedCount} terminé(s)</>}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

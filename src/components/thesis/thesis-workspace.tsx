@@ -10,9 +10,9 @@ import { LayoutDashboard, Brain, Target, Timer, Library } from 'lucide-react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const workspaceTabs = [
-  { value: "dashboard", label: "Dashboard", Icon: LayoutDashboard, Component: ThesisDashboardSection },
-  { value: "brain-dump", label: "Brain Dump", Icon: Brain, Component: BrainDumpSection },
-  { value: "daily-plan", label: "Daily Plan", Icon: Target, Component: DailyPlanSection },
+  { value: "dashboard", label: "Tableau de Bord", Icon: LayoutDashboard, Component: ThesisDashboardSection },
+  { value: "brain-dump", label: "Vide-Cerveau", Icon: Brain, Component: BrainDumpSection },
+  { value: "daily-plan", label: "Plan du Jour", Icon: Target, Component: DailyPlanSection },
   { value: "pomodoro", label: "Pomodoro", Icon: Timer, Component: PomodoroSection },
   { value: "sources", label: "Sources", Icon: Library, Component: SourceLibrarySection },
 ];

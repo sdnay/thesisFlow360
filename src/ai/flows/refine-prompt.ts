@@ -1,31 +1,31 @@
 'use server';
 
 /**
- * @fileOverview This flow refines prompts based on past effective prompts and reformulations.
+ * @fileOverview Ce flux affine les prompts en fonction des prompts efficaces passés et de leurs reformulations.
  *
- * - refinePrompt - A function that suggests refinements to a given prompt based on a history of effective prompts.
- * - RefinePromptInput - The input type for the refinePrompt function.
- * - RefinePromptOutput - The return type for the refinePrompt function.
+ * - refinePrompt - Une fonction qui suggère des améliorations à un prompt donné en fonction d'un historique de prompts efficaces.
+ * - RefinePromptInput - Le type d'entrée pour la fonction refinePrompt.
+ * - RefinePromptOutput - Le type de retour pour la fonction refinePrompt.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const RefinePromptInputSchema = z.object({
-  prompt: z.string().describe('The prompt to be refined.'),
+  prompt: z.string().describe('Le prompt à affiner.'),
   promptHistory: z
     .array(z.string())
-    .describe('A history of effective prompts and reformulations.'),
+    .describe("Un historique des prompts efficaces et de leurs reformulations."),
 });
 export type RefinePromptInput = z.infer<typeof RefinePromptInputSchema>;
 
 const RefinePromptOutputSchema = z.object({
   refinedPrompt: z
     .string()
-    .describe('The refined prompt, incorporating insights from past effective prompts.'),
+    .describe("Le prompt affiné, intégrant les enseignements des prompts efficaces passés."),
   reasoning: z
     .string()
-    .describe('Explanation of why the prompt was refined in this way.'),
+    .describe("Explication de la raison pour laquelle le prompt a été affiné de cette manière."),
 });
 export type RefinePromptOutput = z.infer<typeof RefinePromptOutputSchema>;
 
@@ -37,7 +37,7 @@ const refinePromptPrompt = ai.definePrompt({
   name: 'refinePromptPrompt',
   input: {schema: RefinePromptInputSchema},
   output: {schema: RefinePromptOutputSchema},
-  prompt: `You are an AI prompt optimizer. Given the current prompt and a history of effective prompts, suggest refinements to the current prompt to improve its effectiveness.\n\nCurrent Prompt: {{{prompt}}}\n\nEffective Prompt History:\n{{#each promptHistory}}- {{{this}}}\n{{/each}}\n\nRefined Prompt:`, // Handlebars syntax is correct here
+  prompt: `Vous êtes un optimiseur de prompts IA. Étant donné le prompt actuel et un historique de prompts efficaces, suggérez des améliorations au prompt actuel pour améliorer son efficacité.\n\nPrompt Actuel : {{{prompt}}}\n\nHistorique des Prompts Efficaces :\n{{#each promptHistory}}- {{{this}}}\n{{/each}}\n\nPrompt Affiné :`, 
 });
 
 const refinePromptFlow = ai.defineFlow(

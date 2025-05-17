@@ -8,8 +8,8 @@ const geistSans = GeistSans; // Directly use the imported object
 const geistMono = GeistMono; // Directly use the imported object
 
 export const metadata: Metadata = {
-  title: 'ThesisFlow 360',
-  description: 'Streamline your thesis writing process.',
+  title: 'FluxThèse 360',
+  description: 'Optimisez votre processus de rédaction de thèse.',
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         {children}
         <Toaster />

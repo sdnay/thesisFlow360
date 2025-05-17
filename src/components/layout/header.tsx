@@ -15,7 +15,7 @@ export function Header() {
          <SidebarTrigger asChild>
            <Button variant="outline" size="icon" className="md:hidden">
              <PanelLeft className="h-5 w-5" />
-             <span className="sr-only">Toggle Menu</span>
+             <span className="sr-only">Ouvrir/Fermer le menu</span>
            </Button>
          </SidebarTrigger>
       )}
@@ -24,7 +24,7 @@ export function Header() {
            <SidebarTrigger asChild>
              <Button variant="ghost" size="icon" className="h-8 w-8">
                <PanelLeft className="h-5 w-5" />
-               <span className="sr-only">Toggle Sidebar</span>
+               <span className="sr-only">Ouvrir/Fermer la barre latérale</span>
              </Button>
            </SidebarTrigger>
         </div>
@@ -35,7 +35,7 @@ export function Header() {
         </Link>
       </div>
       <div className="ml-auto flex items-center gap-4">
-        {/* Placeholder for User Menu or other actions */}
+        {/* Placeholder pour Menu Utilisateur ou autres actions */}
         {/* <UserMenu /> */}
       </div>
     </header>

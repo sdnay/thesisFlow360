@@ -1,11 +1,11 @@
 'use server';
 
 /**
- * @fileOverview Summarizes a document provided as a data URI.
+ * @fileOverview Résume un document fourni sous forme d'URI de données.
  *
- * - summarizeDocument - A function that accepts a document data URI and returns a summary.
- * - SummarizeDocumentInput - The input type for the summarizeDocument function.
- * - SummarizeDocumentOutput - The return type for the summarizeDocument function.
+ * - summarizeDocument - Une fonction qui accepte une URI de données d'un document et retourne un résumé.
+ * - SummarizeDocumentInput - Le type d'entrée pour la fonction summarizeDocument.
+ * - SummarizeDocumentOutput - Le type de retour pour la fonction summarizeDocument.
  */
 
 import {ai} from '@/ai/genkit';
@@ -15,13 +15,13 @@ const SummarizeDocumentInputSchema = z.object({
   documentDataUri: z
     .string()
     .describe(
-      'The document to summarize, as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.' // Corrected typo here
+      "Le document à résumer, sous forme d'URI de données qui doit inclure un type MIME et utiliser l'encodage Base64. Format attendu : 'data:<mimetype>;base64,<encoded_data>'."
     ),
 });
 export type SummarizeDocumentInput = z.infer<typeof SummarizeDocumentInputSchema>;
 
 const SummarizeDocumentOutputSchema = z.object({
-  summary: z.string().describe('A summary of the document.'),
+  summary: z.string().describe('Un résumé du document.'),
 });
 export type SummarizeDocumentOutput = z.infer<typeof SummarizeDocumentOutputSchema>;
 
@@ -33,7 +33,7 @@ const prompt = ai.definePrompt({
   name: 'summarizeDocumentPrompt',
   input: {schema: SummarizeDocumentInputSchema},
   output: {schema: SummarizeDocumentOutputSchema},
-  prompt: `Summarize the following document. Be concise and focus on the main points.\n\nDocument: {{media url=documentDataUri}}`,
+  prompt: `Résumez le document suivant. Soyez concis et concentrez-vous sur les points principaux.\n\nDocument : {{media url=documentDataUri}}`,
 });
 
 const summarizeDocumentFlow = ai.defineFlow(
