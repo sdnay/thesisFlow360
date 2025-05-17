@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -29,7 +30,7 @@ export function Header() {
            </SidebarTrigger>
         </div>
       )}
-      <div className="flex items-center">
+      <div className="flex items-center md:hidden"> {/* Logo visible sur mobile dans le header */}
         <Link href="/" className="flex items-center gap-2">
           <Logo />
         </Link>

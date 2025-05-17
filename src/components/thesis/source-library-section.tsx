@@ -7,28 +7,30 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import type { Source } from '@/types';
-import { PlusCircle, Edit3, Trash2, LinkIcon, FileText, Mic, BookOpen, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save } from 'lucide-react'; // Renamed Link to LinkIconLucide
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link'; // Next.js Link
+import { cn } from '@/lib/utils';
 
 const SourceTypeIcon: FC<{ type: Source['type'] }> = ({ type }) => {
   switch (type) {
-    case 'pdf': return <FileText className="h-4 w-4 text-red-500" />;
-    case 'website': return <LinkIcon className="h-4 w-4 text-blue-500" />;
-    case 'interview': return <Mic className="h-4 w-4 text-green-500" />;
-    case 'field_notes': return <BookOpen className="h-4 w-4 text-orange-500" />;
+    case 'pdf': return <FileText className="h-4 w-4 text-red-600" />;
+    case 'website': return <LinkIconLucide className="h-4 w-4 text-blue-600" />;
+    case 'interview': return <Mic className="h-4 w-4 text-green-600" />;
+    case 'field_notes': return <BookOpen className="h-4 w-4 text-orange-600" />;
     default: return <FileText className="h-4 w-4 text-gray-500" />;
   }
 };
 
 const sourceTypeText = (type: Source['type']): string => {
     switch (type) {
-        case 'pdf': return 'PDF';
-        case 'website': return 'Site Web';
+        case 'pdf': return 'Document PDF';
+        case 'website': return 'Site Web / Lien';
         case 'interview': return 'Entretien';
         case 'field_notes': return 'Notes de Terrain';
         case 'other': return 'Autre';
@@ -38,34 +40,47 @@ const sourceTypeText = (type: Source['type']): string => {
 
 
 const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onDelete: (id: string) => Promise<void>, isLoading: boolean }> = ({ source, onEdit, onDelete, isLoading }) => {
+  const isExternalLink = source.source_link_or_path && (source.source_link_or_path.startsWith('http://') || source.source_link_or_path.startsWith('https://'));
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-2">
+    <Card className="shadow-md hover:shadow-xl transition-shadow duration-200 flex flex-col">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex items-center gap-2 flex-grow min-w-0">
             <SourceTypeIcon type={source.type} />
-            <CardTitle className="text-base">{source.title}</CardTitle>
+            <CardTitle className="text-base md:text-lg truncate" title={source.title}>{source.title}</CardTitle>
           </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onEdit(source)} aria-label="Modifier la source" disabled={isLoading}>
+          <div className="flex gap-1 shrink-0">
+            <Button variant="outline" size="icon" onClick={() => onEdit(source)} aria-label="Modifier la source" disabled={isLoading} className="h-8 w-8">
               <Edit3 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => onDelete(source.id)} aria-label="Supprimer la source" className="text-destructive hover:text-destructive/80" disabled={isLoading}>
+            <Button variant="destructiveOutline" size="icon" onClick={() => onDelete(source.id)} aria-label="Supprimer la source" disabled={isLoading} className="h-8 w-8">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
-        <CardDescription className="text-xs">
-          Type : {sourceTypeText(source.type)} | Ajouté : {format(new Date(source.created_at), "d MMM yyyy", { locale: fr })}
+        <CardDescription className="text-xs pt-1">
+          Type : {sourceTypeText(source.type)} | Ajouté le : {format(new Date(source.created_at), "d MMMM yyyy", { locale: fr })}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="text-xs md:text-sm flex-grow space-y-2 py-2">
         {source.source_link_or_path && (
-          <p className="text-xs truncate mb-1">
-            Chemin/Lien : <a href={source.source_link_or_path.startsWith('http') ? source.source_link_or_path : '#'} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{source.source_link_or_path}</a>
-          </p>
+          <div className="flex items-center gap-1.5">
+            <LinkIconLucide className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            {isExternalLink ? (
+                <Link href={source.source_link_or_path} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate" title={source.source_link_or_path}>
+                    {source.source_link_or_path}
+                </Link>
+            ) : (
+                <span className="truncate text-muted-foreground" title={source.source_link_or_path}>{source.source_link_or_path}</span>
+            )}
+          </div>
         )}
-        {source.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap">Notes : {source.notes}</p>}
+        {source.notes && (
+            <div className="pt-1">
+                <h4 className="text-xs font-semibold text-muted-foreground mb-0.5">Notes :</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap text-xs max-h-24 overflow-y-auto custom-scrollbar pr-1">{source.notes}</p>
+            </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -76,8 +91,8 @@ export function SourceLibrarySection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState<Partial<Source> & { id?: string } | null>(null);
   const sourceTypes: Source['type'][] = ["pdf", "website", "interview", "field_notes", "other"];
-  const [isLoading, setIsLoading] = useState(false); // For modal operations
-  const [isCardLoading, setIsCardLoading] = useState(false); // For delete operations on cards
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isCardActionLoading, setIsCardActionLoading] = useState<string|null>(null); // For delete operations on cards
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
@@ -100,30 +115,37 @@ export function SourceLibrarySection() {
 
   useEffect(() => {
     fetchSources();
+     const channel = supabase
+      .channel('db-sources-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sources' }, fetchSources)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchSources]);
 
   const openModalForNew = () => {
-    setCurrentSource({ title: '', type: 'pdf', source_link_or_path: '', notes: '' });
+    setCurrentSource({ title: '', type: 'website', source_link_or_path: '', notes: '' }); // Default to website for convenience
     setIsModalOpen(true);
   };
 
   const openModalForEdit = (source: Source) => {
-    setCurrentSource(JSON.parse(JSON.stringify(source))); // Deep copy
+    setCurrentSource(JSON.parse(JSON.stringify(source)));
     setIsModalOpen(true);
   };
 
   const handleSaveSource = async () => {
-    if (!currentSource || !currentSource.title || !currentSource.type) {
+    if (!currentSource || !currentSource.title?.trim() || !currentSource.type) {
         toast({title: "Erreur de validation", description: "Le titre et le type de la source sont requis.", variant: "destructive"});
         return;
     }
-    setIsLoading(true);
+    setIsFormLoading(true);
     try {
       const payload = {
-        title: currentSource.title,
+        title: currentSource.title.trim(),
         type: currentSource.type,
-        source_link_or_path: currentSource.source_link_or_path || null,
-        notes: currentSource.notes || null,
+        source_link_or_path: currentSource.source_link_or_path?.trim() || null,
+        notes: currentSource.notes?.trim() || null,
       };
 
       if (currentSource.id) { 
@@ -137,87 +159,88 @@ export function SourceLibrarySection() {
       }
       setIsModalOpen(false);
       setCurrentSource(null);
-      await fetchSources();
     } catch (e: any) {
-      toast({ title: "Erreur d'enregistrement", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleSaveSource:", e);
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
   
   const handleDeleteSource = async (sourceId: string) => {
-    setIsCardLoading(true);
+    setIsCardActionLoading(sourceId);
     try {
       const { error } = await supabase.from('sources').delete().eq('id', sourceId);
       if (error) throw error;
-      await fetchSources();
       toast({ title: "Source supprimée" });
     } catch (e: any) {
-      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteSource:", e);
     } finally {
-      setIsCardLoading(false);
+      setIsCardActionLoading(null);
     }
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">Bibliothèque de Sources</h2>
-        <Button onClick={openModalForNew} disabled={isFetching || isLoading}>
+    <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+            <Library className="h-7 w-7 text-primary" />
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Bibliothèque de Sources</h1>
+        </div>
+        <Button onClick={openModalForNew} disabled={isFetching || isFormLoading}>
           <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Source
         </Button>
       </div>
 
       {isFetching ? (
-        <div className="flex justify-center items-center py-10">
+        <div className="flex-grow flex justify-center items-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : sources.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">Aucune source ajoutée pour le moment. Commencez à construire votre bibliothèque !</p>
-          </CardContent>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Library className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
+            <p className="text-muted-foreground">Aucune source ajoutée pour le moment.</p>
+            <p className="text-xs text-muted-foreground">Commencez à construire votre bibliothèque de références !</p>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+        <div className="flex-grow grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 items-start overflow-y-auto custom-scrollbar pr-1 pb-4">
           {sources.map((source) => (
             <SourceItemCard 
               key={source.id} 
               source={source} 
               onEdit={openModalForEdit}
               onDelete={handleDeleteSource}
-              isLoading={isCardLoading}
+              isLoading={isCardActionLoading === source.id}
             />
           ))}
         </div>
       )}
 
-      <Dialog open={isModalOpen} onOpenChange={(open) => {if(!isLoading) setIsModalOpen(open)}}>
+      <Dialog open={isModalOpen} onOpenChange={(open) => {if(!isFormLoading) setIsModalOpen(open)}}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{currentSource?.id ? 'Modifier la Source' : 'Ajouter une Nouvelle Source'}</DialogTitle>
+            <DialogTitle className="text-lg">{currentSource?.id ? 'Modifier la Source' : 'Ajouter une Nouvelle Source'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <label htmlFor="sourceTitle" className="block text-sm font-medium mb-1">Titre</label>
+              <Label htmlFor="sourceTitle" className="block text-sm font-medium mb-1.5">Titre de la source</Label>
               <Input
                 id="sourceTitle"
                 value={currentSource?.title || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, title: e.target.value }))}
-                placeholder="ex : Nom de l'article de revue"
-                disabled={isLoading}
+                placeholder="ex : Article de revue, Nom du livre..."
+                disabled={isFormLoading}
               />
             </div>
             <div>
-              <label htmlFor="sourceType" className="block text-sm font-medium mb-1">Type</label>
+              <Label htmlFor="sourceType" className="block text-sm font-medium mb-1.5">Type de source</Label>
               <Select
-                value={currentSource?.type || 'pdf'}
+                value={currentSource?.type || 'website'}
                 onValueChange={(value) => setCurrentSource(prev => ({ ...prev, type: value as Source['type'] }))}
-                disabled={isLoading}
+                disabled={isFormLoading}
               >
-                <SelectTrigger id="sourceType">
+                <SelectTrigger id="sourceType" aria-label="Type de source">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -228,32 +251,34 @@ export function SourceLibrarySection() {
               </Select>
             </div>
              <div>
-              <label htmlFor="sourceLinkOrPath" className="block text-sm font-medium mb-1">Lien ou Chemin du Fichier (Optionnel)</label>
+              <Label htmlFor="sourceLinkOrPath" className="block text-sm font-medium mb-1.5">Lien ou Chemin du Fichier (Optionnel)</Label>
               <Input
                 id="sourceLinkOrPath"
                 value={currentSource?.source_link_or_path || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, source_link_or_path: e.target.value }))}
-                placeholder="ex : https://exemple.com/article ou /docs/mon_document.pdf"
-                disabled={isLoading}
+                placeholder="ex : https://exemple.com ou /docs/document.pdf"
+                disabled={isFormLoading}
               />
             </div>
             <div>
-              <label htmlFor="sourceNotes" className="block text-sm font-medium mb-1">Notes (Optionnel)</label>
+              <Label htmlFor="sourceNotes" className="block text-sm font-medium mb-1.5">Notes (Optionnel)</Label>
               <Textarea
                 id="sourceNotes"
                 value={currentSource?.notes || ''}
                 onChange={(e) => setCurrentSource(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Points clés, citations, etc."
-                rows={3}
-                disabled={isLoading}
+                placeholder="Points clés, citations, idées principales..."
+                rows={4}
+                disabled={isFormLoading}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {if(!isLoading)setIsModalOpen(false)}} disabled={isLoading}>Annuler</Button>
-            <Button onClick={handleSaveSource} disabled={isLoading}>
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Enregistrer la Source
+            <DialogClose asChild>
+                <Button variant="outline" disabled={isFormLoading}>Annuler</Button>
+            </DialogClose>
+            <Button onClick={handleSaveSource} disabled={isFormLoading || !currentSource?.title?.trim()}>
+              {isFormLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4"/>}
+              {currentSource?.id ? 'Enregistrer les Modifications' : 'Ajouter la Source'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -7,13 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession, TaskType } from '@/types';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle, ExternalLink, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -26,82 +25,50 @@ const taskTypeLabels: Record<TaskType, string> = {
   secondary: "Secondaire",
 };
 
+const taskTypeColors: Record<TaskType, string> = {
+  urgent: "border-red-500/50 bg-red-50 text-red-700",
+  important: "border-orange-500/50 bg-orange-50 text-orange-700",
+  reading: "border-green-500/50 bg-green-50 text-green-700",
+  chatgpt: "border-blue-500/50 bg-blue-50 text-blue-700",
+  secondary: "border-gray-500/50 bg-gray-50 text-gray-700",
+};
+
+
 interface ChapterProgressCardProps {
   chapter: Chapter;
-  onEdit: (chapter: Chapter) => void;
-  onDelete: (chapterId: string) => void;
-  onAddComment: (chapterId: string, comment: string) => Promise<void>;
-  isLoadingCardActions: boolean;
+  onEditModalOpen: (chapter: Chapter) => void; // Renamed to avoid conflict
 }
 
-const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, onDelete, onAddComment, isLoadingCardActions }) => {
-  const [comment, setComment] = useState('');
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [isAddingComment, setIsAddingComment] = useState(false);
-
-  const handleAddCommentInternal = async () => {
-    if (comment.trim()) {
-      setIsAddingComment(true);
-      await onAddComment(chapter.id, comment.trim());
-      setComment('');
-      setShowCommentInput(false);
-      setIsAddingComment(false);
-    }
-  };
-
+const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEditModalOpen }) => {
   return (
-    <Card className="shadow-md hover:shadow-lg transition-shadow duration-200">
-      <CardHeader>
+    <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
+      <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg">{chapter.name}</CardTitle>
-            <CardDescription>{chapter.status}</CardDescription>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => onEdit(chapter)} aria-label="Modifier le chapitre" disabled={isLoadingCardActions}>
-              <Edit3 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => onDelete(chapter.id)} aria-label="Supprimer le chapitre" className="text-destructive hover:text-destructive/80" disabled={isLoadingCardActions}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <CardTitle className="text-base md:text-lg">{chapter.name}</CardTitle>
+          <Button variant="ghost" size="icon" onClick={() => onEditModalOpen(chapter)} aria-label="Modifier le chapitre" className="h-7 w-7">
+            <Edit3 className="h-4 w-4" />
+          </Button>
         </div>
+        <CardDescription className="text-xs">{chapter.status}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="mb-2 text-sm font-medium">Progression : {chapter.progress}%</div>
-        <Progress value={chapter.progress} className="w-full h-3" />
+      <CardContent className="flex-grow">
+        <div className="mb-1 text-xs font-medium">Progression : {chapter.progress}%</div>
+        <Progress value={chapter.progress} className="w-full h-2.5" />
         {chapter.supervisor_comments && chapter.supervisor_comments.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-xs font-semibold text-muted-foreground mb-1">Commentaires du superviseur :</h4>
-            <ul className="list-disc list-inside text-xs space-y-1 max-h-20 overflow-y-auto">
+          <div className="mt-3">
+            <h4 className="text-xs font-semibold text-muted-foreground mb-1">Commentaires :</h4>
+            <ul className="list-disc list-inside text-xs space-y-0.5 max-h-16 overflow-y-auto custom-scrollbar">
               {chapter.supervisor_comments.map((c, index) => (
-                <li key={index}>{c}</li>
+                <li key={index} className="truncate">{c}</li>
               ))}
             </ul>
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-2 pt-4">
-        {showCommentInput ? (
-          <div className="w-full flex gap-2 items-center">
-            <Input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Nouveau commentaire..."
-              className="flex-grow text-sm"
-              disabled={isAddingComment || isLoadingCardActions}
-            />
-            <Button onClick={handleAddCommentInternal} size="sm" disabled={isAddingComment || !comment.trim() || isLoadingCardActions}>
-              {isAddingComment ? <Loader2 className="mr-2 h-3 w-3 animate-spin"/> : null}
-              Ajouter
-            </Button>
-            <Button onClick={() => setShowCommentInput(false)} size="sm" variant="outline" disabled={isAddingComment || isLoadingCardActions}>Annuler</Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setShowCommentInput(true)} disabled={isLoadingCardActions}>
-            <MessageSquare className="mr-2 h-3 w-3" /> Ajouter un commentaire
-          </Button>
-        )}
+      <CardFooter className="pt-3">
+        <Button asChild variant="outline" size="sm" className="w-full text-xs">
+            <Link href="/add-chapter"><Eye className="mr-1.5 h-3.5 w-3.5" /> Voir/Gérer Plan Détaillé</Link>
+        </Button>
       </CardFooter>
     </Card>
   );
@@ -115,8 +82,8 @@ export function ThesisDashboardSection() {
   const [recentPomodoros, setRecentPomodoros] = useState<PomodoroSession[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> | null>(null);
+  const [isChapterModalOpen, setIsChapterModalOpen] = useState(false);
+  const [currentChapterForModal, setCurrentChapterForModal] = useState<Partial<Chapter> | null>(null);
 
   const [isLoadingChapters, setIsLoadingChapters] = useState(true);
   const [isLoadingObjectives, setIsLoadingObjectives] = useState(true);
@@ -124,9 +91,12 @@ export function ThesisDashboardSection() {
   const [isLoadingBrainDumps, setIsLoadingBrainDumps] = useState(true);
   const [isLoadingPomodoros, setIsLoadingPomodoros] = useState(true);
   const [isSavingChapter, setIsSavingChapter] = useState(false);
-  const [isLoadingCardActions, setIsLoadingCardActions] = useState(false);
+  const [isLoadingCardActions, setIsLoadingCardActions] = useState(false); // For delete/add comment on chapters
   const [isLoadingObjectiveToggle, setIsLoadingObjectiveToggle] = useState<string | null>(null);
   const [errorLoading, setErrorLoading] = useState<string | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [chapterForComment, setChapterForComment] = useState<string | null>(null);
+
 
   const { toast } = useToast();
 
@@ -147,10 +117,10 @@ export function ThesisDashboardSection() {
         pomodorosRes,
       ] = await Promise.all([
         supabase.from('chapters').select('*').order('name'),
-        supabase.from('daily_objectives').select('*').order('text'), // Correction ici
+        supabase.from('daily_objectives').select('*').order('text'),
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
-        supabase.from('brain_dump_entries').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('pomodoro_sessions').select('*').order('start_time', { ascending: false }).limit(5),
+        supabase.from('brain_dump_entries').select('*').order('created_at', { ascending: false }).limit(3), // Limiting to 3 for dashboard
+        supabase.from('pomodoro_sessions').select('*').order('start_time', { ascending: false }).limit(3), // Limiting to 3 for dashboard
       ]);
 
       if (chaptersRes.error) throw new Error(`Chapitres: ${chaptersRes.error.message}`);
@@ -183,7 +153,6 @@ export function ThesisDashboardSection() {
       console.error("Erreur fetchAllData:", e);
       setErrorLoading(e.message || "Une erreur est survenue lors du chargement des données du tableau de bord.");
       toast({ title: "Erreur de chargement", description: e.message, variant: "destructive" });
-      // Set all loading states to false on error
       setIsLoadingChapters(false);
       setIsLoadingObjectives(false);
       setIsLoadingTasks(false);
@@ -195,6 +164,18 @@ export function ThesisDashboardSection() {
 
   useEffect(() => {
     fetchAllData();
+    // Set up a listener for changes in the database (optional, can be intensive)
+    const channel = supabase
+      .channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        console.log('Changement DB reçu!', payload);
+        fetchAllData(); // Re-fetch all data on any change
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchAllData]);
 
 
@@ -206,8 +187,7 @@ export function ThesisDashboardSection() {
         .update({ completed })
         .eq('id', id);
       if (error) throw error;
-      setDailyObjectives(prev => prev.map(obj => obj.id === id ? {...obj, completed} : obj));
-      // toast({ title: "Objectif mis à jour" }); // Peut-être trop verbeux pour le dashboard
+      // Optimistic update handled by Supabase realtime or fetchAllData
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleToggleObjective:", e);
@@ -217,31 +197,31 @@ export function ThesisDashboardSection() {
   };
 
   const openModalForNewChapter = () => {
-    setCurrentChapter({ name: '', progress: 0, status: 'Non commencé', supervisor_comments: [] });
-    setIsModalOpen(true);
+    setCurrentChapterForModal({ name: '', progress: 0, status: 'Non commencé', supervisor_comments: [] });
+    setIsChapterModalOpen(true);
   };
 
   const openModalForEditChapter = (chapter: Chapter) => {
-    setCurrentChapter(JSON.parse(JSON.stringify(chapter)));
-    setIsModalOpen(true);
+    setCurrentChapterForModal(JSON.parse(JSON.stringify(chapter)));
+    setIsChapterModalOpen(true);
   };
 
   const handleSaveChapter = async () => {
-    if (!currentChapter || !currentChapter.name?.trim()) {
+    if (!currentChapterForModal || !currentChapterForModal.name?.trim()) {
         toast({title: "Erreur de validation", description: "Le nom du chapitre est requis.", variant: "destructive"});
         return;
     }
     setIsSavingChapter(true);
     try {
       const chapterPayload = {
-        name: currentChapter.name.trim(),
-        progress: currentChapter.progress || 0,
-        status: currentChapter.status?.trim() || 'Non commencé',
-        supervisor_comments: currentChapter.supervisor_comments || [],
+        name: currentChapterForModal.name.trim(),
+        progress: currentChapterForModal.progress || 0,
+        status: currentChapterForModal.status?.trim() || 'Non commencé',
+        supervisor_comments: currentChapterForModal.supervisor_comments || [],
       };
 
-      if (currentChapter.id) {
-        const { error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapter.id);
+      if (currentChapterForModal.id) {
+        const { error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapterForModal.id);
         if (error) throw error;
         toast({ title: "Chapitre modifié", description: `"${chapterPayload.name}" a été mis à jour.` });
       } else {
@@ -249,9 +229,9 @@ export function ThesisDashboardSection() {
         if (error) throw error;
         toast({ title: "Chapitre ajouté", description: `"${chapterPayload.name}" a été ajouté.` });
       }
-      setIsModalOpen(false);
-      setCurrentChapter(null);
-      await fetchAllData(); // Refresh all dashboard data
+      setIsChapterModalOpen(false);
+      setCurrentChapterForModal(null);
+      // Data will be re-fetched by Supabase listener or manually if needed
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -266,7 +246,6 @@ export function ThesisDashboardSection() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      await fetchAllData(); // Refresh all dashboard data
     } catch (e: any)      {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -275,20 +254,22 @@ export function ThesisDashboardSection() {
     }
   };
 
-  const handleAddCommentToChapter = async (chapterId: string, comment: string) => {
+  const handleAddCommentToChapter = async () => {
+    if (!chapterForComment || !newCommentText.trim()) return;
     setIsLoadingCardActions(true);
     try {
-      const chapterToUpdate = chapters.find(ch => ch.id === chapterId);
+      const chapterToUpdate = chapters.find(ch => ch.id === chapterForComment);
       if (!chapterToUpdate) throw new Error("Chapitre non trouvé");
 
-      const updatedComments = [...(chapterToUpdate.supervisor_comments || []), comment];
+      const updatedComments = [...(chapterToUpdate.supervisor_comments || []), newCommentText.trim()];
       const { error } = await supabase
         .from('chapters')
         .update({ supervisor_comments: updatedComments })
-        .eq('id', chapterId);
+        .eq('id', chapterForComment);
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
-      await fetchAllData(); // Refresh all dashboard data
+      setNewCommentText('');
+      setChapterForComment(null);
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddCommentToChapter:", e);
@@ -296,6 +277,7 @@ export function ThesisDashboardSection() {
       setIsLoadingCardActions(false);
     }
   };
+
 
   const isLoadingAnyData = isLoadingChapters || isLoadingObjectives || isLoadingTasks || isLoadingBrainDumps || isLoadingPomodoros;
 
@@ -327,27 +309,27 @@ export function ThesisDashboardSection() {
       </div>
     );
   }
-  
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h1>
-        <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Ajouter un Chapitre
+    <div className="p-3 md:p-4 space-y-4 md:space-y-6"> {/* Reduced padding slightly for more content space */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Tableau de Bord ThesisFlow</h1>
+        <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter} size="sm">
+          <PlusCircle className="mr-2 h-4 w-4" /> Nouveau Chapitre
         </Button>
       </div>
 
-      {isLoadingAnyData && !chapters.length && !dailyObjectives.length && !allTasks.length? (
+      {isLoadingAnyData && !chapters.length && !dailyObjectives.length && !allTasks.length ? (
         <div className="flex justify-center items-center py-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="ml-2">Chargement du tableau de bord...</p>
+          <p className="ml-2 text-muted-foreground">Chargement du tableau de bord...</p>
         </div>
       ) : (
         <>
-          <Card className="shadow-lg border-primary/50">
+          <Card className="shadow-lg border-primary/30 bg-gradient-to-br from-primary/5 to-background">
             <CardHeader>
-              <CardTitle className="flex items-center text-primary">
-                <TrendingUp className="mr-2 h-6 w-6" />
+              <CardTitle className="flex items-center text-primary text-lg md:text-xl">
+                <TrendingUp className="mr-2 h-5 w-5" />
                 Progression Globale de la Thèse
               </CardTitle>
             </CardHeader>
@@ -356,192 +338,189 @@ export function ThesisDashboardSection() {
                 <div className="flex justify-center py-2"><Loader2 className="h-5 w-5 animate-spin" /></div>
               ) : (
                 <>
-                  <Progress value={overallProgress} className="w-full h-4 mb-2" />
-                  <p className="text-center text-xl font-semibold">{overallProgress}%</p>
+                  <Progress value={overallProgress} className="w-full h-3 md:h-4 mb-2" />
+                  <p className="text-center text-lg md:text-xl font-semibold">{overallProgress}%</p>
                   <p className="text-center text-xs text-muted-foreground">{chapters.length} chapitre(s) suivi(s)</p>
                 </>
               )}
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chapters Section */}
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+            {/* Chapters Section - Spans 2 columns on larger screens */}
+            <div className="md:col-span-2 xl:col-span-2 space-y-4 md:space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Progression des Chapitres</CardTitle>
-                  <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
+                  <CardTitle className="text-base md:text-lg">Progression des Chapitres</CardTitle>
+                  <CardDescription className="text-xs md:text-sm">Avancement détaillé de chaque section de votre thèse.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingChapters ? (
                     <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
                   ) : chapters.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
+                    <div className="text-center py-6">
+                        <p className="text-muted-foreground mb-3">Aucun chapitre défini.</p>
+                        <Button asChild variant="default" size="sm">
+                            <Link href="/add-chapter"><PlusCircle className="mr-2 h-4 w-4"/>Commencer le Plan</Link>
+                        </Button>
+                    </div>
                   ) : (
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 max-h-[calc(100vh-20rem)] overflow-y-auto custom-scrollbar pr-1">
                       {chapters.map((chapter) => (
                         <ChapterProgressCard
                           key={chapter.id}
                           chapter={chapter}
-                          onEdit={openModalForEditChapter}
-                          onDelete={handleDeleteChapter}
-                          onAddComment={handleAddCommentToChapter}
-                          isLoadingCardActions={isLoadingCardActions}
+                          onEditModalOpen={openModalForEditChapter}
                         />
                       ))}
                     </div>
                   )}
                 </CardContent>
-                <CardFooter>
-                    <Button asChild variant="outline" size="sm">
-                        <Link href="/add-chapter"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan Détaillé</Link>
-                    </Button>
-                </CardFooter>
               </Card>
             </div>
 
-            {/* KPIs Column */}
-            <div className="lg:col-span-1 space-y-6">
+            {/* KPIs Column - Spans 1 column */}
+            <div className="space-y-4 md:space-y-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center"><TargetIcon className="mr-2 h-5 w-5 text-green-600" />Objectifs du Jour</CardTitle>
-                   <CardDescription>
-                     {isLoadingObjectives ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                      `${objectivesCompletedCount} / ${objectivesTotalCount} complété(s) (${objectivesCompletionPercentage}%)`}
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center text-base md:text-lg"><TargetIcon className="mr-2 h-4 w-4 text-green-600" />Objectifs du Jour</CardTitle>
+                   <CardDescription className="text-xs">
+                     {isLoadingObjectives ? <Loader2 className="h-3 w-3 animate-spin inline-block" /> :
+                      `${objectivesCompletedCount} / ${objectivesTotalCount} (${objectivesCompletionPercentage}%)`}
                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingObjectives ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : dailyObjectives.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-sm py-2">Aucun objectif défini pour aujourd'hui.</p>
+                    <p className="text-muted-foreground text-center text-xs py-2">Aucun objectif défini.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm max-h-48 overflow-y-auto">
-                      {dailyObjectives.map(obj => (
-                        <li key={obj.id} className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/30">
+                    <ul className="space-y-1.5 text-xs max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                      {dailyObjectives.slice(0, 5).map(obj => ( // Show up to 5 objectives
+                        <li key={obj.id} className="flex items-center gap-2 p-1.5 border rounded-md hover:bg-muted/30 transition-colors">
                           <Checkbox
                             id={`dash-obj-${obj.id}`}
                             checked={obj.completed}
                             onCheckedChange={(checked) => handleToggleObjective(obj.id, !!checked)}
                             disabled={isLoadingObjectiveToggle === obj.id}
-                            aria-label={obj.completed ? "Marquer comme non terminé" : "Marquer comme terminé"}
+                            className="h-3.5 w-3.5"
                           />
                           <label
                             htmlFor={`dash-obj-${obj.id}`}
                             className={cn(
-                              "flex-grow cursor-pointer",
+                              "flex-grow cursor-pointer truncate",
                               obj.completed && "line-through text-muted-foreground"
                             )}
+                            title={obj.text}
                           >
                             {obj.text}
                           </label>
-                          {isLoadingObjectiveToggle === obj.id && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
+                          {isLoadingObjectiveToggle === obj.id && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
                         </li>
                       ))}
                     </ul>
                   )}
                 </CardContent>
-                <CardFooter>
-                  <Button asChild variant="outline" size="sm">
-                      <Link href="/daily-plan"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan du Jour</Link>
+                <CardFooter className="pt-2">
+                  <Button asChild variant="outline" size="xs" className="w-full text-xs">
+                      <Link href="/daily-plan"><ListChecks className="mr-1.5 h-3.5 w-3.5" /> Gérer le Plan du Jour</Link>
                   </Button>
                 </CardFooter>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Résumé des Tâches</CardTitle>
-                   <CardDescription>
-                     {isLoadingTasks ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                      `${allTasks.length} tâche(s) au total.`}
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base md:text-lg">Résumé des Tâches</CardTitle>
+                   <CardDescription className="text-xs">
+                     {isLoadingTasks ? <Loader2 className="h-3 w-3 animate-spin inline-block" /> :
+                      `${tasksPending.length} en attente / ${allTasks.length} au total.`}
                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingTasks ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : (
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-1.5 text-xs max-h-36 overflow-y-auto custom-scrollbar pr-1">
                       <p>En attente : <span className="font-semibold text-orange-600">{tasksPending.length}</span></p>
                       {tasksPending.length > 0 && (
-                        <div className="pl-4 text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                        <div className="pl-3 text-xs space-y-0.5">
                           {Object.entries(taskTypeLabels).map(([type, label]) => {
                               const count = tasksPendingByType[type as TaskType] || 0;
                               if (count > 0) {
-                                  return <p key={type}>{label}: <span className="font-medium">{count}</span></p>;
+                                  return <p key={type} className={cn("flex justify-between items-center", taskTypeColors[type as TaskType], "px-1.5 py-0.5 rounded-sm")}><span>{label}:</span> <Badge variant="secondary" className="text-xs">{count}</Badge></p>;
                               }
                               return null;
                           })}
-                          {Object.keys(tasksPendingByType).length === 0 && <p className="text-muted-foreground">Aucune tâche en attente par type.</p>}
                         </div>
                       )}
                       <p>Terminées : <span className="font-semibold text-green-600">{tasksCompletedCount}</span></p>
                     </div>
                   )}
                 </CardContent>
-                 <CardFooter>
-                  <Button asChild variant="outline" size="sm">
-                      <Link href="/tasks"><ListChecks className="mr-2 h-4 w-4" /> Gérer les Tâches</Link>
+                 <CardFooter className="pt-2">
+                  <Button asChild variant="outline" size="xs" className="w-full text-xs">
+                      <Link href="/tasks"><ListChecks className="mr-1.5 h-3.5 w-3.5" /> Gérer les Tâches</Link>
                   </Button>
                 </CardFooter>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Vide-Cerveau</CardTitle>
-                   <CardDescription>
-                     {isLoadingBrainDumps ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                      `${brainDumpsToProcessCount} note(s) "capturée(s)" à traiter.`}
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base md:text-lg">Vide-Cerveau</CardTitle>
+                   <CardDescription className="text-xs">
+                     {isLoadingBrainDumps ? <Loader2 className="h-3 w-3 animate-spin inline-block" /> :
+                      `${brainDumpsToProcessCount} note(s) à traiter.`}
                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingBrainDumps ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : recentBrainDumps.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
+                    <p className="text-muted-foreground text-center text-xs py-2">Aucune note récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm  max-h-40 overflow-y-auto">
-                      {recentBrainDumps.slice(0,3).map(dump => ( 
-                        <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
-                          {dump.text} <Badge variant={dump.status === 'captured' ? 'destructive' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
+                    <ul className="space-y-1.5 text-xs max-h-28 overflow-y-auto custom-scrollbar pr-1">
+                      {recentBrainDumps.map(dump => (
+                        <li key={dump.id} className="truncate p-1.5 border rounded-md bg-muted/40 hover:bg-muted/70 transition-colors" title={dump.text}>
+                          {dump.text} <Badge variant={dump.status === 'captured' ? 'destructive' : 'secondary'} className="ml-1 text-xs opacity-80">{dump.status}</Badge>
                         </li>
                       ))}
                     </ul>
                   )}
                 </CardContent>
-                <CardFooter>
-                  <Button asChild variant="outline" size="sm">
-                      <Link href="/brain-dump"><Notebook className="mr-2 h-4 w-4" /> Aller au Vide-Cerveau</Link>
+                <CardFooter className="pt-2">
+                  <Button asChild variant="outline" size="xs" className="w-full text-xs">
+                      <Link href="/brain-dump"><Notebook className="mr-1.5 h-3.5 w-3.5" /> Aller au Vide-Cerveau</Link>
                   </Button>
                 </CardFooter>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Sessions Pomodoro</CardTitle>
-                  <CardDescription>
-                    {isLoadingPomodoros ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                     `${recentPomodoros.length} sessions récentes (${pomodoroTotalMinutesRecent} min).`}
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base md:text-lg">Sessions Pomodoro</CardTitle>
+                  <CardDescription className="text-xs">
+                    {isLoadingPomodoros ? <Loader2 className="h-3 w-3 animate-spin inline-block" /> :
+                     `${recentPomodoros.length} récentes (${pomodoroTotalMinutesRecent} min).`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {isLoadingPomodoros ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : recentPomodoros.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
+                    <p className="text-muted-foreground text-center text-xs py-2">Aucune session récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm max-h-40 overflow-y-auto">
-                      {recentPomodoros.slice(0,3).map(pomo => ( 
-                         <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
-                          <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
-                          {pomo.notes && <p className="text-xs text-muted-foreground truncate">Notes: {pomo.notes}</p>}
+                    <ul className="space-y-1.5 text-xs max-h-28 overflow-y-auto custom-scrollbar pr-1">
+                      {recentPomodoros.map(pomo => (
+                         <li key={pomo.id} className="p-1.5 border rounded-md bg-muted/40 hover:bg-muted/70 transition-colors">
+                          <p className="truncate">{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
+                          {pomo.notes && <p className="text-xs text-muted-foreground truncate" title={pomo.notes}>Notes: {pomo.notes}</p>}
                         </li>
                       ))}
                     </ul>
                   )}
                 </CardContent>
-                <CardFooter>
-                  <Button asChild variant="outline" size="sm">
-                      <Link href="/pomodoro"><TimerIcon className="mr-2 h-4 w-4" /> Aller au Minuteur Pomodoro</Link>
+                <CardFooter className="pt-2">
+                  <Button asChild variant="outline" size="xs" className="w-full text-xs">
+                      <Link href="/pomodoro"><TimerIcon className="mr-1.5 h-3.5 w-3.5" /> Aller au Minuteur</Link>
                   </Button>
                 </CardFooter>
               </Card>
@@ -549,57 +528,6 @@ export function ThesisDashboardSection() {
           </div>
         </>
       )}
-
-      <Dialog open={isModalOpen} onOpenChange={(open) => {if (!isSavingChapter) setIsModalOpen(open)}}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{currentChapter?.id ? 'Modifier le Chapitre' : 'Ajouter un Nouveau Chapitre'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <label htmlFor="chapterName" className="block text-sm font-medium mb-1">Nom du Chapitre</label>
-              <Input
-                id="chapterName"
-                value={currentChapter?.name || ''}
-                onChange={(e) => setCurrentChapter(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="ex : Introduction"
-                disabled={isSavingChapter}
-              />
-            </div>
-            <div>
-              <label htmlFor="chapterProgress" className="block text-sm font-medium mb-1">Progression (%)</label>
-              <Input
-                id="chapterProgress"
-                type="number"
-                min="0"
-                max="100"
-                value={currentChapter?.progress || 0}
-                onChange={(e) => setCurrentChapter(prev => ({ ...prev, progress: parseInt(e.target.value, 10) || 0 }))}
-                disabled={isSavingChapter}
-              />
-            </div>
-            <div>
-              <label htmlFor="chapterStatus" className="block text-sm font-medium mb-1">Statut</label>
-              <Input
-                id="chapterStatus"
-                value={currentChapter?.status || ''}
-                onChange={(e) => setCurrentChapter(prev => ({ ...prev, status: e.target.value }))}
-                placeholder="ex : En cours"
-                disabled={isSavingChapter}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {if(!isSavingChapter) setIsModalOpen(false)}} disabled={isSavingChapter}>Annuler</Button>
-            <Button onClick={handleSaveChapter} disabled={isSavingChapter || !currentChapter?.name?.trim()}>
-              {isSavingChapter ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {isSavingChapter ? 'Enregistrement...' : (currentChapter?.id ? 'Mettre à Jour' : 'Ajouter le Chapitre')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
-
-    

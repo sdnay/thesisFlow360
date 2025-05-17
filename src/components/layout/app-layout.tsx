@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -26,20 +27,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Logo className="h-8 w-auto" />
             </Link>
             <SidebarTrigger asChild className="group-data-[collapsible=icon]:hidden ml-auto md:hidden">
-               <Button variant="ghost" size="icon"><PanelLeft /></Button>
+               <Button variant="ghost" size="icon" className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                 <PanelLeft />
+               </Button>
             </SidebarTrigger>
           </div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarNav />
         </SidebarContent>
-        <SidebarFooter className="p-2 border-t border-sidebar-border">
-          {/* Footer content if any */}
+        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+          {/* Peut-être un lien vers les paramètres ou une version ici */}
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="flex flex-col">
+      <SidebarInset className="flex flex-col h-screen">
         <Header />
-        <main className="flex-1 overflow-y-auto bg-muted/30">
+        <main className="flex-1 flex flex-col overflow-hidden bg-muted/20"> {/* Permet au contenu enfant de gérer son propre défilement */}
           {children}
         </main>
       </SidebarInset>

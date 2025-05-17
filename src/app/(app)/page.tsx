@@ -1,3 +1,4 @@
+
 // src/app/(app)/page.tsx
 "use client";
 
@@ -7,17 +8,15 @@ import { ChatGPTPromptLogPanel } from '@/components/chat/chat-gpt-prompt-log-pan
 
 export default function HomePage() {
   return (
-    // Assurez-vous que ce div parent a une hauteur définie pour que 'h-full' sur ResizablePanelGroup fonctionne.
-    // h-16 est la hauteur typique d'un header (theme(space.16) -> 4rem -> 64px).
-    <div className="h-[calc(100vh-theme(space.16))] w-full"> 
+    <div className="h-full w-full p-2 md:p-4"> 
       <ResizablePanelGroup 
         direction="horizontal" 
-        className="h-full w-full rounded-lg border"
+        className="h-full w-full rounded-lg border bg-card shadow-sm" // Added bg-card and shadow for panel group
       >
-        <ResizablePanel defaultSize={65} minSize={40} className="flex flex-col"> {/* Suppression de overflow-y-auto ici */}
+        <ResizablePanel defaultSize={65} minSize={40} className="flex flex-col overflow-y-auto">
           <ThesisDashboardSection />
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        <ResizableHandle withHandle className="bg-border" />
         <ResizablePanel defaultSize={35} minSize={25} className="flex flex-col overflow-y-auto"> {/* L'assistant IA peut garder son propre scroll */}
           <ChatGPTPromptLogPanel />
         </ResizablePanel>

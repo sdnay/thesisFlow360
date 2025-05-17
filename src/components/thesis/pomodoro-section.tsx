@@ -5,17 +5,19 @@ import { useState, useEffect, useRef, type FC, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
-import { Play, Pause, RotateCcw, ListChecks, Trash2, Loader2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, ListChecks, Trash2, Loader2, Timer, Save } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const DEFAULT_SESSION_DURATION = 25; 
 const MAX_SESSION_DURATION = 120; 
-const MIN_SESSION_DURATION = 1; 
+const MIN_SESSION_DURATION = 5; // Minimum 5 minutes
 
 interface PomodoroLogItemProps {
   session: PomodoroSession;
@@ -25,14 +27,17 @@ interface PomodoroLogItemProps {
 
 const PomodoroLogItem: FC<PomodoroLogItemProps> = ({ session, onDelete, isLoading }) => {
   return (
-    <li className="flex justify-between items-center p-3 border rounded-md bg-card hover:bg-muted/50">
-      <div>
+    <li className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-lg bg-card hover:bg-muted/30 transition-colors shadow-sm">
+      <div className="flex-grow mb-2 sm:mb-0">
         <p className="text-sm font-medium">
-          Session de {session.duration} min - {format(new Date(session.start_time), "d MMM, HH:mm", { locale: fr })}
+          Session de <span className="text-primary font-semibold">{session.duration} min</span>
         </p>
-        {session.notes && <p className="text-xs text-muted-foreground mt-1">Notes : {session.notes}</p>}
+        <p className="text-xs text-muted-foreground">
+          {format(new Date(session.start_time), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}
+        </p>
+        {session.notes && <p className="text-xs text-foreground mt-1.5 pt-1.5 border-t border-dashed">Notes : {session.notes}</p>}
       </div>
-       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive hover:text-destructive/80" disabled={isLoading}>
+       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 self-start sm:self-center" disabled={isLoading}>
         <Trash2 className="h-4 w-4" />
       </Button>
     </li>
@@ -47,7 +52,9 @@ export function PomodoroSection() {
   const [sessionNotes, setSessionNotes] = useState('');
   const [pomodoroLog, setPomodoroLog] = useState<PomodoroSession[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const [isLogging, setIsLogging] = useState(false); // For add/delete log item
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [isLogging, setIsLogging] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
@@ -57,7 +64,8 @@ export function PomodoroSection() {
       const { data, error } = await supabase
         .from('pomodoro_sessions')
         .select('*')
-        .order('start_time', { ascending: false });
+        .order('start_time', { ascending: false })
+        .limit(20); // Fetch last 20 sessions
       if (error) throw error;
       setPomodoroLog(data || []);
     } catch (e: any) {
@@ -70,6 +78,14 @@ export function PomodoroSection() {
 
   useEffect(() => {
     fetchPomodoroLog();
+    // Optional: Setup realtime listener for logs
+    const channel = supabase
+      .channel('db-pomodoro-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pomodoro_sessions' }, fetchPomodoroLog)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchPomodoroLog]);
 
 
@@ -80,24 +96,24 @@ export function PomodoroSection() {
   const logSession = useCallback(async (completed: boolean) => {
     setIsLogging(true);
     try {
+      const actualDurationUsed = durationMinutes - Math.floor(timeLeft / 60);
       const newSessionPayload: Omit<PomodoroSession, 'id'> = {
-        start_time: new Date(Date.now() - (durationMinutes * 60 - timeLeft) * 1000).toISOString(), 
-        duration: durationMinutes,
-        notes: completed ? (sessionNotes || `Session de ${durationMinutes} min terminée`) : (sessionNotes || `Session de ${durationMinutes} min incomplète (réinitialisée)`),
+        start_time: new Date(Date.now() - (actualDurationUsed * 60 * 1000)).toISOString(), // Approximate start time
+        duration: actualDurationUsed > 0 ? actualDurationUsed : durationMinutes, // Log actual duration if reset early
+        notes: sessionNotes || (completed ? `Session de ${durationMinutes} min terminée` : `Session de ${durationMinutes} min interrompue`),
       };
       const { error } = await supabase.from('pomodoro_sessions').insert(newSessionPayload);
       if (error) throw error;
       
       setSessionNotes(''); 
-      await fetchPomodoroLog();
       toast({ title: "Session enregistrée" });
     } catch (e: any) {
-      toast({ title: "Erreur d'enregistrement", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur logSession:", e);
     } finally {
       setIsLogging(false);
     }
-  }, [durationMinutes, timeLeft, sessionNotes, fetchPomodoroLog, toast]);
+  }, [durationMinutes, timeLeft, sessionNotes, toast]);
 
 
   useEffect(() => {
@@ -108,7 +124,8 @@ export function PomodoroSection() {
             clearInterval(timerRef.current!);
             setIsActive(false);
             logSession(true); 
-            toast({ title: "Session Pomodoro terminée !" });
+            toast({ title: "Session Pomodoro terminée !", description: "Prenez une petite pause."});
+            audioRef.current?.play();
             return 0;
           }
           return prevTime - 1;
@@ -118,7 +135,7 @@ export function PomodoroSection() {
       clearInterval(timerRef.current!);
     }
     return () => clearInterval(timerRef.current!);
-  }, [isActive, isPaused, durationMinutes, logSession, toast]); // Added logSession and toast
+  }, [isActive, isPaused, logSession, toast]);
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isActive) return;
@@ -141,7 +158,7 @@ export function PomodoroSection() {
 
   const resetTimer = () => {
     if (isActive) { 
-        logSession(false); // Log as incomplete if reset while active
+        logSession(false); 
     }
     setIsActive(false);
     setIsPaused(false);
@@ -150,14 +167,13 @@ export function PomodoroSection() {
   };
   
   const deleteLogItem = async (id: string) => {
-    setIsLogging(true);
+    setIsLogging(true); // Use general logging state for this simple operation
     try {
       const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id);
       if (error) throw error;
-      await fetchPomodoroLog();
       toast({ title: "Session supprimée du journal" });
     } catch (e: any) {
-      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur deleteLogItem:", e);
     } finally {
       setIsLogging(false);
@@ -172,23 +188,33 @@ export function PomodoroSection() {
 
   const progressPercentage = ((durationMinutes * 60 - timeLeft) / (durationMinutes * 60)) * 100;
 
+  useEffect(() => {
+    // Précharger l'audio pour éviter les délais au premier play
+    audioRef.current = new Audio('/sounds/notification.mp3'); // Assurez-vous que ce chemin est correct
+    audioRef.current.load();
+  }, []);
+
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Minuteur & Journal Pomodoro</h2>
+    <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
+      <div className="flex items-center gap-3">
+        <Timer className="h-7 w-7 text-primary" />
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Minuteur & Journal Pomodoro</h1>
+      </div>
 
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-center text-5xl font-mono tracking-wider">
+        <CardHeader className="items-center">
+          <CardTitle className="text-5xl md:text-6xl font-mono tracking-wider text-primary">
             {formatTime(timeLeft)}
           </CardTitle>
-          <CardDescription className="text-center">
-            Définissez la durée de votre session de travail profond (1-120 minutes).
+          <CardDescription className="text-center text-xs md:text-sm">
+            Concentrez-vous pendant {durationMinutes} minutes.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Progress value={isActive ? progressPercentage : 0} className="w-full h-3" />
-          <div className="flex items-center gap-2">
-            <label htmlFor="duration" className="text-sm font-medium">Durée (min) :</label>
+        <CardContent className="space-y-4 px-4 md:px-6">
+          <Progress value={isActive ? progressPercentage : 0} className="w-full h-3 md:h-4" />
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+            <Label htmlFor="duration" className="text-sm font-medium whitespace-nowrap">Durée (min) :</Label>
             <Input
               id="duration"
               type="number"
@@ -196,43 +222,48 @@ export function PomodoroSection() {
               onChange={handleDurationChange}
               min={MIN_SESSION_DURATION}
               max={MAX_SESSION_DURATION}
-              className="w-20"
+              className="w-full sm:w-24 text-center"
               disabled={isActive || isLogging}
+              aria-label="Durée de la session en minutes"
             />
           </div>
-          <Input
-            placeholder="Optionnel : Sur quoi travaillez-vous ?"
+          <Textarea
+            placeholder="Sur quoi travaillez-vous pendant cette session ? (Optionnel)"
             value={sessionNotes}
             onChange={(e) => setSessionNotes(e.target.value)}
-            disabled={!isActive || isLogging} // Disabled if timer not active OR if logging
+            rows={2}
+            disabled={isLogging} // Can edit notes even if timer is active but not while logging
           />
         </CardContent>
-        <CardFooter className="flex justify-center gap-3">
-          <Button onClick={toggleTimer} size="lg" className="w-32" disabled={isLogging}>
+        <CardFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 p-4 md:p-6">
+          <Button onClick={toggleTimer} size="lg" className="w-full sm:w-36" disabled={isLogging}>
             {isActive && !isPaused ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
             {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Reprendre' : 'Démarrer')}
           </Button>
-          <Button onClick={resetTimer} variant="outline" size="lg" disabled={isLogging}>
+          <Button onClick={resetTimer} variant="outline" size="lg" disabled={isLogging || (!isActive && timeLeft === durationMinutes * 60)} className="w-full sm:w-36">
             <RotateCcw className="mr-2 h-5 w-5" /> Réinitialiser
           </Button>
         </CardFooter>
       </Card>
 
-      
-      <Card>
+      <Card className="flex-grow flex flex-col shadow-md overflow-hidden">
         <CardHeader>
-          <CardTitle>Journal des Sessions</CardTitle>
-          <CardDescription>Historique de vos sessions de travail profond.</CardDescription>
+          <CardTitle className="text-lg md:text-xl">Journal des Sessions Pomodoro</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Historique de vos sessions de travail.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
           {isFetching ? (
-            <div className="flex justify-center items-center py-10">
+            <div className="flex justify-center items-center h-full py-10">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : pomodoroLog.length === 0 ? (
-            <p className="text-muted-foreground text-center">Aucune session enregistrée pour le moment.</p>
+            <div className="text-center py-10">
+                <Timer className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p className="text-muted-foreground">Aucune session enregistrée.</p>
+                <p className="text-xs text-muted-foreground">Utilisez le minuteur pour commencer !</p>
+            </div>
           ) : (
-            <ul className="space-y-3 max-h-96 overflow-y-auto">
+            <ul className="space-y-3">
               {pomodoroLog.map((session) => (
                 <PomodoroLogItem key={session.id} session={session} onDelete={deleteLogItem} isLoading={isLogging}/>
               ))}

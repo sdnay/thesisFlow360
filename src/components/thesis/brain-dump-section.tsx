@@ -6,11 +6,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { BrainDumpEntry } from '@/types';
-import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2 } from 'lucide-react';
+import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, CheckSquare, ArchiveRestore } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface BrainDumpItemCardProps { 
   entry: BrainDumpEntry;
@@ -19,32 +21,84 @@ interface BrainDumpItemCardProps {
   isLoading: boolean;
 }
 
+const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<any>; color: string; actions?: Array<{ toStatus: BrainDumpEntry['status']; label: string; icon: FC<any>; condition?: (entry: BrainDumpEntry) => boolean }> }> = {
+  captured: {
+    label: 'Capturé',
+    icon: Zap,
+    color: 'bg-blue-50 border-blue-200 text-blue-700',
+    actions: [
+      { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
+      { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
+      { toStatus: 'discarded', label: 'Écarter', icon: Archive },
+    ],
+  },
+  task: {
+    label: 'Tâche',
+    icon: ListChecks,
+    color: 'bg-amber-50 border-amber-200 text-amber-700',
+    actions: [
+      { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
+      { toStatus: 'discarded', label: 'Écarter', icon: Archive },
+    ],
+  },
+  idea: {
+    label: 'Idée',
+    icon: Lightbulb,
+    color: 'bg-lime-50 border-lime-200 text-lime-700',
+    actions: [
+      { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
+      { toStatus: 'discarded', label: 'Écarter', icon: Archive },
+    ],
+  },
+  discarded: {
+    label: 'Écarté',
+    icon: Archive,
+    color: 'bg-gray-100 border-gray-300 text-gray-600 opacity-70',
+    actions: [
+      { toStatus: 'captured', label: 'Restaurer', icon: ArchiveRestore },
+    ],
+  },
+};
+
+
 const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading }) => {
+  const config = statusConfig[entry.status];
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
-      <CardContent className="pt-4">
+    <Card className={cn("shadow-sm hover:shadow-lg transition-shadow flex flex-col", config.color)}>
+      <CardHeader className="pb-2 pt-3">
+        <div className="flex justify-between items-center">
+            <Badge variant="secondary" className={cn("text-xs", config.color, "border")}>
+                <config.icon className="mr-1.5 h-3.5 w-3.5" />
+                {config.label}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: fr })}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-1 pb-3 flex-grow">
         <p className="text-sm whitespace-pre-wrap">{entry.text}</p>
       </CardContent>
-      <CardFooter className="flex justify-between items-center text-xs text-muted-foreground pt-2">
-        <span>{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: fr })} - Statut : <span className="font-medium">{entry.status === "captured" ? "Capturé" : entry.status === "idea" ? "Idée" : entry.status === "task" ? "Tâche" : "Écarté"}</span></span>
-        <div className="flex gap-1">
-          {entry.status === 'captured' && (
-            <>
-              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'task')} title="Marquer comme Tâche" disabled={isLoading}>
-                <ListChecks className="h-4 w-4 text-blue-500" />
+      <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 pb-3 border-t">
+        <div className="flex gap-1 flex-wrap">
+          {config.actions?.map(action => {
+            if (action.condition && !action.condition(entry)) return null;
+            return (
+              <Button 
+                key={action.toStatus}
+                variant="outline" 
+                size="xs" 
+                onClick={() => onUpdateStatus(entry.id, action.toStatus)} 
+                title={action.label} 
+                disabled={isLoading}
+                className="text-xs bg-card hover:bg-muted/50"
+              >
+                <action.icon className="mr-1 h-3 w-3" /> {action.label}
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'idea')} title="Marquer comme Idée" disabled={isLoading}>
-                <Lightbulb className="h-4 w-4 text-yellow-500" />
-              </Button>
-            </>
-          )}
-          <Button variant="ghost" size="icon" onClick={() => onUpdateStatus(entry.id, 'discarded')} title="Écarter" disabled={isLoading || entry.status === 'discarded'}>
-             <Archive className="h-4 w-4 text-gray-500" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)} title="Supprimer Définitivement" className="text-destructive hover:text-destructive/80" disabled={isLoading}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+            )
+          })}
         </div>
+        <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)} title="Supprimer Définitivement" className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7" disabled={isLoading}>
+            <Trash2 className="h-4 w-4" />
+        </Button>
       </CardFooter>
     </Card>
   )
@@ -54,8 +108,8 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
 export function BrainDumpSection() {
   const [brainDumps, setBrainDumps] = useState<BrainDumpEntry[]>([]);
   const [newDumpText, setNewDumpText] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // For add operation
-  const [isCardLoading, setIsCardLoading] = useState(false); // For card operations (update/delete)
+  const [isAddingLoading, setIsAddingLoading] = useState(false);
+  const [isCardLoading, setIsCardLoading] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
@@ -69,7 +123,7 @@ export function BrainDumpSection() {
       if (error) throw error;
       setBrainDumps(data || []);
     } catch (e: any) {
-      toast({ title: "Erreur", description: "Impossible de charger les notes du vide-cerveau.", variant: "destructive" });
+      toast({ title: "Erreur", description: "Impossible de charger les notes.", variant: "destructive" });
       console.error("Erreur fetchBrainDumps:", e);
     } finally {
       setIsFetching(false);
@@ -78,11 +132,18 @@ export function BrainDumpSection() {
 
   useEffect(() => {
     fetchBrainDumps();
+    const channel = supabase
+      .channel('db-braindump-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brain_dump_entries' }, fetchBrainDumps)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchBrainDumps]);
 
   const handleAddDump = async () => {
     if (newDumpText.trim() === '') return;
-    setIsLoading(true);
+    setIsAddingLoading(true);
     try {
       const newEntryPayload: Omit<BrainDumpEntry, 'id' | 'created_at'> = {
         text: newDumpText.trim(),
@@ -91,123 +152,113 @@ export function BrainDumpSection() {
       const { error } = await supabase.from('brain_dump_entries').insert(newEntryPayload);
       if (error) throw error;
       setNewDumpText('');
-      await fetchBrainDumps();
       toast({ title: "Note ajoutée", description: "Votre pensée a été capturée." });
     } catch (e: any) {
-      toast({ title: "Erreur d'ajout", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur d'ajout", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddDump:", e);
     } finally {
-      setIsLoading(false);
+      setIsAddingLoading(false);
     }
   };
 
   const handleUpdateStatus = async (id: string, status: BrainDumpEntry['status']) => {
-    setIsCardLoading(true);
+    setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').update({ status }).eq('id', id);
       if (error) throw error;
-      await fetchBrainDumps(); // Refresh list
     } catch (e: any) {
-      toast({ title: "Erreur de mise à jour", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleUpdateStatus:", e);
     } finally {
-      setIsCardLoading(false);
+      setIsCardLoading(null);
     }
   };
   
   const handleDeleteDump = async (id: string) => {
-    setIsCardLoading(true);
+    setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').delete().eq('id', id);
       if (error) throw error;
-      await fetchBrainDumps(); // Refresh list
       toast({ title: "Note supprimée" });
     } catch (e: any) {
-      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteDump:", e);
     } finally {
-      setIsCardLoading(false);
+      setIsCardLoading(null);
     }
   };
 
-  const capturedDumps = brainDumps.filter(d => d.status === 'captured');
-  const ideaDumps = brainDumps.filter(d => d.status === 'idea');
-  const taskDumps = brainDumps.filter(d => d.status === 'task');
-  const discardedDumps = brainDumps.filter(d => d.status === 'discarded');
+  const groupedDumps = brainDumps.reduce((acc, entry) => {
+    (acc[entry.status] = acc[entry.status] || []).push(entry);
+    return acc;
+  }, {} as Record<BrainDumpEntry['status'], BrainDumpEntry[]>);
+
+  const statusOrder: BrainDumpEntry['status'][] = ['captured', 'idea', 'task', 'discarded'];
 
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Vide-Cerveau</h2>
+    <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
+      <div className="flex items-center gap-3">
+        <Brain className="h-7 w-7 text-primary" />
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Vide-Cerveau</h1>
+      </div>
       
-      <Card>
+      <Card className="shadow-md">
         <CardHeader>
-          <CardTitle>Capturer une Nouvelle Idée</CardTitle>
-          <CardDescription>Notez toutes les pensées, citations ou tâches qui vous viennent à l'esprit.</CardDescription>
+          <CardTitle className="text-lg md:text-xl">Capturer une Pensée / Idée</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Notez rapidement tout ce qui vous vient à l'esprit.</CardDescription>
         </CardHeader>
         <CardContent>
           <Textarea
             value={newDumpText}
             onChange={(e) => setNewDumpText(e.target.value)}
-            placeholder="Écrivez vos pensées ici..."
-            rows={4}
-            className="mb-2"
-            disabled={isLoading || isFetching}
+            placeholder="Écrivez ici..."
+            rows={3}
+            className="mb-3"
+            disabled={isAddingLoading || isFetching}
           />
         </CardContent>
         <CardFooter>
-          <Button onClick={handleAddDump} disabled={isLoading || !newDumpText.trim() || isFetching}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          <Button onClick={handleAddDump} disabled={isAddingLoading || !newDumpText.trim() || isFetching}>
+            {isAddingLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Enregistrer la Note
           </Button>
         </CardFooter>
       </Card>
 
       {isFetching ? (
-        <div className="flex justify-center items-center py-10">
+        <div className="flex-grow flex justify-center items-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : brainDumps.length === 0 && !newDumpText ? (
-         <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground text-center">Votre esprit est clair ! Ou commencez à décharger vos pensées ci-dessus.</p>
-          </CardContent>
+         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Brain className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
+            <p className="text-muted-foreground">Votre esprit est clair !</p>
+            <p className="text-xs text-muted-foreground">Utilisez le formulaire ci-dessus pour commencer à décharger vos pensées.</p>
         </Card>
-      ) : null}
+      ) : (
+        <div className="flex-grow space-y-6 overflow-y-auto custom-scrollbar pr-1 pb-4">
+          {statusOrder.map(statusKey => {
+            const entries = groupedDumps[statusKey] || [];
+            const config = statusConfig[statusKey];
+            if (entries.length === 0 && statusKey !== 'captured') return null; // Don't show empty sections other than 'captured' initially
 
-      {capturedDumps.length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium mb-2">À Clarifier ({capturedDumps.length})</h3>
-          <div className="space-y-3">
-            {capturedDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading} />)}
-          </div>
-        </div>
-      )}
-
-      {ideaDumps.length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium mb-2">Idées Utiles ({ideaDumps.length})</h3>
-           <div className="space-y-3">
-            {ideaDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading} />)}
-          </div>
-        </div>
-      )}
-      
-      {taskDumps.length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium mb-2">Tâches ({taskDumps.length})</h3>
-           <div className="space-y-3">
-            {taskDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading}/>)}
-          </div>
-        </div>
-      )}
-
-      {discardedDumps.length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium mb-2">Écartées ({discardedDumps.length})</h3>
-           <div className="space-y-3">
-            {discardedDumps.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading}/>)}
-          </div>
+            return (
+              <div key={statusKey}>
+                <h2 className="text-base md:text-lg font-semibold mb-2 flex items-center gap-2">
+                  <config.icon className={cn("h-5 w-5", config.color.replace('bg-', 'text-').replace('-50', '-600'))} />
+                  {config.label} ({entries.length})
+                </h2>
+                {entries.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                    {entries.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading === entry.id} />)}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic ml-7">Aucune note dans cette catégorie.</p>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

@@ -8,12 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry } from '@/types';
 import { processUserRequest, type ThesisAgentInput, type ThesisAgentOutput } from '@/ai/flows/thesis-agent-flow';
-import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot } from 'lucide-react';
+import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, ThumbsUp, ThumbsDown, Edit } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PromptLogItemDisplayProps {
   entry: PromptLogEntry;
@@ -31,60 +32,74 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
     setTimeout(() => {
       if (type === 'original') setCopiedOriginal(false);
       else setCopiedRefined(false);
-    }, 2000);
+    }, 1500);
   };
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">Prompt Original</CardTitle>
-        <CardDescription className="text-xs">
-          Enregistré : {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr })}
+    <Card className="shadow-sm bg-card/80">
+      <CardHeader className="pb-2 pt-3">
+        <CardTitle className="text-xs font-semibold text-primary">Prompt Original</CardTitle>
+        <CardDescription className="text-xs text-muted-foreground">
+          {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-xs space-y-2">
-        <div className="p-2 border rounded-md bg-muted/50 relative">
-          <p className="whitespace-pre-wrap">{entry.original_prompt}</p>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-1 right-1 h-6 w-6"
-            onClick={() => handleCopy(entry.original_prompt, 'original')}
-          >
-            {copiedOriginal ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-          </Button>
+      <CardContent className="text-xs space-y-1.5 pb-2">
+        <div className="p-2 border rounded-md bg-background relative">
+          <p className="whitespace-pre-wrap text-foreground/90">{entry.original_prompt}</p>
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-0.5 right-0.5 h-6 w-6"
+                  onClick={() => handleCopy(entry.original_prompt, 'original')}
+                >
+                  {copiedOriginal ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left"><p>Copier Original</p></TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         {entry.refined_prompt && (
           <>
-            <h4 className="text-sm font-medium pt-1">Prompt Affiné</h4>
-            <div className="p-2 border rounded-md bg-accent/20 relative">
-              <p className="whitespace-pre-wrap">{entry.refined_prompt}</p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-1 right-1 h-6 w-6"
-                onClick={() => handleCopy(entry.refined_prompt!, 'refined')}
-              >
-                {copiedRefined ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-              </Button>
+            <h4 className="text-xs font-semibold text-accent pt-1">Prompt Affiné</h4>
+            <div className="p-2 border rounded-md bg-accent/10 border-accent/30 relative">
+              <p className="whitespace-pre-wrap text-accent/90">{entry.refined_prompt}</p>
+              <TooltipProvider delayDuration={100}>
+               <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-0.5 right-0.5 h-6 w-6"
+                    onClick={() => handleCopy(entry.refined_prompt!, 'refined')}
+                    >
+                    {copiedRefined ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left"><p>Copier Affiné</p></TooltipContent>
+               </Tooltip>
+              </TooltipProvider>
             </div>
           </>
         )}
         {entry.reasoning && (
           <>
-            <h4 className="text-sm font-medium">Raisonnement pour l'Affinage</h4>
-            <p className="p-2 border rounded-md bg-muted/30 italic whitespace-pre-wrap">{entry.reasoning}</p>
+            <h4 className="text-xs font-semibold text-muted-foreground pt-1">Raisonnement</h4>
+            <p className="p-2 border rounded-md bg-muted/40 italic whitespace-pre-wrap text-muted-foreground/90">{entry.reasoning}</p>
           </>
         )}
         {entry.tags && entry.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
-            {entry.tags.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
+            {entry.tags.map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
           </div>
         )}
       </CardContent>
-      <CardFooter className="pt-2">
-        <Button variant="outline" size="sm" onClick={() => onUsePrompt(entry.refined_prompt || entry.original_prompt)}>
-          Utiliser ce Prompt
+      <CardFooter className="pt-2 pb-3">
+        <Button variant="outline" size="xs" onClick={() => onUsePrompt(entry.refined_prompt || entry.original_prompt)} className="text-xs">
+          <Edit className="mr-1.5 h-3 w-3" /> Utiliser ce Prompt
         </Button>
       </CardFooter>
     </Card>
@@ -97,6 +112,7 @@ interface AgentMessage {
   text: string;
   timestamp: Date;
   actions?: ThesisAgentOutput['actionsTaken'];
+  isLoading?: boolean; // For agent's streaming-like placeholder
 }
 
 export function ChatGPTPromptLogPanel() {
@@ -117,14 +133,14 @@ export function ChatGPTPromptLogPanel() {
         .from('prompt_log_entries')
         .select('*')
         .order('timestamp', { ascending: false })
-        .limit(20); 
+        .limit(10); 
 
       if (supabaseError) throw supabaseError;
       setPromptLogs(data || []);
     } catch (e: any) {
       console.error("Erreur lors de la récupération du journal des prompts:", e);
       setError("Échec de la récupération du journal des prompts.");
-      toast({ title: "Erreur", description: "Impossible de charger le journal des prompts.", variant: "destructive" });
+      toast({ title: "Erreur Logs", description: "Impossible de charger le journal des prompts.", variant: "destructive" });
     } finally {
       setIsFetchingLogs(false);
     }
@@ -132,6 +148,14 @@ export function ChatGPTPromptLogPanel() {
 
   useEffect(() => {
     fetchPromptLogs();
+    // Optional: Setup realtime listener for prompt logs
+     const channel = supabase
+      .channel('db-promptlogs-panel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries' }, fetchPromptLogs)
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchPromptLogs]);
 
   const handleSendToAgent = async () => {
@@ -143,13 +167,16 @@ export function ChatGPTPromptLogPanel() {
       text: currentUserRequest,
       timestamp: new Date(),
     };
-    setConversation(prev => [...prev, userMessage]);
+    // Add user message and a temporary loading message for agent
+    setConversation(prev => [...prev, userMessage, { id: `agent-loading-${Date.now()}`, type: 'agent', text: 'L\'assistant réfléchit...', timestamp: new Date(), isLoading: true }]);
     
+    const requestTextForAgent = currentUserRequest;
+    setCurrentUserRequest(''); 
     setIsLoadingAgent(true);
     setError(null);
     
     try {
-      const agentInput: ThesisAgentInput = { userRequest: currentUserRequest };
+      const agentInput: ThesisAgentInput = { userRequest: requestTextForAgent };
       const result: ThesisAgentOutput = await processUserRequest(agentInput);
       
       const agentResponseMessage: AgentMessage = {
@@ -159,17 +186,20 @@ export function ChatGPTPromptLogPanel() {
         timestamp: new Date(),
         actions: result.actionsTaken,
       };
-      setConversation(prev => [...prev, agentResponseMessage]);
+      // Replace loading message with actual agent response
+      setConversation(prev => [...prev.filter(m => !m.isLoading), agentResponseMessage]);
 
-      setCurrentUserRequest(''); 
-      // Les outils (comme refinePromptTool) peuvent consigner des prompts.
-      // On pourrait rafraîchir le journal ici si une action d'affinage a eu lieu.
       if (result.actionsTaken?.some(action => action.toolName === 'refinePromptTool' && action.toolOutput?.success)) {
-        await fetchPromptLogs();
+        // fetchPromptLogs(); // Realtime listener should handle this
       }
-      // Afficher un toast pour le message de l'agent peut être redondant si on l'affiche dans le chat
-      // mais utile pour les confirmations importantes ou erreurs
-      toast({ title: "Assistant IA", description: result.responseMessage });
+      // Toast only for significant actions or errors, not every message
+      if (result.actionsTaken && result.actionsTaken.length > 0) {
+        const actionSummary = result.actionsTaken.map(a => a.toolOutput?.message || a.toolName).join(', ');
+        // toast({ title: "Assistant IA", description: `Action(s) effectuée(s) : ${actionSummary}` });
+      } else if (!result.responseMessage.toLowerCase().includes("désolé") && !result.responseMessage.toLowerCase().includes("erreur")) {
+        // toast({ title: "Assistant IA", description: result.responseMessage });
+      }
+
 
     } catch (e: any) {
       console.error("Erreur avec l'agent IA:", e);
@@ -181,7 +211,7 @@ export function ChatGPTPromptLogPanel() {
         text: errorMessage,
         timestamp: new Date(),
       };
-      setConversation(prev => [...prev, agentErrorMessage]);
+      setConversation(prev => [...prev.filter(m => !m.isLoading), agentErrorMessage]);
       toast({ title: "Erreur de l'Agent", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
       setIsLoadingAgent(false);
@@ -190,36 +220,47 @@ export function ChatGPTPromptLogPanel() {
   
   const handleUsePromptFromLog = (promptText: string) => {
     setCurrentUserRequest(promptText);
+    const textarea = document.getElementById('agent-input-textarea') as HTMLTextAreaElement;
+    if (textarea) textarea.focus();
   };
 
   return (
     <div className="flex flex-col h-full p-1 md:p-2 bg-background">
-      <Card className="flex-grow flex flex-col shadow-none border-0 md:border md:shadow-md">
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2 text-lg">
+      <Card className="flex-grow flex flex-col shadow-none border-0 md:border md:shadow-lg">
+        <CardHeader className="border-b p-4">
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
             <Bot className="h-5 w-5 text-primary" />
             Assistant IA ThesisFlow
           </CardTitle>
-          <CardDescription>
-            Discutez avec l'assistant pour gérer votre thèse, ajouter des éléments, ou affiner des prompts.
+          <CardDescription className="text-xs md:text-sm">
+            Interagissez avec l'IA pour gérer votre thèse ou affiner des prompts.
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="pt-4 flex-grow flex flex-col gap-4 overflow-hidden">
-          {/* Conversation Area */}
-          <ScrollArea className="flex-grow pr-3 -mr-3 mb-2 border rounded-md p-2 bg-muted/20">
+        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 overflow-hidden p-3 md:p-4">
+          <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar">
             <div className="space-y-3">
-              {conversation.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">Commencez par envoyer un message à l'assistant.</p>
+              {conversation.length === 0 && !isLoadingAgent && (
+                <div className="text-sm text-muted-foreground text-center py-6">
+                  <Sparkles className="mx-auto h-8 w-8 text-primary/70 mb-2"/>
+                  Commencez par envoyer un message à l'assistant.
+                </div>
               )}
               {conversation.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-2.5 rounded-lg text-sm ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  <div className={`max-w-[85%] p-2.5 rounded-lg text-sm shadow-sm ${msg.type === 'user' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-card text-foreground border rounded-bl-none'}`}>
+                    {msg.isLoading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" /> 
+                        <span className="italic text-muted-foreground">{msg.text}</span>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                    )}
                     {msg.actions && msg.actions.length > 0 && (
-                      <details className="mt-1 text-xs opacity-80">
-                        <summary className="cursor-pointer">Détails des actions ({msg.actions.length})</summary>
-                        <ul className="list-disc pl-4 mt-1">
+                      <details className="mt-1.5 text-xs opacity-80 pt-1 border-t border-dashed">
+                        <summary className="cursor-pointer font-medium">Détails des actions ({msg.actions.length})</summary>
+                        <ul className="list-disc pl-4 mt-1 space-y-0.5">
                         {msg.actions.map((action, index) => (
                           <li key={index}>
                             <strong>{action.toolName}</strong>: {action.toolOutput?.message || JSON.stringify(action.toolOutput)}
@@ -228,28 +269,21 @@ export function ChatGPTPromptLogPanel() {
                         </ul>
                       </details>
                     )}
-                    <p className="text-xs opacity-60 mt-1 text-right">{formatDistanceToNow(msg.timestamp, { addSuffix: true, locale: fr })}</p>
+                    {!msg.isLoading && <p className="text-xs opacity-60 mt-1.5 text-right">{formatDistanceToNow(msg.timestamp, { addSuffix: true, locale: fr })}</p>}
                   </div>
                 </div>
               ))}
-               {isLoadingAgent && (
-                <div className="flex justify-start">
-                   <div className="max-w-[80%] p-2.5 rounded-lg text-sm bg-muted text-foreground flex items-center">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> L'assistant réfléchit...
-                  </div>
-                </div>
-              )}
             </div>
           </ScrollArea>
 
-          {/* Input Area */}
-          <div className="space-y-2 border-t pt-3">
+          <div className="space-y-2 border-t pt-3 mt-auto"> {/* Input area at the bottom */}
             <Textarea
+              id="agent-input-textarea"
               value={currentUserRequest}
               onChange={(e) => setCurrentUserRequest(e.target.value)}
-              placeholder="Demandez quelque chose à l'assistant IA..."
-              rows={3}
-              className="text-sm"
+              placeholder="Demandez à l'IA..."
+              rows={2}
+              className="text-sm min-h-[60px] resize-none"
               disabled={isLoadingAgent}
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -261,18 +295,17 @@ export function ChatGPTPromptLogPanel() {
             <div className="flex gap-2">
               <Button onClick={handleSendToAgent} disabled={isLoadingAgent || !currentUserRequest.trim()} className="flex-1">
                 {isLoadingAgent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                {isLoadingAgent ? 'Envoi...' : 'Envoyer à l\'Assistant'}
+                {isLoadingAgent ? 'Envoi...' : 'Envoyer'}
               </Button>
             </div>
              {error && (
-              <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {error}</p>
+              <p className="text-xs text-destructive flex items-center gap-1 pt-1"><AlertTriangle className="h-3.5 w-3.5" /> {error}</p>
             )}
           </div>
           
-          {/* Section Journal des Prompts (pour consultation) */}
           <details className="border-t pt-3">
-            <summary className="text-base font-semibold flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground">
-              <History className="h-4 w-4" /> Voir le Journal des Prompts Affinés
+            <summary className="text-sm font-medium flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+              <History className="h-4 w-4" /> Historique des Prompts Affinés
             </summary>
             <div className="mt-2 flex-grow overflow-hidden flex flex-col">
               {isFetchingLogs ? (
@@ -280,12 +313,13 @@ export function ChatGPTPromptLogPanel() {
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : promptLogs.length === 0 ? (
-                <div className="flex-grow flex items-center justify-center py-4">
-                  <p className="text-muted-foreground text-center text-sm">Le journal des prompts affinés est vide.</p>
+                <div className="text-center py-4">
+                  <History className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2"/>
+                  <p className="text-muted-foreground text-center text-sm">Le journal des prompts est vide.</p>
                 </div>
               ) : (
-                <ScrollArea className="flex-grow max-h-60 pr-3">
-                  <div className="space-y-3">
+                <ScrollArea className="flex-grow max-h-60 pr-2 custom-scrollbar">
+                  <div className="space-y-2">
                     {promptLogs.map((entry) => (
                       <PromptLogItemDisplay key={entry.id} entry={entry} onUsePrompt={handleUsePromptFromLog} />
                     ))}
@@ -299,5 +333,3 @@ export function ChatGPTPromptLogPanel() {
     </div>
   );
 }
-
-    
