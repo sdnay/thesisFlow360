@@ -209,7 +209,7 @@ export function AiTaskManagerPage() {
   }, [toast]);
 
   useEffect(() => {
-    fetchTasks();
+    fetchTasks(); 
     const channel = supabase
       .channel('db-tasks-page-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => {
@@ -242,11 +242,12 @@ export function AiTaskManagerPage() {
       }
 
       const newTasksToInsert: Array<Omit<Task, 'id' | 'created_at'>> = result.modifiedTaskList.map((taskText) => {
-        const completedMatch = taskText.match(/(?:Completed|Terminé): (true|false|vrai|faux)/i);
-        const typeMatch = taskText.match(/(?:Type): (urgent|important|reading|chatgpt|secondary)/i);
-
+        const textOnly = taskText.replace(/\s*\((?:ID: [\w-]+, )?(?:Terminé|Completed): (?:true|false|vrai|faux), Type: \w+\)/gi, '').trim();
+        const completedMatch = taskText.match(/(?:Terminé|Completed): (true|false|vrai|faux)/i);
+        const typeMatch = taskText.match(/Type: (urgent|important|reading|chatgpt|secondary)/i);
+        
         return {
-          text: taskText.replace(/\s*\((?:ID: [\w-]+, )?(?:Completed|Terminé): (?:true|false|vrai|faux), Type: \w+\)/gi, '').trim(),
+          text: textOnly,
           completed: completedMatch ? (completedMatch[1].toLowerCase() === 'true' || completedMatch[1].toLowerCase() === 'vrai') : false,
           type: typeMatch ? typeMatch[1].toLowerCase() as TaskType : 'secondary',
         };
@@ -309,12 +310,7 @@ export function AiTaskManagerPage() {
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de l'enregistrement: ${errorMessage}`);
-      // Toast est déjà géré dans les blocs if/else pour les erreurs Supabase spécifiques.
-      // Un toast générique ici pourrait être redondant si une erreur Supabase s'est produite.
-      // S'il s'agit d'une autre erreur, un toast ici serait utile.
-      if (!(e && (e as any).message && ((e as any).message.includes("update") || (e as any).message.includes("insert")))) {
-         toast({ title: "Erreur", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
-      }
+      toast({ title: "Erreur d'enregistrement", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
       console.error("Erreur ajout/modif manuelle:", errorMessage, e);
     } finally {
       setIsManualTaskLoading(false);
@@ -516,4 +512,5 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
+
     
