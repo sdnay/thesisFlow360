@@ -1,40 +1,37 @@
+
 "use client";
 
-import { useState, type FC } from 'react';
+import { useState, type FC, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+// import { Textarea } from '@/components/ui/textarea'; // Pas utilisé pour les commentaires ici
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import type { Chapter } from '@/types';
-import { PlusCircle, Edit3, Trash2, MessageSquare } from 'lucide-react';
-
-const initialChapters: Chapter[] = [
-  { id: '1', name: 'Introduction', progress: 75, status: 'En cours', supervisorComments: ['Bon début, développer la revue de littérature.'] },
-  { id: '2', name: 'Revue de Littérature', progress: 40, status: 'En révision', supervisorComments: ['Besoin de sources plus récentes.'] },
-  { id: '3', name: 'Méthodologie', progress: 90, status: 'Brouillon terminé', supervisorComments: [] },
-  { id: '4', name: 'Résultats', progress: 10, status: 'Non commencé', supervisorComments: [] },
-  { id: '5', name: 'Discussion', progress: 0, status: 'Non commencé', supervisorComments: [] },
-  { id: '6', name: 'Conclusion', progress: 0, status: 'Non commencé', supervisorComments: [] },
-];
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChapterProgressCardProps {
   chapter: Chapter;
   onEdit: (chapter: Chapter) => void;
   onDelete: (chapterId: string) => void;
-  onAddComment: (chapterId: string, comment: string) => void;
+  onAddComment: (chapterId: string, comment: string) => Promise<void>;
 }
 
 const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, onDelete, onAddComment }) => {
   const [comment, setComment] = useState('');
   const [showCommentInput, setShowCommentInput] = useState(false);
+  const [isAddingComment, setIsAddingComment] = useState(false);
 
-  const handleAddComment = () => {
+  const handleAddCommentInternal = async () => {
     if (comment.trim()) {
-      onAddComment(chapter.id, comment.trim());
+      setIsAddingComment(true);
+      await onAddComment(chapter.id, comment.trim());
       setComment('');
       setShowCommentInput(false);
+      setIsAddingComment(false);
     }
   };
 
@@ -59,11 +56,11 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
       <CardContent>
         <div className="mb-2 text-sm font-medium">Progression : {chapter.progress}%</div>
         <Progress value={chapter.progress} className="w-full h-3" />
-        {chapter.supervisorComments.length > 0 && (
+        {chapter.supervisor_comments && chapter.supervisor_comments.length > 0 && (
           <div className="mt-4">
             <h4 className="text-xs font-semibold text-muted-foreground mb-1">Commentaires du superviseur :</h4>
             <ul className="list-disc list-inside text-xs space-y-1">
-              {chapter.supervisorComments.map((comment, index) => (
+              {chapter.supervisor_comments.map((comment, index) => (
                 <li key={index}>{comment}</li>
               ))}
             </ul>
@@ -78,9 +75,13 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
               onChange={(e) => setComment(e.target.value)} 
               placeholder="Nouveau commentaire..."
               className="flex-grow"
+              disabled={isAddingComment}
             />
-            <Button onClick={handleAddComment} size="sm">Ajouter</Button>
-            <Button onClick={() => setShowCommentInput(false)} size="sm" variant="outline">Annuler</Button>
+            <Button onClick={handleAddCommentInternal} size="sm" disabled={isAddingComment || !comment.trim()}>
+              {isAddingComment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+              Ajouter
+            </Button>
+            <Button onClick={() => setShowCommentInput(false)} size="sm" variant="outline" disabled={isAddingComment}>Annuler</Button>
           </div>
         ) : (
           <Button variant="outline" size="sm" onClick={() => setShowCommentInput(true)}>
@@ -94,56 +95,114 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
 
 
 export function ThesisDashboardSection() {
-  const [chapters, setChapters] = useState<Chapter[]>(initialChapters);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // For modal operations
+  const [isFetching, setIsFetching] = useState(true);
+  const { toast } = useToast();
+
+  const fetchChapters = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      const { data, error } = await supabase.from('chapters').select('*').order('name');
+      if (error) throw error;
+      setChapters(data || []);
+    } catch (e: any) {
+      toast({ title: "Erreur", description: "Impossible de charger les chapitres.", variant: "destructive" });
+      console.error("Erreur fetchChapters:", e);
+    } finally {
+      setIsFetching(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchChapters();
+  }, [fetchChapters]);
 
   const openModalForNew = () => {
-    setCurrentChapter({ name: '', progress: 0, status: 'Non commencé', supervisorComments: [] });
+    setCurrentChapter({ name: '', progress: 0, status: 'Non commencé', supervisor_comments: [] });
     setIsModalOpen(true);
   };
 
   const openModalForEdit = (chapter: Chapter) => {
-    setCurrentChapter(chapter);
+    setCurrentChapter(JSON.parse(JSON.stringify(chapter))); // Deep copy pour éviter modif directe
     setIsModalOpen(true);
   };
 
-  const handleSaveChapter = () => {
-    if (!currentChapter || !currentChapter.name) return; 
-
-    if (currentChapter.id) { 
-      setChapters(chapters.map(ch => ch.id === currentChapter.id ? currentChapter as Chapter : ch));
-    } else { 
-      const newChapter: Chapter = {
-        ...currentChapter,
-        id: Date.now().toString(), 
-      } as Chapter;
-      setChapters([...chapters, newChapter]);
+  const handleSaveChapter = async () => {
+    if (!currentChapter || !currentChapter.name) {
+        toast({title: "Erreur de validation", description: "Le nom du chapitre est requis.", variant: "destructive"});
+        return;
     }
-    setIsModalOpen(false);
-    setCurrentChapter(null);
+    setIsLoading(true);
+    try {
+      if (currentChapter.id) { 
+        const { id, ...chapterToUpdate } = currentChapter;
+        const { error } = await supabase.from('chapters').update(chapterToUpdate).eq('id', id);
+        if (error) throw error;
+        toast({ title: "Chapitre modifié", description: `"${currentChapter.name}" a été mis à jour.` });
+      } else { 
+        const { error } = await supabase.from('chapters').insert([currentChapter as Omit<Chapter, 'id'>]);
+        if (error) throw error;
+        toast({ title: "Chapitre ajouté", description: `"${currentChapter.name}" a été ajouté.` });
+      }
+      setIsModalOpen(false);
+      setCurrentChapter(null);
+      await fetchChapters();
+    } catch (e: any) {
+      toast({ title: "Erreur d'enregistrement", description: e.message, variant: "destructive" });
+      console.error("Erreur handleSaveChapter:", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleDeleteChapter = (chapterId: string) => {
-    setChapters(chapters.filter(ch => ch.id !== chapterId));
+  const handleDeleteChapter = async (chapterId: string) => {
+    try {
+      const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
+      if (error) throw error;
+      toast({ title: "Chapitre supprimé" });
+      await fetchChapters();
+    } catch (e: any) {
+      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      console.error("Erreur handleDeleteChapter:", e);
+    }
   };
 
-  const handleAddCommentToChapter = (chapterId: string, comment: string) => {
-    setChapters(chapters.map(ch => 
-      ch.id === chapterId ? { ...ch, supervisorComments: [...ch.supervisorComments, comment] } : ch
-    ));
+  const handleAddCommentToChapter = async (chapterId: string, comment: string) => {
+    try {
+      const chapterToUpdate = chapters.find(ch => ch.id === chapterId);
+      if (!chapterToUpdate) throw new Error("Chapitre non trouvé");
+
+      const updatedComments = [...(chapterToUpdate.supervisor_comments || []), comment];
+      const { error } = await supabase
+        .from('chapters')
+        .update({ supervisor_comments: updatedComments })
+        .eq('id', chapterId);
+      if (error) throw error;
+      toast({ title: "Commentaire ajouté" });
+      await fetchChapters(); // Re-fetch to update UI, or update local state optimistically
+    } catch (e: any) {
+      toast({ title: "Erreur d'ajout de commentaire", description: e.message, variant: "destructive" });
+      console.error("Erreur handleAddCommentToChapter:", e);
+    }
   };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-semibold">Tableau de Bord de la Thèse</h2>
-        <Button onClick={openModalForNew}>
+        <Button onClick={openModalForNew} disabled={isFetching}>
           <PlusCircle className="mr-2 h-4 w-4" /> Ajouter un Chapitre
         </Button>
       </div>
 
-      {chapters.length === 0 ? (
+      {isFetching ? (
+        <div className="flex justify-center items-center py-10">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : chapters.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
             <p className="text-muted-foreground text-center">Aucun chapitre ajouté pour le moment. Commencez par ajouter votre premier chapitre !</p>
@@ -163,7 +222,7 @@ export function ThesisDashboardSection() {
         </div>
       )}
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={(open) => {if (!isLoading) setIsModalOpen(open)}}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{currentChapter?.id ? 'Modifier le Chapitre' : 'Ajouter un Nouveau Chapitre'}</DialogTitle>
@@ -176,6 +235,7 @@ export function ThesisDashboardSection() {
                 value={currentChapter?.name || ''}
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="ex : Introduction"
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -187,6 +247,7 @@ export function ThesisDashboardSection() {
                 max="100"
                 value={currentChapter?.progress || 0}
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, progress: parseInt(e.target.value, 10) || 0 }))}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -196,12 +257,16 @@ export function ThesisDashboardSection() {
                 value={currentChapter?.status || ''}
                 onChange={(e) => setCurrentChapter(prev => ({ ...prev, status: e.target.value }))}
                 placeholder="ex : En cours"
+                disabled={isLoading}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveChapter}>Enregistrer le Chapitre</Button>
+            <Button variant="outline" onClick={() => {if(!isLoading) setIsModalOpen(false)}} disabled={isLoading}>Annuler</Button>
+            <Button onClick={handleSaveChapter} disabled={isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Enregistrer le Chapitre
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

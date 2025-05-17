@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, type FC } from 'react';
+import { useState, type FC, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,15 +9,12 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry } from '@/types';
 import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
-import { Sparkles, History, Send, Copy, Check, AlertTriangle } from 'lucide-react';
+import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-
-const initialPromptLogs: PromptLogEntry[] = [
-  { id: 'pl1', originalPrompt: 'Résumez les arguments clés de "Surveiller et Punir" de Foucault.', refinedPrompt: 'Fournissez un résumé concis des principaux arguments présentés dans "Surveiller et Punir" de Michel Foucault, en vous concentrant sur la transition du pouvoir souverain au pouvoir disciplinaire et ses mécanismes.', reasoning: 'Ajout de spécificité concernant les concepts clés et les domaines d\'intérêt pour un résumé plus ciblé.', timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), tags: ['résumé', 'Foucault'] },
-  { id: 'pl2', originalPrompt: 'Générez une question de recherche sur le changement climatique et son impact sur les communautés côtières.', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), tags: ['question-recherche', 'changement-climatique'] },
-];
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface PromptLogItemDisplayProps {
   entry: PromptLogEntry;
@@ -47,26 +45,26 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
       </CardHeader>
       <CardContent className="text-xs space-y-2">
         <div className="p-2 border rounded-md bg-muted/50 relative">
-          <p className="whitespace-pre-wrap">{entry.originalPrompt}</p>
+          <p className="whitespace-pre-wrap">{entry.original_prompt}</p>
           <Button
             variant="ghost"
             size="icon"
             className="absolute top-1 right-1 h-6 w-6"
-            onClick={() => handleCopy(entry.originalPrompt, 'original')}
+            onClick={() => handleCopy(entry.original_prompt, 'original')}
           >
             {copiedOriginal ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
           </Button>
         </div>
-        {entry.refinedPrompt && (
+        {entry.refined_prompt && (
           <>
             <h4 className="text-sm font-medium pt-1">Prompt Affiné</h4>
             <div className="p-2 border rounded-md bg-accent/20 relative">
-              <p className="whitespace-pre-wrap">{entry.refinedPrompt}</p>
+              <p className="whitespace-pre-wrap">{entry.refined_prompt}</p>
               <Button
                 variant="ghost"
                 size="icon"
                 className="absolute top-1 right-1 h-6 w-6"
-                onClick={() => handleCopy(entry.refinedPrompt!, 'refined')}
+                onClick={() => handleCopy(entry.refined_prompt!, 'refined')}
               >
                 {copiedRefined ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
               </Button>
@@ -86,7 +84,7 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
         )}
       </CardContent>
       <CardFooter className="pt-2">
-        <Button variant="outline" size="sm" onClick={() => onUsePrompt(entry.refinedPrompt || entry.originalPrompt)}>
+        <Button variant="outline" size="sm" onClick={() => onUsePrompt(entry.refined_prompt || entry.original_prompt)}>
           Utiliser ce Prompt
         </Button>
       </CardFooter>
@@ -95,61 +93,114 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
 };
 
 export function ChatGPTPromptLogPanel() {
-  const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>(initialPromptLogs);
+  const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>([]);
   const [currentPrompt, setCurrentPrompt] = useState('');
-  const [promptHistoryForRefinement, setPromptHistoryForRefinement] = useState<string[]>(['Résumez ce texte de manière concise.', 'Expliquez ce concept en termes simples.']);
   const [tags, setTags] = useState('');
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingLogs, setIsFetchingLogs] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const fetchPromptLogs = useCallback(async () => {
+    setIsFetchingLogs(true);
+    setError(null);
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('prompt_log_entries')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(50); // Limiter le nombre de logs affichés
+
+      if (supabaseError) throw supabaseError;
+      setPromptLogs(data || []);
+    } catch (e: any) {
+      console.error("Erreur lors de la récupération du journal des prompts:", e);
+      setError("Échec de la récupération du journal des prompts.");
+      toast({ title: "Erreur", description: "Impossible de charger le journal des prompts.", variant: "destructive" });
+    } finally {
+      setIsFetchingLogs(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPromptLogs();
+  }, [fetchPromptLogs]);
 
   const handleRefinePrompt = async () => {
     if (currentPrompt.trim() === '') return;
     setIsLoading(true);
     setError(null);
     try {
+      // Utiliser les prompts existants comme historique pour l'affinage
+      const historyPrompts = promptLogs
+        .slice(0, 10) // Utiliser les 10 derniers prompts comme contexte
+        .map(p => p.refined_prompt || p.original_prompt)
+        .filter(p => p.trim() !== '');
+
       const input: RefinePromptInput = {
         prompt: currentPrompt,
-        promptHistory: promptHistoryForRefinement.filter(p => p.trim() !== ''),
+        promptHistory: historyPrompts,
       };
       const result: RefinePromptOutput = await refinePrompt(input);
-      const newLogEntry: PromptLogEntry = {
-        id: Date.now().toString(),
-        originalPrompt: currentPrompt,
-        refinedPrompt: result.refinedPrompt,
+      
+      const newLogEntryPayload: Omit<PromptLogEntry, 'id' | 'timestamp'> = {
+        original_prompt: currentPrompt,
+        refined_prompt: result.refinedPrompt,
         reasoning: result.reasoning,
-        timestamp: new Date().toISOString(),
         tags: tags.split(',').map(t => t.trim()).filter(t => t),
       };
-      setPromptLogs(prevLogs => [newLogEntry, ...prevLogs]);
+      
+      const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
+      if (insertError) throw insertError;
+      
       setCurrentPrompt(''); 
       setTags('');
-    } catch (e) {
+      await fetchPromptLogs();
+      toast({ title: "Prompt affiné", description: "Le prompt a été affiné et consigné." });
+    } catch (e: any) {
       console.error("Erreur lors de l'affinage du prompt:", e);
       setError("Échec de l'affinage du prompt. Veuillez réessayer.");
-      const newLogEntry: PromptLogEntry = {
-        id: Date.now().toString(),
-        originalPrompt: currentPrompt,
-        timestamp: new Date().toISOString(),
-        tags: tags.split(',').map(t => t.trim()).filter(t => t),
-      };
-      setPromptLogs(prevLogs => [newLogEntry, ...prevLogs]);
+      // Consigner le prompt original même en cas d'échec de l'affinage
+      try {
+        const fallbackLogEntry: Omit<PromptLogEntry, 'id' | 'timestamp'> = {
+          original_prompt: currentPrompt,
+          tags: tags.split(',').map(t => t.trim()).filter(t => t),
+        };
+        await supabase.from('prompt_log_entries').insert(fallbackLogEntry);
+        await fetchPromptLogs();
+      } catch (logError: any) {
+         toast({ title: "Erreur de consignation", description: logError.message, variant: "destructive" });
+      }
+      toast({ title: "Erreur d'affinage", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleLogCurrentPrompt = () => {
+  const handleLogCurrentPrompt = async () => {
     if (currentPrompt.trim() === '') return;
-     const newLogEntry: PromptLogEntry = {
-        id: Date.now().toString(),
-        originalPrompt: currentPrompt,
-        timestamp: new Date().toISOString(),
+    setIsLoading(true);
+    setError(null);
+    try {
+      const newLogEntryPayload: Omit<PromptLogEntry, 'id' | 'timestamp'> = {
+        original_prompt: currentPrompt,
         tags: tags.split(',').map(t => t.trim()).filter(t => t),
       };
-      setPromptLogs(prevLogs => [newLogEntry, ...prevLogs]);
+      const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
+      if (insertError) throw insertError;
+
       setCurrentPrompt('');
       setTags('');
+      await fetchPromptLogs();
+      toast({ title: "Prompt consigné", description: "Le prompt actuel a été enregistré." });
+    } catch (e: any) {
+      console.error("Erreur lors de la consignation du prompt:", e);
+      setError("Échec de la consignation du prompt.");
+      toast({ title: "Erreur", description: e.message || "Impossible de consigner le prompt.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleUsePromptFromLog = (promptText: string) => {
@@ -165,7 +216,7 @@ export function ChatGPTPromptLogPanel() {
             Ingénierie de Prompt ChatGPT
           </CardTitle>
           <CardDescription>
-            Créez, affinez et consignez vos prompts efficaces.
+            Créez, affinez et consignez vos prompts efficaces. L'historique pour l'affinage est automatiquement tiré des prompts récents.
           </CardDescription>
         </CardHeader>
         
@@ -178,45 +229,39 @@ export function ChatGPTPromptLogPanel() {
               placeholder="Entrez votre prompt ici..."
               rows={4}
               className="text-sm"
+              disabled={isLoading}
             />
             <Input 
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="Étiquettes (séparées par virgule, ex: résumé, analyse)"
               className="text-xs"
+              disabled={isLoading}
             />
             <div className="flex gap-2">
-              <Button onClick={handleRefinePrompt} disabled={isLoading || !currentPrompt.trim()} className="flex-1">
-                <Sparkles className="mr-2 h-4 w-4" />
+              <Button onClick={handleRefinePrompt} disabled={isLoading || !currentPrompt.trim() || isFetchingLogs} className="flex-1">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 {isLoading ? 'Affinage...' : 'Affiner & Consigner'}
               </Button>
-              <Button onClick={handleLogCurrentPrompt} variant="outline" disabled={!currentPrompt.trim()} className="flex-1">
-                <Send className="mr-2 h-4 w-4" /> Consigner Actuel
+              <Button onClick={handleLogCurrentPrompt} variant="outline" disabled={isLoading || !currentPrompt.trim() || isFetchingLogs} className="flex-1">
+                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                 Consigner Actuel
               </Button>
             </div>
              {error && (
               <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {error}</p>
             )}
           </div>
-
-          <details className="text-sm">
-            <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
-              Contexte : Historique des prompts efficaces ({promptHistoryForRefinement.length})
-            </summary>
-            <Textarea
-              value={promptHistoryForRefinement.join('\n')}
-              onChange={(e) => setPromptHistoryForRefinement(e.target.value.split('\n'))}
-              placeholder="Un prompt efficace par ligne (utilisé pour le contexte d'affinage)"
-              rows={3}
-              className="mt-1 text-xs"
-            />
-          </details>
           
           <div className="flex-grow overflow-hidden flex flex-col">
             <h3 className="text-base font-semibold mb-2 flex items-center gap-2 text-muted-foreground">
               <History className="h-4 w-4" /> Journal des Prompts
             </h3>
-            {promptLogs.length === 0 ? (
+            {isFetchingLogs ? (
+               <div className="flex-grow flex items-center justify-center">
+                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
+               </div>
+            ) : promptLogs.length === 0 ? (
               <div className="flex-grow flex items-center justify-center">
                 <p className="text-muted-foreground text-center">Votre journal de prompts est vide. <br/>Commencez par entrer un prompt ci-dessus.</p>
               </div>

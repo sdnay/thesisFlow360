@@ -1,14 +1,17 @@
+
 "use client";
 
-import { useState, useEffect, useRef, type FC } from 'react';
+import { useState, useEffect, useRef, type FC, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
-import { Play, Pause, RotateCcw, ListChecks, Trash2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, ListChecks, Trash2, Loader2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from '@/hooks/use-toast';
 
 const DEFAULT_SESSION_DURATION = 25; 
 const MAX_SESSION_DURATION = 120; 
@@ -16,19 +19,20 @@ const MIN_SESSION_DURATION = 1;
 
 interface PomodoroLogItemProps {
   session: PomodoroSession;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
+  isLoading: boolean;
 }
 
-const PomodoroLogItem: FC<PomodoroLogItemProps> = ({ session, onDelete }) => {
+const PomodoroLogItem: FC<PomodoroLogItemProps> = ({ session, onDelete, isLoading }) => {
   return (
     <li className="flex justify-between items-center p-3 border rounded-md bg-card hover:bg-muted/50">
       <div>
         <p className="text-sm font-medium">
-          Session de {session.duration} min - {format(new Date(session.startTime), "d MMM, HH:mm", { locale: fr })}
+          Session de {session.duration} min - {format(new Date(session.start_time), "d MMM, HH:mm", { locale: fr })}
         </p>
         {session.notes && <p className="text-xs text-muted-foreground mt-1">Notes : {session.notes}</p>}
       </div>
-       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive hover:text-destructive/80">
+       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive hover:text-destructive/80" disabled={isLoading}>
         <Trash2 className="h-4 w-4" />
       </Button>
     </li>
@@ -43,10 +47,58 @@ export function PomodoroSection() {
   const [sessionNotes, setSessionNotes] = useState('');
   const [pomodoroLog, setPomodoroLog] = useState<PomodoroSession[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLogging, setIsLogging] = useState(false); // For add/delete log item
+  const [isFetching, setIsFetching] = useState(true);
+  const { toast } = useToast();
+
+  const fetchPomodoroLog = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      const { data, error } = await supabase
+        .from('pomodoro_sessions')
+        .select('*')
+        .order('start_time', { ascending: false });
+      if (error) throw error;
+      setPomodoroLog(data || []);
+    } catch (e: any) {
+      toast({ title: "Erreur", description: "Impossible de charger le journal Pomodoro.", variant: "destructive" });
+      console.error("Erreur fetchPomodoroLog:", e);
+    } finally {
+      setIsFetching(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPomodoroLog();
+  }, [fetchPomodoroLog]);
+
 
   useEffect(() => {
     setTimeLeft(durationMinutes * 60);
   }, [durationMinutes]);
+
+  const logSession = useCallback(async (completed: boolean) => {
+    setIsLogging(true);
+    try {
+      const newSessionPayload: Omit<PomodoroSession, 'id'> = {
+        start_time: new Date(Date.now() - (durationMinutes * 60 - timeLeft) * 1000).toISOString(), 
+        duration: durationMinutes,
+        notes: completed ? (sessionNotes || `Session de ${durationMinutes} min terminée`) : (sessionNotes || `Session de ${durationMinutes} min incomplète (réinitialisée)`),
+      };
+      const { error } = await supabase.from('pomodoro_sessions').insert(newSessionPayload);
+      if (error) throw error;
+      
+      setSessionNotes(''); 
+      await fetchPomodoroLog();
+      toast({ title: "Session enregistrée" });
+    } catch (e: any) {
+      toast({ title: "Erreur d'enregistrement", description: e.message, variant: "destructive" });
+      console.error("Erreur logSession:", e);
+    } finally {
+      setIsLogging(false);
+    }
+  }, [durationMinutes, timeLeft, sessionNotes, fetchPomodoroLog, toast]);
+
 
   useEffect(() => {
     if (isActive && !isPaused) {
@@ -56,7 +108,7 @@ export function PomodoroSection() {
             clearInterval(timerRef.current!);
             setIsActive(false);
             logSession(true); 
-            alert("Session Pomodoro terminée !");
+            toast({ title: "Session Pomodoro terminée !" });
             return 0;
           }
           return prevTime - 1;
@@ -66,7 +118,7 @@ export function PomodoroSection() {
       clearInterval(timerRef.current!);
     }
     return () => clearInterval(timerRef.current!);
-  }, [isActive, isPaused, durationMinutes]); // Added durationMinutes to dependency array
+  }, [isActive, isPaused, durationMinutes, logSession, toast]); // Added logSession and toast
 
   const handleDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isActive) return;
@@ -89,7 +141,7 @@ export function PomodoroSection() {
 
   const resetTimer = () => {
     if (isActive) { 
-        logSession(false);
+        logSession(false); // Log as incomplete if reset while active
     }
     setIsActive(false);
     setIsPaused(false);
@@ -97,19 +149,19 @@ export function PomodoroSection() {
     setSessionNotes('');
   };
   
-  const logSession = (completed: boolean) => {
-    const newSession: PomodoroSession = {
-      id: Date.now().toString(),
-      startTime: new Date(Date.now() - (durationMinutes * 60 - timeLeft) * 1000).toISOString(), 
-      duration: durationMinutes,
-      notes: completed ? (sessionNotes || `Session de ${durationMinutes} min terminée`) : `Session de ${durationMinutes} min incomplète (réinitialisée)`,
-    };
-    setPomodoroLog(prevLog => [newSession, ...prevLog]);
-    setSessionNotes(''); 
-  };
-
-  const deleteLogItem = (id: string) => {
-    setPomodoroLog(prevLog => prevLog.filter(session => session.id !== id));
+  const deleteLogItem = async (id: string) => {
+    setIsLogging(true);
+    try {
+      const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id);
+      if (error) throw error;
+      await fetchPomodoroLog();
+      toast({ title: "Session supprimée du journal" });
+    } catch (e: any) {
+      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      console.error("Erreur deleteLogItem:", e);
+    } finally {
+      setIsLogging(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -145,46 +197,49 @@ export function PomodoroSection() {
               min={MIN_SESSION_DURATION}
               max={MAX_SESSION_DURATION}
               className="w-20"
-              disabled={isActive}
+              disabled={isActive || isLogging}
             />
           </div>
           <Input
             placeholder="Optionnel : Sur quoi travaillez-vous ?"
             value={sessionNotes}
             onChange={(e) => setSessionNotes(e.target.value)}
-            disabled={!isActive}
+            disabled={!isActive || isLogging} // Disabled if timer not active OR if logging
           />
         </CardContent>
         <CardFooter className="flex justify-center gap-3">
-          <Button onClick={toggleTimer} size="lg" className="w-32">
+          <Button onClick={toggleTimer} size="lg" className="w-32" disabled={isLogging}>
             {isActive && !isPaused ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
             {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Reprendre' : 'Démarrer')}
           </Button>
-          <Button onClick={resetTimer} variant="outline" size="lg">
+          <Button onClick={resetTimer} variant="outline" size="lg" disabled={isLogging}>
             <RotateCcw className="mr-2 h-5 w-5" /> Réinitialiser
           </Button>
         </CardFooter>
       </Card>
 
-      {pomodoroLog.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Journal des Sessions</CardTitle>
-            <CardDescription>Historique de vos sessions de travail profond.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {pomodoroLog.length === 0 ? (
-              <p className="text-muted-foreground text-center">Aucune session enregistrée pour le moment.</p>
-            ) : (
-              <ul className="space-y-3 max-h-96 overflow-y-auto">
-                {pomodoroLog.map((session) => (
-                  <PomodoroLogItem key={session.id} session={session} onDelete={deleteLogItem} />
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Journal des Sessions</CardTitle>
+          <CardDescription>Historique de vos sessions de travail profond.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isFetching ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : pomodoroLog.length === 0 ? (
+            <p className="text-muted-foreground text-center">Aucune session enregistrée pour le moment.</p>
+          ) : (
+            <ul className="space-y-3 max-h-96 overflow-y-auto">
+              {pomodoroLog.map((session) => (
+                <PomodoroLogItem key={session.id} session={session} onDelete={deleteLogItem} isLoading={isLogging}/>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

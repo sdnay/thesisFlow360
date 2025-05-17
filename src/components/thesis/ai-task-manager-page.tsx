@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, type FC, useEffect } from 'react';
+import { useState, type FC, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,12 +9,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, CheckCircle, Circle } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, CheckCircle, Circle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react'; // Remplacé ChevronUpDownIcon si non dispo
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from '@/hooks/use-toast';
+
 
 const taskTypeColors: Record<TaskType, string> = {
   urgent: "bg-red-100 text-red-700 border-red-300 hover:bg-red-200",
@@ -32,13 +36,13 @@ const taskTypeLabels: Record<TaskType, string> = {
 };
 
 
-const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskType) => void }> = ({ selectedType, onSelectType }) => {
+const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskType) => void, disabled?: boolean }> = ({ selectedType, onSelectType, disabled }) => {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" role="combobox" aria-expanded={open} className="w-[120px] justify-between text-xs">
+        <Button variant="outline" size="sm" role="combobox" aria-expanded={open} className="w-[120px] justify-between text-xs" disabled={disabled}>
           {taskTypeLabels[selectedType]}
           <ChevronUpDownIcon className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
@@ -76,14 +80,7 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
   );
 };
 
-const ChevronUpDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-  </svg>
-);
-
-
-const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string) => void, onDelete: (id: string) => void, onSetType: (id: string, type: TaskType) => void, onEdit: (task: Task) => void }> = ({ task, onToggle, onDelete, onSetType, onEdit }) => {
+const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string, completed: boolean) => void, onDelete: (id: string) => void, onSetType: (id: string, type: TaskType) => void, onEdit: (task: Task) => void }> = ({ task, onToggle, onDelete, onSetType, onEdit }) => {
   return (
     <div className={cn(
       "flex items-center justify-between p-3 rounded-md border transition-all duration-150",
@@ -94,7 +91,7 @@ const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string) => void, onDelete
         <Checkbox
           id={`task-${task.id}`}
           checked={task.completed}
-          onCheckedChange={() => onToggle(task.id)}
+          onCheckedChange={(checked) => onToggle(task.id, !!checked)}
           className={cn(
              task.type === 'urgent' ? "border-red-500 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600"
             :task.type === 'important' ? "border-orange-500 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-600"
@@ -129,13 +126,38 @@ export function AiTaskManagerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [instructions, setInstructions] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingTasks, setIsFetchingTasks] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   
   const [manualTaskText, setManualTaskText] = useState('');
   const [manualTaskType, setManualTaskType] = useState<TaskType>('secondary');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const { toast } = useToast();
 
+  const fetchTasks = useCallback(async () => {
+    setIsFetchingTasks(true);
+    setError(null);
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (supabaseError) throw supabaseError;
+      setTasks(data || []);
+    } catch (e: any) {
+      console.error("Erreur lors de la récupération des tâches:", e);
+      setError("Échec de la récupération des tâches.");
+      toast({ title: "Erreur", description: "Impossible de charger les tâches.", variant: "destructive" });
+    } finally {
+      setIsFetchingTasks(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   const handleAiModifyTasks = async () => {
     if (instructions.trim() === '') return;
@@ -143,72 +165,132 @@ export function AiTaskManagerPage() {
     setError(null);
     setAiReasoning(null);
     try {
+      const currentTaskStrings = tasks.map(t => `${t.text} (ID: ${t.id}, Terminé: ${t.completed}, Type: ${t.type})`);
       const input: ModifyTaskListInput = {
         instructions,
-        taskList: tasks.map(t => `${t.text} (Terminé: ${t.completed}, Type: ${t.type})`),
+        taskList: currentTaskStrings,
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
       
-      const newTasks: Task[] = result.modifiedTaskList.map((taskText, index) => {
-        const existingTask = tasks.find(t => taskText.includes(t.text));
+      // Simplification: supprimer toutes les tâches actuelles et réinsérer celles de l'IA
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '0'); // Supprime tout (condition fictive pour supprimer tout)
+      if (deleteError) throw deleteError;
+
+      const newTasksToInsert: Array<Omit<Task, 'id' | 'created_at'>> = result.modifiedTaskList.map((taskText) => {
         const completedMatch = taskText.match(/(?:Completed|Terminé): (true|false|vrai|faux)/i);
         const typeMatch = taskText.match(/(?:Type|Type): (urgent|important|reading|chatgpt|secondary)/i);
-
+        
         return {
-          id: existingTask?.id || Date.now().toString() + index,
-          text: taskText.replace(/\s*\((?:Completed|Terminé): (?:true|false|vrai|faux)|Type: \w+\)/gi, '').trim(),
-          completed: completedMatch ? (completedMatch[1].toLowerCase() === 'true' || completedMatch[1].toLowerCase() === 'vrai') : (existingTask?.completed || false),
-          type: typeMatch ? typeMatch[1].toLowerCase() as TaskType : (existingTask?.type || 'secondary'),
-          createdAt: existingTask?.createdAt || new Date().toISOString(),
+          text: taskText.replace(/\s*\((?:ID: [\w-]+, )?(?:Completed|Terminé): (?:true|false|vrai|faux), Type: \w+\)/gi, '').trim(),
+          completed: completedMatch ? (completedMatch[1].toLowerCase() === 'true' || completedMatch[1].toLowerCase() === 'vrai') : false,
+          type: typeMatch ? typeMatch[1].toLowerCase() as TaskType : 'secondary',
         };
       });
 
-      setTasks(newTasks);
+      if (newTasksToInsert.length > 0) {
+        const { error: insertError } = await supabase.from('tasks').insert(newTasksToInsert);
+        if (insertError) throw insertError;
+      }
+      
       setAiReasoning(result.reasoning);
       setInstructions('');
-    } catch (e) {
-      console.error("Erreur lors de la modification de la liste des tâches:", e);
-      setError("Échec de la modification de la liste des tâches avec l'IA. Veuillez réessayer.");
+      await fetchTasks(); // Recharger les tâches depuis Supabase
+      toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
+    } catch (e: any) {
+      console.error("Erreur lors de la modification de la liste des tâches avec l'IA:", e);
+      setError("Échec de la modification des tâches avec l'IA.");
+      toast({ title: "Erreur IA", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddOrUpdateManualTask = () => {
+  const handleAddOrUpdateManualTask = async () => {
     if (manualTaskText.trim() === '') return;
+    setIsLoading(true);
+    setError(null);
 
-    if (editingTask) {
-      setTasks(tasks.map(t => t.id === editingTask.id ? { ...t, text: manualTaskText, type: manualTaskType } : t));
-      setEditingTask(null);
-    } else {
-      const newTask: Task = {
-        id: Date.now().toString(),
-        text: manualTaskText.trim(),
-        completed: false,
-        type: manualTaskType,
-        createdAt: new Date().toISOString(),
-      };
-      setTasks(prevTasks => [newTask, ...prevTasks]);
-    }
-    setManualTaskText('');
-    setManualTaskType('secondary');
-  };
-
-  const handleToggleTask = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
-
-  const handleDeleteTask = (id: string) => {
-    setTasks(tasks.filter(t => t.id !== id));
-    if (editingTask && editingTask.id === id) {
+    try {
+      if (editingTask) {
+        const { error: updateError } = await supabase
+          .from('tasks')
+          .update({ text: manualTaskText, type: manualTaskType })
+          .eq('id', editingTask.id);
+        if (updateError) throw updateError;
         setEditingTask(null);
-        setManualTaskText('');
-        setManualTaskType('secondary');
+        toast({ title: "Tâche mise à jour", description: `"${manualTaskText}" a été modifiée.` });
+      } else {
+        const newTaskPayload: Omit<Task, 'id' | 'created_at'> = {
+          text: manualTaskText.trim(),
+          completed: false,
+          type: manualTaskType,
+        };
+        const { error: insertError } = await supabase.from('tasks').insert(newTaskPayload);
+        if (insertError) throw insertError;
+        toast({ title: "Tâche ajoutée", description: `"${manualTaskText}" a été ajoutée.` });
+      }
+      setManualTaskText('');
+      setManualTaskType('secondary');
+      await fetchTasks();
+    } catch (e: any) {
+      console.error("Erreur lors de l'ajout/modification manuelle de la tâche:", e);
+      setError("Échec de l'enregistrement de la tâche.");
+      toast({ title: "Erreur", description: e.message || "Impossible d'enregistrer la tâche.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSetTaskType = (id: string, type: TaskType) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, type } : t));
+  const handleToggleTask = async (id: string, completed: boolean) => {
+    setError(null);
+    try {
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ completed })
+        .eq('id', id);
+      if (updateError) throw updateError;
+      await fetchTasks(); // Optimistic update could be done here too
+    } catch (e: any) {
+       console.error("Erreur lors du changement de statut de la tâche:", e);
+       setError("Échec du changement de statut.");
+       toast({ title: "Erreur", description: "Impossible de changer le statut de la tâche.", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    setError(null);
+    try {
+      const { error: deleteError } = await supabase.from('tasks').delete().eq('id', id);
+      if (deleteError) throw deleteError;
+      
+      if (editingTask && editingTask.id === id) {
+          setEditingTask(null);
+          setManualTaskText('');
+          setManualTaskType('secondary');
+      }
+      await fetchTasks();
+      toast({ title: "Tâche supprimée" });
+    } catch (e: any) {
+      console.error("Erreur lors de la suppression de la tâche:", e);
+      setError("Échec de la suppression de la tâche.");
+      toast({ title: "Erreur", description: "Impossible de supprimer la tâche.", variant: "destructive" });
+    }
+  };
+
+  const handleSetTaskType = async (id: string, type: TaskType) => {
+     setError(null);
+    try {
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ type })
+        .eq('id', id);
+      if (updateError) throw updateError;
+      await fetchTasks();
+    } catch (e: any) {
+       console.error("Erreur lors du changement de type de la tâche:", e);
+       setError("Échec du changement de type.");
+       toast({ title: "Erreur", description: "Impossible de changer le type de la tâche.", variant: "destructive" });
+    }
   };
   
   const handleEditTask = (task: Task) => {
@@ -227,7 +309,7 @@ export function AiTaskManagerPage() {
             <Bot className="h-6 w-6 text-primary" /> Modification de Tâches Assistée par IA
           </CardTitle>
           <CardDescription>
-            Donnez des instructions à l'IA pour gérer vos tâches (ex : "Ajouter une tâche pour écrire le chapitre 1", "Marquer 'revoir la littérature' comme urgent et terminé").
+            Donnez des instructions à l'IA pour gérer vos tâches (ex : "Ajouter une tâche pour écrire le chapitre 1", "Marquer 'revoir la littérature' comme urgent et terminé"). L'IA réécrira toute la liste.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -237,13 +319,15 @@ export function AiTaskManagerPage() {
             placeholder="Entrez les instructions pour l'IA..."
             rows={3}
             className="mb-2"
+            disabled={isLoading}
           />
-           {error && (
+           {error && ( // Affichage de l'erreur générale pour la page
             <p className="text-xs text-destructive mt-1 mb-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {error}</p>
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleAiModifyTasks} disabled={isLoading || !instructions.trim()}>
+          <Button onClick={handleAiModifyTasks} disabled={isLoading || !instructions.trim() || isFetchingTasks}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {isLoading ? 'Traitement...' : 'Soumettre à l\'IA'}
           </Button>
         </CardFooter>
@@ -270,15 +354,16 @@ export function AiTaskManagerPage() {
             onChange={(e) => setManualTaskText(e.target.value)}
             placeholder="Entrez la description de la tâche..."
             className="flex-grow"
+            disabled={isLoading}
           />
           <div className="flex items-center gap-2">
-            <TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} />
-            <Button onClick={handleAddOrUpdateManualTask} className="flex-shrink-0">
-              {editingTask ? <Edit2 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-              {editingTask ? 'Mettre à Jour la Tâche' : 'Ajouter la Tâche'}
+            <TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} disabled={isLoading} />
+            <Button onClick={handleAddOrUpdateManualTask} className="flex-shrink-0" disabled={isLoading || !manualTaskText.trim()}>
+              {isLoading && editingTask ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingTask ? <Edit2 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)}
+              {isLoading && editingTask ? 'Mise à jour...' : (isLoading ? 'Ajout...' : (editingTask ? 'Mettre à Jour la Tâche' : 'Ajouter la Tâche'))}
             </Button>
             {editingTask && (
-                <Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');}}>
+                <Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');}} disabled={isLoading}>
                     Annuler la Modification
                 </Button>
             )}
@@ -289,10 +374,14 @@ export function AiTaskManagerPage() {
       <Card className="flex-grow flex flex-col overflow-hidden">
         <CardHeader>
           <CardTitle>Vos Tâches</CardTitle>
-          <CardDescription>{tasks.length} tâche(s)</CardDescription>
+          <CardDescription>{isFetchingTasks ? "Chargement..." : `${tasks.length} tâche(s)`}</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 pr-1">
-          {tasks.length === 0 ? (
+          {isFetchingTasks ? (
+             <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+             </div>
+          ) : tasks.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">Aucune tâche pour le moment. Ajoutez-en manuellement ou utilisez l'IA !</p>
           ) : (
             tasks.map((task) => (
