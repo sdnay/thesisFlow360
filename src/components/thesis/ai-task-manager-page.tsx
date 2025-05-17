@@ -9,8 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, CheckIcon } from 'lucide-react';
-import { ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react'; 
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo } from 'lucide-react';
+import { ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -61,8 +61,8 @@ const TaskTypeSelector: FC<{
       <PopoverContent className="w-[150px] p-0">
         <Command>
           <CommandInput placeholder="Rechercher type..." className="h-9 text-sm" />
-          <CommandEmpty>Aucun type.</CommandEmpty>
           <CommandList>
+            <CommandEmpty>Aucun type.</CommandEmpty>
             <CommandGroup>
               {Object.entries(taskTypeLabels).map(([type, label]) => (
                 <CommandItem
@@ -168,7 +168,6 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
     </Card>
   );
 };
-
 
 export function AiTaskManagerPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -512,5 +511,3 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
-
-    
