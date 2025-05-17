@@ -228,7 +228,7 @@ export function AiTaskManagerPage() {
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
       
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '0'); 
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '0'); // Placeholder ID, adjust if needed
       if (deleteError) throw deleteError;
 
       const newTasksToInsert: Array<Omit<Task, 'id' | 'created_at'>> = result.modifiedTaskList.map((taskText) => {
@@ -252,8 +252,9 @@ export function AiTaskManagerPage() {
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
     } catch (e: any) {
       console.error("Erreur IA:", e);
-      setError(`Échec de la modification avec l'IA: ${e.message || "Une erreur inconnue est survenue."}`);
-      toast({ title: "Erreur IA", description: e.message || "Une erreur est survenue.", variant: "destructive" });
+      const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+      setError(`Échec de la modification avec l'IA: ${errorMessage}`);
+      toast({ title: "Erreur IA", description: errorMessage, variant: "destructive" });
     } finally {
       setIsAiLoading(false);
     }
@@ -285,9 +286,10 @@ export function AiTaskManagerPage() {
       }
       setManualTaskText('');
       setManualTaskType('secondary');
-    } catch (e: any) { // Corrected: removed the stray '{' from the line below
-      console.error("Erreur ajout/modif manuelle:", e);
-      setError(`Échec de l'enregistrement: ${e.message || "Une erreur inconnue est survenue."}`);
+    } catch (e: any) {
+      const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+      console.error("Erreur ajout/modif manuelle:", errorMessage, e);
+      setError(`Échec de l'enregistrement: ${errorMessage}`);
       toast({ title: "Erreur", description: "Impossible d'enregistrer la tâche.", variant: "destructive" });
     } finally {
       setIsManualTaskLoading(false);
@@ -304,8 +306,9 @@ export function AiTaskManagerPage() {
         .eq('id', id);
       if (updateError) throw updateError;
     } catch (e: any) {
-       console.error("Erreur toggle tâche:", e);
-       setError(`Échec du changement de statut: ${e.message || "Une erreur inconnue est survenue."}`);
+       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+       console.error("Erreur toggle tâche:", errorMessage, e);
+       setError(`Échec du changement de statut: ${errorMessage}`);
        toast({ title: "Erreur", description: "Impossible de changer le statut.", variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
@@ -326,8 +329,9 @@ export function AiTaskManagerPage() {
       }
       toast({ title: "Tâche supprimée" });
     } catch (e: any) {
-      console.error("Erreur suppression tâche:", e);
-      setError(`Échec de la suppression: ${e.message || "Une erreur inconnue est survenue."}`);
+      const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+      console.error("Erreur suppression tâche:", errorMessage, e);
+      setError(`Échec de la suppression: ${errorMessage}`);
       toast({ title: "Erreur", description: "Impossible de supprimer la tâche.", variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
@@ -344,8 +348,9 @@ export function AiTaskManagerPage() {
         .eq('id', id);
       if (updateError) throw updateError;
     } catch (e: any) {
-       console.error("Erreur type tâche:", e);
-       setError(`Échec du changement de type: ${e.message || "Une erreur inconnue est survenue."}`);
+       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+       console.error("Erreur type tâche:", errorMessage, e);
+       setError(`Échec du changement de type: ${errorMessage}`);
        toast({ title: "Erreur", description: "Impossible de changer le type.", variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
@@ -479,4 +484,5 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
+
     
