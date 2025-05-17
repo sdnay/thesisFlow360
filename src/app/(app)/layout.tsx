@@ -1,9 +1,9 @@
 
-"use client"; // Nécessaire car nous allons utiliser useAuth
+"use client";
 
 import { AppLayout } from '@/components/layout/app-layout';
-import { useAuth } from '@/hooks/useAuth'; // Import du hook
-import { useRouter } from 'next/navigation'; // Pour la redirection
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
@@ -12,15 +12,14 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isLoading, session } = useAuth();
+  const { session, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    // console.log(`[DashboardLayout] isLoading: ${isLoading}, session: ${session ? 'Présente' : 'Absente'}`);
     if (!isLoading && !session) {
-      // Si le chargement est terminé et qu'il n'y a pas de session active,
-      // rediriger vers la page de connexion.
-      // Le middleware devrait déjà gérer cela, mais c'est une sécurité supplémentaire côté client.
-      router.replace('/auth/login');
+      // console.log("[DashboardLayout] Pas de session et chargement terminé. Redirection vers /login.");
+      router.replace('/login'); // Redirige si pas de session et que le chargement est terminé
     }
   }, [isLoading, session, router]);
 
@@ -34,16 +33,16 @@ export default function DashboardLayout({
   }
 
   if (!session) {
-    // Affiche un état de chargement ou rien en attendant la redirection
-    // (ou un message "Redirection vers la connexion...")
+    // Affiche un état de chargement ou rien en attendant la redirection gérée par le useEffect.
+    // Cela évite un flash de contenu non protégé si le middleware n'a pas encore agi (moins probable avec le matcher actuel).
     return (
        <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-3 text-lg text-muted-foreground">Redirection...</p>
+        <p className="ml-3 text-lg text-muted-foreground">Vérification de l'authentification...</p>
       </div>
     );
   }
 
-  // Si l'utilisateur est connecté, afficher le layout de l'application
+  // Si l'utilisateur est connecté (session existe), afficher le layout de l'application
   return <AppLayout>{children}</AppLayout>;
 }

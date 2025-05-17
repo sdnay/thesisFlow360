@@ -21,10 +21,10 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     allowedDevOrigins: [
-        '*.cloudworkstations.dev', // General wildcard
+        '*.cloudworkstations.dev', // Joker général
         'http://*.cloudworkstations.dev',
         'https://*.cloudworkstations.dev',
-        // Specific origins from logs, with both http and https
+        // Origines spécifiques des logs, avec http et https
         'https://9000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
         'http://9000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
         'https://6000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',

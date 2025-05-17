@@ -6,7 +6,7 @@ import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons/logo';
 import { PanelLeft, LogOut, UserCircle, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth'; // Ajouté
+import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,11 +16,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from '@/lib/utils'; // Added missing import
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const { isMobile } = useSidebar();
-  const { user, signOut, isLoading: isAuthLoading } = useAuth(); // Ajouté
+  const { user, signOut, isLoading: isAuthLoading } = useAuth();
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,7 +68,6 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                 <Avatar className="h-9 w-9">
-                  {/* TODO: Remplacer par user.user_metadata?.avatar_url si disponible */}
                   <AvatarImage src={user.user_metadata?.avatar_url || ""} alt={user.email || "Utilisateur"} />
                   <AvatarFallback>{getUserInitials(user.email)}</AvatarFallback>
                 </Avatar>
@@ -86,10 +85,6 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {/* <DropdownMenuItem>
-                <UserCircle className="mr-2 h-4 w-4" />
-                Profil (à venir)
-              </DropdownMenuItem> */}
               <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
                 Déconnexion
