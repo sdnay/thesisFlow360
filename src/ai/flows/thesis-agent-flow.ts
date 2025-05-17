@@ -12,8 +12,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { supabase } from '@/lib/supabaseClient';
-import type { PromptLogEntry, RefinePromptInput, RefinePromptOutput } from '@/types';
-import { refinePrompt } from '@/ai/flows/refine-prompt'; // Importer la fonction d'affinage
+import type { PromptLogEntry } from '@/types'; // Removed RefinePromptInput, RefinePromptOutput as they are local to refine-prompt flow
+import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt'; // Importer la fonction d'affinage et ses types
 
 // --- Définitions des Outils ---
 
@@ -215,7 +215,7 @@ const refinePromptTool = ai.defineTool(
         tags: ['affinage_par_agent'], 
       };
       const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
-      if (insertError) throw insertError; // Lèvera une erreur si l'insertion échoue
+      if (insertError) throw insertError; 
 
       return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné et consigné avec succès.", success: true };
     } catch (e: any) {
@@ -269,16 +269,33 @@ Voici les actions que tu peux entreprendre avec les outils :
     Utilise \`addTaskTool\` dans les deux cas.
 - **Affiner un prompt** : Si l'utilisateur demande explicitement d'améliorer, d'affiner ou de reformuler un prompt pour une meilleure interaction avec une IA. Utilise \`refinePromptTool\`.
 
-**Instructions importantes :**
+Instructions importantes :
 - Réponds toujours en français.
 - Sois concis et direct. Confirme l'action effectuée (ex: "Chapitre 'Conclusion' ajouté.").
-- Si un outil est utilisé avec succès, base ta réponse sur le champ \`message\` de la sortie de l'outil.
+- Si un outil est utilisé avec succès, le champ \`message\` de la sortie de l'outil devrait être utilisé pour formuler ta réponse.
 - Si un outil échoue, informe l'utilisateur de l'échec et de la raison si possible (contenue dans le champ \`message\` de la sortie de l'outil en cas d'échec).
 - Si la demande de l'utilisateur n'est pas claire ou ne correspond à aucun outil, demande des clarifications. N'invente pas d'actions.
 - N'hésite pas à utiliser les outils dès que tu es raisonnablement sûr de l'intention de l'utilisateur. Ne demande pas de confirmation superflue avant d'agir.
-- Si plusieurs outils sont appelés, essaie de synthétiser les résultats dans ta réponse.
+- Si plusieurs outils sont appelés, essaie de synthétiser les résultats.
 
 Demande de l'utilisateur : {{{userRequest}}}
+
+---
+Instructions de formatage de la réponse :
+Ta réponse FINALE DOIT être un objet JSON valide.
+Cet objet JSON DOIT contenir une clé "responseMessage" avec une chaîne de caractères comme valeur, qui sera ta réponse textuelle à l'utilisateur.
+Si tu utilises des outils, la "responseMessage" doit résumer ce que tu as fait ou le résultat principal.
+Si tu poses une question pour clarification, cette question doit être la valeur de "responseMessage".
+
+Exemple si une action a été effectuée :
+{
+  "responseMessage": "J'ai ajouté le chapitre 'Introduction'."
+}
+
+Exemple si tu as besoin de clarification :
+{
+  "responseMessage": "Quel est le titre de la source que vous souhaitez ajouter ?"
+}
 `,
 });
 
@@ -292,50 +309,57 @@ const thesisAgentFlow = ai.defineFlow(
     const llmResponse = await thesisAgentMainPrompt(input);
     const agentOutput = llmResponse.output;
 
-    if (!agentOutput) {
-      return { responseMessage: "Désolé, une erreur interne est survenue et je n'ai pas pu traiter votre demande." };
+    if (!agentOutput || !agentOutput.responseMessage) { // Check for responseMessage specifically
+      // Construct a default error message if the LLM failed to provide a structured response
+      let errorMessage = "Désolé, une erreur interne est survenue et je n'ai pas pu traiter votre demande.";
+      if (llmResponse.candidates && llmResponse.candidates.length > 0) {
+          const candidate = llmResponse.candidates[0];
+          if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'TOOL_CALLS') {
+              errorMessage = `Ma réponse a été interrompue (raison: ${candidate.finishReason}). Veuillez réessayer ou reformuler.`;
+          }
+      }
+      // Even if agentOutput is null, we ensure the flow returns a valid ThesisAgentOutput
+      return { 
+          responseMessage: errorMessage,
+          actionsTaken: llmResponse.toolRequests?.map(req => ({ // Map tool requests if they exist
+              toolName: req.toolName,
+              toolInput: req.input,
+              toolOutput: req.output, // This is the tool's direct output
+          })) || undefined
+      };
     }
     
-    // Si l'LLM a directement fourni un message de réponse (par exemple, pour demander une clarification),
-    // et qu'aucun outil n'a été appelé, on retourne ce message.
-    if (agentOutput.responseMessage && llmResponse.toolRequests.length === 0) {
-      return { responseMessage: agentOutput.responseMessage };
-    }
-
-    // Si des outils ont été appelés, la réponse finale devrait être construite
-    // à partir des résultats des outils, comme indiqué dans le prompt.
-    // Le champ responseMessage de l'output du prompt devrait déjà être bien formulé par l'IA.
-    // S'il manque, on en construit un basique.
     let finalMessage = agentOutput.responseMessage;
     
-    const actionsTakenDetails: ThesisAgentOutput['actionsTaken'] = [];
-     if (llmResponse.toolRequests.length > 0) {
+    const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
+     if (llmResponse.toolRequests && llmResponse.toolRequests.length > 0) {
         for (const toolRequest of llmResponse.toolRequests) {
              actionsTakenDetails.push({
                 toolName: toolRequest.toolName,
                 toolInput: toolRequest.input,
-                toolOutput: toolRequest.output, // Output from the tool, after it has run
+                toolOutput: toolRequest.output, 
             });
         }
-        // Si l'IA n'a pas formulé un `responseMessage` malgré l'appel aux outils (ce qui ne devrait pas arriver avec le prompt actuel)
-        if (!finalMessage) {
-            const successfulActions = actionsTakenDetails.filter(a => a.toolOutput?.success).length;
-            const failedActions = actionsTakenDetails.length - successfulActions;
+        // The LLM should have already formulated a good responseMessage based on tool outputs as per prompt.
+        // If for some reason it's missing, but tools were called, we can add a generic one.
+        if (!finalMessage && actionsTakenDetails.length > 0) {
+             const successfulActions = actionsTakenDetails.filter(a => a.toolOutput?.success).length;
+             const failedActions = actionsTakenDetails.length - successfulActions;
 
             if (successfulActions > 0 && failedActions === 0) {
-                finalMessage = `J'ai complété votre demande avec succès.`;
+                finalMessage = `J'ai complété votre demande avec succès en utilisant ${successfulActions} outil(s).`;
             } else if (successfulActions > 0 && failedActions > 0) {
-                finalMessage = `J'ai partiellement complété votre demande. Certaines actions ont échoué.`;
+                finalMessage = `J'ai partiellement complété votre demande. ${successfulActions} action(s) réussie(s), ${failedActions} échec(s).`;
             } else if (failedActions > 0) {
-                finalMessage = `Désolé, je n'ai pas pu compléter votre demande.`;
-            } else { // Aucun outil n'a vraiment retourné de statut clair, ou aucun outil n'a été appelé (ne devrait pas arriver ici)
-                 finalMessage = `J'ai traité votre demande.`;
+                finalMessage = `Désolé, ${failedActions} action(s) ont échoué.`;
+            } else { 
+                 finalMessage = `J'ai traité votre demande en utilisant des outils.`;
             }
         }
     } else if (!finalMessage) {
+         // This case (no tool calls, no responseMessage from LLM) should be rare with the new prompt instructions
          finalMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler votre demande ?";
     }
-
 
     return {
       responseMessage: finalMessage,
@@ -347,8 +371,3 @@ const thesisAgentFlow = ai.defineFlow(
 export async function processUserRequest(input: ThesisAgentInput): Promise<ThesisAgentOutput> {
   return thesisAgentFlow(input);
 }
-
-    
-
-    
-
