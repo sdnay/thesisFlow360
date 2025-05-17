@@ -3,8 +3,10 @@ import type { Database as SupabaseDatabase } from './supabase'; // Assurez-vous 
 
 export type Database = SupabaseDatabase;
 
+// NOUVELLE INTERFACE POUR LES TAGS
 export interface Tag {
   id: string;
+  user_id: string; // Ajouté pour les tags spécifiques à l'utilisateur
   name: string;
   color?: string | null;
   created_at: string;
@@ -12,30 +14,29 @@ export interface Tag {
 
 export interface Chapter {
   id: string;
+  user_id: string; // Ajouté
   name: string;
   progress: number;
   status: string;
   supervisor_comments: string[];
   created_at: string;
-  // Pour la récupération via Supabase avec jointure (la structure peut varier un peu)
-  chapter_tags?: { tags: Tag }[]; // Supabase structure pour many-to-many
-  // Champ simplifié après traitement des données côté client
-  tags?: Tag[]; 
-  tasks?: Partial<Task>[]; // Pour afficher les tâches liées
-  daily_objectives?: Partial<DailyObjective>[]; // Pour afficher les objectifs liés
+  chapter_tags?: { tags: Tag }[];
+  tags?: Tag[];
+  // Pour les éléments liés (récupérés séparément ou via des jointures plus complexes)
+  tasks_count?: number;
+  daily_objectives_count?: number;
 }
 
 export interface Task {
   id: string;
+  user_id: string; // Ajouté
   text: string;
   completed: boolean;
   type: TaskType;
   created_at: string;
   chapter_id?: string | null;
-  // Pour la récupération via Supabase avec jointure
-  chapters?: { id: string, name: string } | null; // Chapitre lié
-  task_tags?: { tags: Tag }[]; // Supabase structure pour many-to-many
-  // Champ simplifié après traitement
+  chapters?: { id: string, name: string } | null;
+  task_tags?: { tags: Tag }[];
   tags?: Tag[];
 }
 
@@ -43,30 +44,28 @@ export type TaskType = "urgent" | "important" | "reading" | "chatgpt" | "seconda
 
 export interface DailyObjective {
   id: string;
+  user_id: string; // Ajouté
   text: string;
   completed: boolean;
-  objective_date: string; // YYYY-MM-DD
+  objective_date: string;
   created_at: string;
   completed_at?: string | null;
   chapter_id?: string | null;
-  // Pour la récupération via Supabase avec jointure
-  chapters?: { id: string, name: string } | null; // Chapitre lié
-  daily_objective_tags?: { tags: Tag }[]; // Supabase structure
-  // Champ simplifié après traitement
+  chapters?: { id: string, name: string } | null;
+  daily_objective_tags?: { tags: Tag }[];
   tags?: Tag[];
 }
 
 export interface PomodoroSession {
   id: string;
-  start_time: string; // ISO string
-  duration: number; // en minutes
+  user_id: string; // Ajouté
+  start_time: string;
+  duration: number;
   notes?: string | null;
-  created_at?: string; // Ajouté pour cohérence, Supabase peut le gérer
-  // Clés étrangères
+  created_at?: string;
   chapter_id?: string | null;
   task_id?: string | null;
   daily_objective_id?: string | null;
-  // Relations pour affichage (après jointure)
   chapters?: { id: string, name: string } | null;
   tasks?: { id: string, text: string } | null;
   daily_objectives?: { id: string, text: string } | null;
@@ -74,51 +73,38 @@ export interface PomodoroSession {
 
 export interface BrainDumpEntry {
   id: string;
+  user_id: string; // Ajouté
   text: string;
   created_at: string;
   status: BrainDumpEntryStatus;
-  // Pour la récupération via Supabase avec jointure
-  brain_dump_entry_tags?: { tags: Tag }[]; // Supabase structure
-  // Champ simplifié après traitement
+  brain_dump_entry_tags?: { tags: Tag }[];
   tags?: Tag[];
 }
 export type BrainDumpEntryStatus = "captured" | "idea" | "task" | "discarded";
 
 export interface Source {
   id: string;
+  user_id: string; // Ajouté
   title: string;
   type: 'pdf' | 'website' | 'interview' | 'field_notes' | 'other';
   source_link_or_path?: string | null;
   notes?: string | null;
   created_at: string;
-  // Pour la récupération via Supabase avec jointure
-  source_tags?: { tags: Tag }[]; // Supabase structure
-  // Champ simplifié après traitement
+  source_tags?: { tags: Tag }[];
   tags?: Tag[];
 }
 
 export interface PromptLogEntry {
   id: string;
+  user_id: string; // Ajouté
   original_prompt: string;
   refined_prompt?: string;
   reasoning?: string;
   timestamp: string;
-  tags?: string[]; // Ces tags sont textuels pour l'instant
+  tags?: string[]; // Textuels pour l'instant, pourraient devenir des relations de Tag aussi
 }
 
-// Important : Vous DEVEZ générer vos types Supabase après avoir appliqué les modifications SQL.
-// Commande : npx supabase gen types typescript --project-id VOTRE_ID_PROJET --schema public > src/types/supabase.ts
-// Puis, dans supabaseClient.ts, importez { Database } from './supabase' (ou le chemin correct).
-// Les types `Insert` et `Update` dans le commentaire ci-dessous sont des exemples
-// et seront remplacés par les types générés par Supabase.
-
-/*
-Pour src/lib/supabaseClient.ts :
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/supabase'; // CE FICHI SERA GENERE
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
-*/
+// Rappel : Après avoir appliqué les modifications SQL à votre base Supabase,
+// générez les types précis avec la CLI Supabase pour remplacer le contenu de src/types/supabase.ts :
+// npx supabase gen types typescript --project-id VOTRE_ID_PROJET --schema public > src/types/supabase.ts
+// Et dans supabaseClient.ts, assurez-vous d'importer { Database } depuis ce fichier généré.
