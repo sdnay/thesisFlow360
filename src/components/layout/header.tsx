@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from '@/lib/utils'; // Added missing import
 
 export function Header() {
   const { isMobile } = useSidebar();
@@ -97,7 +98,7 @@ export function Header() {
           </DropdownMenu>
         ) : (
           <Button asChild variant="outline" size="sm">
-            <Link href="/auth/login">Se Connecter</Link>
+            <Link href="/login">Se Connecter</Link>
           </Button>
         )}
       </div>
