@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType, Chapter, Tag } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter, ArrowUpDown, Tags, Link as LinkIcon, Timer, EllipsisVertical, XIcon, ChevronUpDownIcon as ChevronUpDownIconLucide } from 'lucide-react'; // ChevronUpDownIcon renommé
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter, ArrowUpDown, Tags as TagsIcon, Link as LinkIconLucide, Timer, EllipsisVertical, XIcon, ChevronsUpDownIcon as ChevronUpDownIconLucide } from 'lucide-react'; // Correction ici
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -21,18 +21,15 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth'; // Ajouté
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/hooks/useAuth';
 
-
-// TaskTypeSelector Component (pas de changement majeur ici, juste s'assurer qu'il est présent)
 const taskTypeLabels: Record<TaskType, string> = { urgent: "Urgent", important: "Important", reading: "Lecture", chatgpt: "ChatGPT", secondary: "Secondaire" };
-const taskTypeClasses: Record<TaskType, { border: string; badge: string; checkbox: string }> = {
-  urgent: { border: "border-l-red-500 dark:border-l-red-600", badge: "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700", checkbox: "border-red-400 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600 dark:border-red-500 dark:data-[state=checked]:bg-red-600 dark:data-[state=checked]:border-red-700" },
-  important: { border: "border-l-orange-500 dark:border-l-orange-600", badge: "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700", checkbox: "border-orange-400 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-600 dark:border-orange-500 dark:data-[state=checked]:bg-orange-600 dark:data-[state=checked]:border-orange-700" },
-  reading: { border: "border-l-green-500 dark:border-l-green-600", badge: "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700", checkbox: "border-green-400 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-600 dark:border-green-500 dark:data-[state=checked]:bg-green-600 dark:data-[state=checked]:border-green-700" },
-  chatgpt: { border: "border-l-blue-500 dark:border-l-blue-600", badge: "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700", checkbox: "border-blue-400 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-600 dark:border-blue-500 dark:data-[state=checked]:bg-blue-600 dark:data-[state=checked]:border-blue-700" },
-  secondary: { border: "border-l-gray-400 dark:border-l-gray-500", badge: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700/40 dark:text-gray-300 dark:border-gray-500", checkbox: "border-gray-400 data-[state=checked]:bg-gray-500 data-[state=checked]:border-gray-600 dark:border-gray-500 dark:data-[state=checked]:bg-gray-600 dark:data-[state=checked]:border-gray-700" },
+const taskTypeClasses: Record<TaskType, { border: string; badgeBg: string; badgeText: string; checkbox: string }> = {
+  urgent: { border: "border-red-500 dark:border-red-600", badgeBg: "bg-red-100 dark:bg-red-900/40", badgeText: "text-red-700 dark:text-red-300", checkbox: "border-red-400 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600 dark:border-red-500 dark:data-[state=checked]:bg-red-600 dark:data-[state=checked]:border-red-700" },
+  important: { border: "border-orange-500 dark:border-orange-600", badgeBg: "bg-orange-100 dark:bg-orange-900/40", badgeText: "text-orange-700 dark:text-orange-300", checkbox: "border-orange-400 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-600 dark:border-orange-500 dark:data-[state=checked]:bg-orange-600 dark:data-[state=checked]:border-orange-700" },
+  reading: { border: "border-green-500 dark:border-green-600", badgeBg: "bg-green-100 dark:bg-green-900/40", badgeText: "text-green-700 dark:text-green-300", checkbox: "border-green-400 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-600 dark:border-green-500 dark:data-[state=checked]:bg-green-600 dark:data-[state=checked]:border-green-700" },
+  chatgpt: { border: "border-blue-500 dark:border-blue-600", badgeBg: "bg-blue-100 dark:bg-blue-900/40", badgeText: "text-blue-700 dark:text-blue-300", checkbox: "border-blue-400 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-600 dark:border-blue-500 dark:data-[state=checked]:bg-blue-600 dark:data-[state=checked]:border-blue-700" },
+  secondary: { border: "border-gray-400 dark:border-gray-500", badgeBg: "bg-gray-100 dark:bg-gray-700/40", badgeText: "text-gray-600 dark:text-gray-400", checkbox: "border-gray-400 data-[state=checked]:bg-gray-500 data-[state=checked]:border-gray-600 dark:border-gray-500 dark:data-[state=checked]:bg-gray-600 dark:data-[state=checked]:border-gray-700" },
 };
 
 const TaskTypeSelector: FC<{ selectedType: TaskType; onSelectType: (type: TaskType) => void; disabled?: boolean; buttonClassName?: string; size?: 'sm' | 'default';}> =
@@ -41,7 +38,7 @@ const TaskTypeSelector: FC<{ selectedType: TaskType; onSelectType: (type: TaskTy
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className={cn("justify-between text-sm font-normal", size === 'sm' ? "h-9 w-[140px]" : "h-10 w-[160px]", buttonClassName)} disabled={disabled}>
+        <Button variant="outline" role="combobox" aria-expanded={open} className={cn("justify-between font-normal", size === 'sm' ? "h-9 w-[140px] text-xs" : "h-10 w-[160px] text-sm", buttonClassName)} disabled={disabled}>
           {taskTypeLabels[selectedType]}
           <ChevronUpDownIconLucide className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -54,7 +51,7 @@ const TaskTypeSelector: FC<{ selectedType: TaskType; onSelectType: (type: TaskTy
             <CommandGroup>
               {Object.entries(taskTypeLabels).map(([type, label]) => (
                 <CommandItem key={type} value={type} onSelect={(currentValue) => { onSelectType(currentValue as TaskType); setOpen(false); }} className="text-sm cursor-pointer">
-                  <CheckIcon className={cn("mr-2 h-4 w-4", selectedType === type ? "opacity-100" : "opacity-0")} />
+                  <ListChecks className={cn("mr-2 h-4 w-4", selectedType === type ? "opacity-100" : "opacity-0")} />
                   {label}
                 </CommandItem>
               ))}
@@ -65,7 +62,7 @@ const TaskTypeSelector: FC<{ selectedType: TaskType; onSelectType: (type: TaskTy
     </Popover>
   );
 };
-// SimpleTagManager Component
+
 const SimpleTagManager: FC<{
   availableTags: Tag[];
   selectedTags: Tag[];
@@ -141,13 +138,12 @@ const SimpleTagManager: FC<{
   );
 };
 
-
 interface TaskItemCardProps {
   task: Task;
   onToggle: (id: string, completed: boolean) => Promise<void>;
   onSetType: (id: string, type: TaskType) => Promise<void>;
   onEdit: (task: Task) => void;
-  onDelete: (id: string) => Promise<void>; // Ajouté onDelete
+  onDelete: (id: string) => Promise<void>;
   onStartPomodoro: (task: Task) => void;
   isCurrentItemLoading: boolean;
 }
@@ -156,7 +152,7 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onSetType, onEdit
   const typeStyle = taskTypeClasses[task.type] || taskTypeClasses.secondary;
 
   return (
-    <Card className={cn("relative overflow-hidden border-l-4 shadow-sm transition-all duration-150 hover:shadow-md", typeStyle.border, task.completed && "opacity-70 bg-muted/50 dark:bg-muted/20")}>
+    <Card className={cn("relative overflow-hidden border-l-4 shadow-sm transition-all duration-150 hover:shadow-md", typeStyle.border, task.completed && "opacity-60 bg-muted/30 dark:bg-muted/20")}>
       <CardContent className="p-3 md:p-4 flex flex-col gap-3">
         <div className="flex items-start gap-3">
           <Checkbox
@@ -172,17 +168,17 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onSetType, onEdit
               {task.text}
             </p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              <Badge variant="outline" className={cn("font-normal py-0.5 px-1.5 h-auto", typeStyle.badge)}>{taskTypeLabels[task.type]}</Badge>
+              <Badge variant="outline" className={cn("font-normal py-0.5 px-1.5 h-auto", typeStyle.badgeBg, typeStyle.badgeText, typeStyle.border.replace('-l-', '-'))}>{taskTypeLabels[task.type]}</Badge>
               <span className="text-muted-foreground">Créé : {task.created_at ? format(new Date(task.created_at), "d MMM yy, HH:mm", { locale: fr }) : 'N/A'}</span>
               {task.chapters && (
                 <span className="text-muted-foreground flex items-center gap-1">
-                  <LinkIcon className="h-3 w-3" />
+                  <LinkIconLucide className="h-3 w-3" />
                   Chapitre: {task.chapters.name}
                 </span>
               )}
             </div>
             {task.tags && task.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
+              <div className="flex flex-wrap gap-1 pt-1.5">
                 {task.tags.map(tag => (
                   <Badge key={tag.id} variant="secondary" style={tag.color ? { backgroundColor: tag.color, color: 'white' } : {}} className="text-xs">
                     {tag.name}
@@ -192,27 +188,31 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onSetType, onEdit
             )}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 pt-2 border-t sm:border-none sm:pt-0">
-          <TaskTypeSelector selectedType={task.type} onSelectType={(type) => onSetType(task.id, type)} disabled={isCurrentItemLoading} size="sm" buttonClassName="w-full sm:w-[140px]" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 pt-2 border-t sm:border-none sm:pt-0 mt-auto">
+          <TaskTypeSelector selectedType={task.type} onSelectType={(type) => onSetType(task.id, type)} disabled={isCurrentItemLoading} size="sm" buttonClassName="w-full sm:w-auto" />
           <div className="flex gap-1.5 w-full sm:w-auto">
-            <Button variant="outline" size="sm" onClick={() => onStartPomodoro(task)} className="flex-grow sm:flex-grow-0" disabled={isCurrentItemLoading} title="Démarrer un Pomodoro pour cette tâche">
+            <Button variant="outline" size="sm" onClick={() => onStartPomodoro(task)} className="flex-grow sm:flex-grow-0 h-9" disabled={isCurrentItemLoading} title="Démarrer un Pomodoro pour cette tâche">
               <Timer className="mr-1.5 h-4 w-4" /> Pomodoro
             </Button>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+             <Popover>
+                <PopoverTrigger asChild>
                     <Button variant="outline" size="icon" className="h-9 w-9" disabled={isCurrentItemLoading} title="Plus d'actions">
                         <EllipsisVertical className="h-4 w-4"/>
                     </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(task)} disabled={isCurrentItemLoading}>
-                        <Edit2 className="mr-2 h-4 w-4" /> Modifier
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onDelete(task.id)} disabled={isCurrentItemLoading} className="text-destructive focus:text-destructive">
-                        <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-40 p-1">
+                  <Command>
+                    <CommandList>
+                      <CommandItem onSelect={() => onEdit(task)} disabled={isCurrentItemLoading} className="cursor-pointer text-sm">
+                          <Edit2 className="mr-2 h-4 w-4" /> Modifier
+                      </CommandItem>
+                      <CommandItem onSelect={() => onDelete(task.id)} disabled={isCurrentItemLoading} className="text-destructive focus:text-destructive cursor-pointer text-sm">
+                          <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                      </CommandItem>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+            </Popover>
           </div>
         </div>
       </CardContent>
@@ -228,10 +228,10 @@ const statusOptions: { value: FilterStatus; label: string }[] = [ { value: "all"
 const typeFilterOptions: { value: FilterType; label: string }[] = [ { value: "all", label: "Tous les types" }, ...(Object.keys(taskTypeLabels) as TaskType[]).map(type => ({ value: type, label: taskTypeLabels[type] })) ];
 
 export function AiTaskManagerPage() {
-  const { user } = useAuth(); // Ajouté pour obtenir user_id
+  const { user } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [chapters, setChapters] = useState<Pick<Chapter, 'id' | 'name'>[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
   const [instructions, setInstructions] = useState('');
@@ -256,14 +256,17 @@ export function AiTaskManagerPage() {
   const { toast } = useToast();
 
   const fetchInitialData = useCallback(async () => {
-    if (!user) return; // Ne rien faire si l'utilisateur n'est pas connecté
+    if (!user) {
+      setIsFetchingInitialData(false); // Si pas d'utilisateur, ne rien faire et arrêter le chargement
+      return;
+    }
     setIsFetchingInitialData(true);
     setError(null);
     try {
       const [tasksRes, chaptersRes, tagsRes] = await Promise.all([
-        supabase.from('tasks').select('*, chapters(id, name), task_tags(tags(id, name, color))').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('tasks').select('*, chapters(id, name), task_tags(tags(id, name, color))').eq('user_id', user.id),
         supabase.from('chapters').select('id, name').eq('user_id', user.id).order('name'),
-        supabase.from('tags').select('*').eq('user_id', user.id).order('name') // Tags spécifiques à l'utilisateur
+        supabase.from('tags').select('*').eq('user_id', user.id).order('name')
       ]);
 
       if (tasksRes.error) throw new Error(`Erreur tâches: ${tasksRes.error.message}`);
@@ -272,44 +275,51 @@ export function AiTaskManagerPage() {
 
       const processedTasks = (tasksRes.data || []).map(task => ({
         ...task,
+        user_id: user.id, // Assurer la présence de user_id
         tags: task.task_tags?.map((tt: any) => tt.tags) || [],
-        chapters: task.chapters as { id: string, name: string } | null,
+        chapters: task.chapters as { id: string, name: string } | null, // S'assurer que chapters a le bon type
       }));
       setTasks(processedTasks);
       setChapters(chaptersRes.data || []);
-      setAvailableTags(tagsRes.data || []);
+      setAvailableTags((tagsRes.data || []).map(t => ({...t, user_id: user.id })));
 
     } catch (e: any) {
       const errorMessage = (e as Error).message || "Une erreur inconnue est survenue.";
       setError(`Échec de la récupération des données: ${errorMessage}`);
       toast({ title: "Erreur de Chargement", description: errorMessage, variant: "destructive" });
-      console.error("Erreur fetchInitialData:", e);
+      console.error("Erreur fetchInitialData (Tâches):", e);
     } finally {
       setIsFetchingInitialData(false);
     }
-  }, [toast, user]); // Ajout de user aux dépendances
+  }, [toast, user]);
 
   useEffect(() => {
-    if (user) { // Ne charger les données que si l'utilisateur est disponible
+    if (user) {
       fetchInitialData();
+    } else {
+      // Si l'utilisateur se déconnecte, vider les données et arrêter le chargement
+      setTasks([]);
+      setChapters([]);
+      setAvailableTags([]);
+      setIsFetchingInitialData(false);
     }
-  }, [user, fetchInitialData]); // Déclencher si user change
+  }, [user, fetchInitialData]);
 
   useEffect(() => {
-    if (!user) return; // Ne pas s'abonner si pas d'utilisateur
+    if (!user) return;
 
-    const taskChannel = supabase
-      .channel('tasks-page-updates-for-user')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' /* Potentiellement filtrer par user_id via la tâche liée */ }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
+    const tasksChannel = supabase
+      .channel(`tasks-page-updates-user-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, (_payload) => fetchInitialData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' }, (_payload) => fetchInitialData()) // RLS on task_tags implies user scope
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, (_payload) => fetchInitialData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, (_payload) => fetchInitialData())
       .subscribe();
 
     return () => {
-      supabase.removeChannel(taskChannel);
+      supabase.removeChannel(tasksChannel);
     };
-  }, [user, fetchInitialData]); // S'abonner/se désabonner si user change
+  }, [user, fetchInitialData]);
 
   const filteredAndSortedTasks = useMemo(() => {
     let processedTasks = [...tasks];
@@ -327,14 +337,15 @@ export function AiTaskManagerPage() {
   }, [tasks, filterStatus, filterType, sortOrder]);
 
   const saveTaskTags = async (taskId: string, tagsToSave: Tag[]) => {
-    if (!user) return;
-    // 1. Supprimer les anciennes liaisons
-    await supabase.from('task_tags').delete().eq('task_id', taskId);
-    // 2. Insérer les nouvelles liaisons
+    if (!user) throw new Error("Utilisateur non authentifié.");
+    // Supprimer les anciennes liaisons pour cette tâche
+    await supabase.from('task_tags').delete().eq('task_id', taskId); // RLS est supposé gérer la sécurité via task_id
+
+    // Insérer les nouvelles liaisons
     if (tagsToSave.length > 0) {
       const newLinks = tagsToSave.map(tag => ({ task_id: taskId, tag_id: tag.id }));
       const { error: linkError } = await supabase.from('task_tags').insert(newLinks);
-      if (linkError) throw new Error(`Erreur liaison nouveaux tags: ${linkError.message}`);
+      if (linkError) throw new Error(`Erreur lors de la liaison des nouveaux tags: ${linkError.message}`);
     }
   };
 
@@ -344,7 +355,7 @@ export function AiTaskManagerPage() {
     setError(null);
 
     const taskPayload = {
-      user_id: user.id, // Ajouté
+      user_id: user.id,
       text: manualTaskText.trim(),
       type: manualTaskType,
       completed: editingTask ? editingTask.completed : false,
@@ -354,48 +365,39 @@ export function AiTaskManagerPage() {
     try {
       let savedTaskWithRelations: Task | null = null;
       if (editingTask) {
-        const { data: updatedTask, error: updateError } = await supabase
+        const { data: updatedTaskData, error: updateError } = await supabase
           .from('tasks').update(taskPayload).eq('id', editingTask.id).eq('user_id', user.id).select().single();
         if (updateError) throw updateError;
-        if (!updatedTask) throw new Error("La tâche mise à jour n'a pas été retournée.");
-        await saveTaskTags(updatedTask.id, manualTaskTags);
+        if (!updatedTaskData) throw new Error("La tâche mise à jour n'a pas été retournée par la base de données.");
+        await saveTaskTags(updatedTaskData.id, manualTaskTags);
 
         const { data: fetchedTask, error: fetchError } = await supabase.from('tasks')
           .select('*, chapters(id, name), task_tags(tags(id, name, color))')
-          .eq('id', updatedTask.id).eq('user_id', user.id).single();
+          .eq('id', updatedTaskData.id).eq('user_id', user.id).single();
         if (fetchError || !fetchedTask) throw fetchError || new Error("Impossible de récupérer la tâche mise à jour avec ses relations.");
+        savedTaskWithRelations = { ...fetchedTask, user_id: user.id, tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: fetchedTask.chapters as { id: string, name: string } | null };
 
-        savedTaskWithRelations = {
-          ...fetchedTask,
-          user_id: user.id,
-          tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [],
-          chapters: fetchedTask.chapters as { id: string, name: string } | null,
-        };
         setTasks(prevTasks => prevTasks.map(t => t.id === savedTaskWithRelations!.id ? savedTaskWithRelations! : t));
         toast({ title: "Tâche mise à jour" });
       } else {
-        const { data: newTask, error: insertError } = await supabase
+        const { data: newTaskData, error: insertError } = await supabase
           .from('tasks').insert(taskPayload).select().single();
         if (insertError) throw insertError;
-        if (!newTask) throw new Error("La nouvelle tâche n'a pas été retournée.");
-        await saveTaskTags(newTask.id, manualTaskTags);
+        if (!newTaskData) throw new Error("La nouvelle tâche n'a pas été retournée par la base de données.");
+        await saveTaskTags(newTaskData.id, manualTaskTags);
+        
         const { data: fetchedTask, error: fetchError } = await supabase.from('tasks')
           .select('*, chapters(id, name), task_tags(tags(id, name, color))')
-          .eq('id', newTask.id).eq('user_id', user.id).single();
+          .eq('id', newTaskData.id).eq('user_id', user.id).single();
         if (fetchError || !fetchedTask) throw fetchError || new Error("Impossible de récupérer la nouvelle tâche avec ses relations.");
-
-        savedTaskWithRelations = {
-          ...fetchedTask,
-          user_id: user.id,
-          tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [],
-          chapters: fetchedTask.chapters as { id: string, name: string } | null,
-        };
+        savedTaskWithRelations = { ...fetchedTask, user_id: user.id, tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: fetchedTask.chapters as { id: string, name: string } | null };
+        
         setTasks(prevTasks => [savedTaskWithRelations!, ...prevTasks].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         toast({ title: "Tâche ajoutée" });
       }
       setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]);
     } catch (e: any) {
-      const errorMessage = (e as Error).message || "Erreur inconnue.";
+      const errorMessage = (e as Error).message || "Erreur inconnue lors de la sauvegarde de la tâche.";
       setError(errorMessage); toast({ title: "Erreur d'enregistrement", description: errorMessage, variant: "destructive" });
     } finally {
       setIsManualTaskLoading(false);
@@ -404,8 +406,7 @@ export function AiTaskManagerPage() {
 
   const handleToggleTask = async (id: string, completed: boolean) => {
     if (!user) return;
-    setIsTaskItemLoading(id);
-    setError(null);
+    setIsTaskItemLoading(id); setError(null);
     try {
       const { data: updatedTask, error } = await supabase
         .from('tasks').update({ completed }).eq('id', id).eq('user_id', user.id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
@@ -414,32 +415,31 @@ export function AiTaskManagerPage() {
         const processedTask = { ...updatedTask, user_id: user.id, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as { id: string, name: string } | null };
         setTasks(prevTasks => prevTasks.map(t => t.id === id ? processedTask : t));
       }
-    } catch (e: any) { /* ... gestion erreur ... */ }
-    finally { setIsTaskItemLoading(null); }
+    } catch (e: any) {
+      const errorMessage = (e as Error).message || "Erreur inconnue lors de la mise à jour du statut.";
+      setError(errorMessage); toast({ title: "Erreur MàJ Statut", description: errorMessage, variant: "destructive" });
+    } finally { setIsTaskItemLoading(null); }
   };
 
   const handleDeleteTask = async (id: string) => {
     if (!user) return;
-    setIsTaskItemLoading(id);
-    setError(null);
+    setIsTaskItemLoading(id); setError(null);
     try {
-      await supabase.from('task_tags').delete().eq('task_id', id); // Les RLS sur task_tags s'assureront que seul le propriétaire peut faire ça indirectement
+      await supabase.from('task_tags').delete().eq('task_id', id); // RLS devrait gérer la sécurité utilisateur
       const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', user.id);
       if (error) throw error;
       setTasks(prevTasks => prevTasks.filter(t => t.id !== id));
       if (editingTask && editingTask.id === id) { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]); }
       toast({ title: "Tâche supprimée" });
     } catch (e: any) {
-        const errorMessage = (e as Error).message || "Erreur inconnue.";
+        const errorMessage = (e as Error).message || "Erreur inconnue lors de la suppression.";
         setError(errorMessage); toast({ title: "Erreur de suppression", description: errorMessage, variant: "destructive" });
-    }
-    finally { setIsTaskItemLoading(null); }
+    } finally { setIsTaskItemLoading(null); }
   };
 
   const handleSetTaskType = async (id: string, type: TaskType) => {
     if (!user) return;
-    setIsTaskItemLoading(id);
-    setError(null);
+    setIsTaskItemLoading(id); setError(null);
     try {
       const { data: updatedTask, error } = await supabase
         .from('tasks').update({ type }).eq('id', id).eq('user_id', user.id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
@@ -448,8 +448,10 @@ export function AiTaskManagerPage() {
         const processedTask = { ...updatedTask, user_id: user.id, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as { id: string, name: string } | null };
         setTasks(prevTasks => prevTasks.map(t => t.id === id ? processedTask : t));
       }
-    } catch (e: any) { /* ... gestion erreur ... */ }
-    finally { setIsTaskItemLoading(null); }
+    } catch (e: any) {
+      const errorMessage = (e as Error).message || "Erreur inconnue lors de la mise à jour du type.";
+      setError(errorMessage); toast({ title: "Erreur MàJ Type", description: errorMessage, variant: "destructive" });
+    } finally { setIsTaskItemLoading(null); }
   };
 
   const handleEditTask = (task: Task) => {
@@ -467,21 +469,13 @@ export function AiTaskManagerPage() {
 
   const handleAddTagToManualTask = async (tagNameOrTag: string | Tag) => {
     if (!user) return;
-    let finalTag: Tag | undefined;
-    if (typeof tagNameOrTag === 'string') {
-      const existingTag = availableTags.find(t => t.name.toLowerCase() === tagNameOrTag.toLowerCase() && t.user_id === user.id);
-      if (existingTag) {
-        finalTag = existingTag;
-      } else {
-        const { data: newTagFromDb, error: tagError } = await supabase.from('tags').insert({ name: tagNameOrTag, user_id: user.id }).select().single();
-        if (tagError) { toast({ title: "Erreur création Tag", description: tagError.message, variant: "destructive" }); return; }
-        if (newTagFromDb) {
-          finalTag = { ...newTagFromDb, user_id: user.id };
-          setAvailableTags(prev => [...prev, finalTag!].sort((a,b) => a.name.localeCompare(b.name)));
-        }
-      }
-    } else {
-      finalTag = tagNameOrTag;
+    let finalTag: Tag | undefined = typeof tagNameOrTag === 'string' ?
+      availableTags.find(t => t.name.toLowerCase() === tagNameOrTag.toLowerCase() && t.user_id === user.id) : tagNameOrTag;
+    if (typeof tagNameOrTag === 'string' && !finalTag) {
+      const { data: newTagFromDb, error: tagError } = await supabase.from('tags').insert({ name: tagNameOrTag, user_id: user.id }).select().single();
+      if (tagError || !newTagFromDb) { toast({ title: "Erreur création Tag", description: tagError?.message || "Impossible de créer le tag.", variant: "destructive" }); return; }
+      finalTag = { ...newTagFromDb, user_id: user.id }; // Assurer que user_id est présent
+      setAvailableTags(prev => [...prev, finalTag!].sort((a,b) => a.name.localeCompare(b.name)));
     }
     if (finalTag && !manualTaskTags.find(mt => mt.id === finalTag!.id)) {
       setManualTaskTags(prev => [...prev, finalTag!]);
@@ -494,64 +488,32 @@ export function AiTaskManagerPage() {
 
   const handleAiModifyTasks = async () => {
     if (!user || instructions.trim() === '') return;
-    setIsAiLoading(true);
-    setError(null);
-    setAiReasoning(null);
-
-    const currentTaskListStrings = tasks.map(t => `${t.text} (Type: ${t.type}, Complété: ${t.completed})`);
+    setIsAiLoading(true); setError(null); setAiReasoning(null);
+    const currentTaskListStrings = tasks.map(t => `${t.text} (Type: ${t.type}, Complété: ${t.completed}, Chapitre: ${t.chapters?.name || 'Aucun'}, Tags: ${t.tags?.map(tag => tag.name).join(', ') || 'Aucun'})`);
     const input: ModifyTaskListInput = { instructions, taskList: currentTaskListStrings };
-
     try {
       const result: ModifyTaskListOutput = await modifyTaskList(input);
       setAiReasoning(result.reasoning);
-
-      // Supprimer toutes les tâches existantes de l'utilisateur
-      const { error: deleteError } = await supabase.from('tasks').delete().eq('user_id', user.id);
-      if (deleteError) throw deleteError;
-
-      // Insérer les nouvelles tâches
-      const newTasksToInsert = result.modifiedTaskList.map(taskString => {
-        // Essayer d'extraire le type si l'IA le fournit, sinon 'secondary' par défaut
-        const match = taskString.match(/\(Type:\s*(\w+)/i);
-        let type: TaskType = 'secondary';
-        if (match && match[1] && Object.keys(taskTypeLabels).includes(match[1].toLowerCase() as TaskType) ) {
-            type = match[1].toLowerCase() as TaskType;
-        }
-        const text = taskString.replace(/\s*\(Type:\s*\w+.*?\)/i, '').trim(); // Enlever la partie type du texte
-
-        return {
-          text: text,
-          type: type,
-          completed: false, // Par défaut les nouvelles tâches de l'IA ne sont pas complétées
-          user_id: user.id,
-        };
-      });
-
-      if (newTasksToInsert.length > 0) {
-        const { error: insertError } = await supabase.from('tasks').insert(newTasksToInsert);
-        if (insertError) throw insertError;
-      }
-      // Le fetchInitialData via Realtime mettra à jour la liste des tâches
-      toast({ title: "Liste des tâches modifiée par l'IA", description: "Votre liste a été mise à jour." });
+      toast({ title: "Instructions IA traitées", description: "Actualisation des données en cours...", duration: 5000 });
+      await fetchInitialData();
+      console.log("Réponse IA (liste modifiée brute):", result.modifiedTaskList);
+      console.log("Raisonnement IA:", result.reasoning);
     } catch (e: any) {
       const errorMessage = (e as Error).message || "Erreur de l'IA.";
-      setError(errorMessage);
-      toast({ title: "Erreur IA", description: errorMessage, variant: "destructive" });
+      setError(errorMessage); toast({ title: "Erreur IA", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsAiLoading(false);
-      setInstructions('');
+      setIsAiLoading(false); setInstructions('');
     }
   };
-
-  if (!user && !isFetchingInitialData) { // Si l'utilisateur n'est pas encore chargé mais que le fetch initial est terminé
-      return (
+  
+  if (!user && isFetchingInitialData) { // Gérer le cas où l'utilisateur n'est pas encore chargé
+     return (
         <div className="p-4 md:p-6 h-full flex flex-col items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
             <p className="text-muted-foreground">Chargement des informations utilisateur...</p>
         </div>
     );
   }
-
 
   return (
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
@@ -567,13 +529,13 @@ export function AiTaskManagerPage() {
             <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 text-primary" /> Gérer avec l'IA</CardTitle><CardDescription className="text-sm">L'IA peut réorganiser, ajouter ou modifier votre liste.</CardDescription></CardHeader>
             <CardContent><Textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex : Ajoute 'Relire chapitre X' comme urgent..." rows={3} className="mb-3 text-sm" disabled={isAiLoading || isFetchingInitialData} /></CardContent>
             <CardFooter><Button onClick={handleAiModifyTasks} disabled={isAiLoading || !instructions.trim() || isFetchingInitialData} className="w-full">{isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />} {isAiLoading ? 'Traitement IA...' : 'Soumettre à l\'IA'}</Button></CardFooter>
-             {aiReasoning && (<CardFooter className="pt-3 text-xs text-muted-foreground italic border-t">Raisonnement IA : {aiReasoning}</CardFooter>)}
+             {aiReasoning && (<CardFooter className="pt-3 text-xs text-muted-foreground italic border-t flex items-start gap-1.5"><Info className="h-4 w-4 mt-0.5 shrink-0"/> <span>Raisonnement IA : {aiReasoning}</span></CardFooter>)}
           </Card>
 
           <Card className="shadow-md" id="manual-task-card">
             <CardHeader><CardTitle className="text-lg">{editingTask ? 'Modifier la Tâche' : 'Ajouter une Tâche Manuellement'}</CardTitle></CardHeader>
             <CardContent className="space-y-4 py-4" id="manual-task-card-content">
-              <div><Label htmlFor="manualTaskText" className="mb-1.5 block">Description</Label><Input id="manualTaskText" value={manualTaskText} onChange={(e) => setManualTaskText(e.target.value)} placeholder="Description..." className="text-sm" disabled={isManualTaskLoading} /></div>
+              <div><Label htmlFor="manualTaskText" className="mb-1.5 block">Description</Label><Input id="manualTaskText" value={manualTaskText} onChange={(e) => setManualTaskText(e.target.value)} placeholder="Description de la nouvelle tâche..." className="text-sm h-10" disabled={isManualTaskLoading} /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><Label htmlFor="manualTaskTypeSelect" className="mb-1.5 block">Type</Label><TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} disabled={isManualTaskLoading} /></div>
                 <div>
@@ -590,7 +552,7 @@ export function AiTaskManagerPage() {
               <div>
                 <Label className="mb-1.5 block">Tags (Optionnel)</Label>
                 <SimpleTagManager
-                  availableTags={availableTags}
+                  availableTags={availableTags.filter(t => t.user_id === user?.id)} // Assurer que les tags sont bien ceux de l'utilisateur
                   selectedTags={manualTaskTags}
                   onTagAdd={handleAddTagToManualTask}
                   onTagRemove={handleRemoveTagFromManualTask}
@@ -598,8 +560,8 @@ export function AiTaskManagerPage() {
                 />
               </div>
               <div className="flex gap-2 pt-2">
-                <Button onClick={handleAddOrUpdateManualTask} className="flex-1" disabled={isManualTaskLoading || !manualTaskText.trim()}>{isManualTaskLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingTask ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)} {isManualTaskLoading ? (editingTask ? 'Mise à jour...' : 'Ajout...') : (editingTask ? 'Enregistrer' : 'Ajouter la Tâche')}</Button>
-                {editingTask && (<Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]); }} disabled={isManualTaskLoading}>Annuler</Button>)}
+                <Button onClick={handleAddOrUpdateManualTask} className="flex-1 h-10" disabled={isManualTaskLoading || !manualTaskText.trim()}>{isManualTaskLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingTask ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)} {isManualTaskLoading ? (editingTask ? 'Mise à jour...' : 'Ajout...') : (editingTask ? 'Enregistrer' : 'Ajouter la Tâche')}</Button>
+                {editingTask && (<Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]); }} disabled={isManualTaskLoading} className="h-10">Annuler</Button>)}
               </div>
             </CardContent>
           </Card>
@@ -619,12 +581,12 @@ export function AiTaskManagerPage() {
           <Card className="flex-grow flex flex-col shadow-md overflow-hidden">
             <CardHeader>
               <CardTitle className="text-lg">Vos Tâches</CardTitle>
-              <CardDescription className="text-sm">{isFetchingInitialData ? "Chargement..." : `${filteredAndSortedTasks.length} tâche(s) ${filterStatus !== 'all' || filterType !== 'all' ? 'correspondant aux filtres' : 'au total'}. ${tasks.filter(t => !t.completed).length} en attente.`}</CardDescription>
+              <CardDescription className="text-sm">{isFetchingInitialData ? "Chargement..." : `${filteredAndSortedTasks.length} tâche(s) ${filterStatus !== 'all' || filterType !== 'all' ? 'correspondant aux filtres' : `au total (${tasks.filter(t => !t.completed).length} en attente).`}`}</CardDescription>
             </CardHeader>
             <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
               {isFetchingInitialData ? ( <div className="flex-grow flex flex-col justify-center items-center py-10 text-muted-foreground"><Loader2 className="h-10 w-10 animate-spin text-primary mb-4" /><p>Chargement des tâches...</p></div>
               ) : error ? ( <div className="flex-grow flex flex-col justify-center items-center py-10 text-destructive border border-destructive/50 bg-destructive/10 rounded-md p-4"><AlertTriangle className="h-10 w-10 mb-4" /><p className="font-semibold">Erreur de chargement</p><p className="text-sm text-center mt-1">{error}</p><Button onClick={fetchInitialData} variant="destructive" className="mt-4">Réessayer</Button></div>
-              ) : filteredAndSortedTasks.length === 0 ? ( <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md min-h-[200px]"><ListChecks className="mx-auto h-16 w-16 opacity-50 mb-4" /><p className="font-medium text-lg mb-1">{tasks.length === 0 ? "Aucune tâche pour le moment." : "Aucune tâche ne correspond à vos filtres."}</p><p className="text-sm mb-4">{tasks.length === 0 ? "Utilisez les formulaires pour ajouter des tâches." : "Essayez d'ajuster vos filtres."}</p>{tasks.length === 0 && (<Button onClick={() => { const el = document.getElementById('manual-task-card-content'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); const inputField = el.querySelector('input#manualTaskText'); if (inputField) (inputField as HTMLInputElement).focus(); } }}> <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une tâche </Button>)}</div>
+              ) : filteredAndSortedTasks.length === 0 ? ( <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md min-h-[200px]"><ListChecks className="mx-auto h-16 w-16 opacity-30 mb-4" /><p className="font-medium text-lg mb-1">{tasks.length === 0 ? "Aucune tâche pour le moment." : "Aucune tâche ne correspond à vos filtres."}</p><p className="text-sm mb-4">{tasks.length === 0 ? "Utilisez les formulaires pour ajouter des tâches." : "Essayez d'ajuster vos filtres."}</p>{tasks.length === 0 && (<Button onClick={() => { const el = document.getElementById('manual-task-card-content'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); const inputField = el.querySelector('input#manualTaskText'); if (inputField) (inputField as HTMLInputElement).focus(); } }}> <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une tâche </Button>)}</div>
               ) : ( filteredAndSortedTasks.map((task) => ( <TaskItemCard key={task.id} task={task} onToggle={handleToggleTask} onSetType={handleSetTaskType} onEdit={handleEditTask} onDelete={handleDeleteTask} onStartPomodoro={handleStartPomodoroForTask} isCurrentItemLoading={isTaskItemLoading === task.id} /> )))}
             </CardContent>
           </Card>
