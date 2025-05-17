@@ -42,14 +42,14 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" role="combobox" aria-expanded={open} className="w-[130px] justify-between text-xs" disabled={disabled}>
+        <Button variant="outline" size="sm" role="combobox" aria-expanded={open} className="w-[140px] justify-between text-sm" disabled={disabled}>
           {taskTypeLabels[selectedType]}
-          <ChevronUpDownIcon className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+          <ChevronUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[130px] p-0">
+      <PopoverContent className="w-[140px] p-0">
         <Command>
-          <CommandInput placeholder="Rechercher type..." className="h-8 text-xs" />
+          <CommandInput placeholder="Rechercher type..." className="h-9 text-sm" />
           <CommandEmpty>Aucun type.</CommandEmpty>
           <CommandList>
             <CommandGroup>
@@ -61,11 +61,11 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
                     onSelectType(currentValue as TaskType);
                     setOpen(false);
                   }}
-                  className="text-xs cursor-pointer"
+                  className="text-sm cursor-pointer"
                 >
                   <CheckIcon
                     className={cn(
-                      "mr-2 h-3 w-3",
+                      "mr-2 h-4 w-4",
                       selectedType === type ? "opacity-100" : "opacity-0"
                     )}
                   />
@@ -83,16 +83,17 @@ const TaskTypeSelector: FC<{ selectedType: TaskType, onSelectType: (type: TaskTy
 const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string, completed: boolean) => void, onDelete: (id: string) => void, onSetType: (id: string, type: TaskType) => void, onEdit: (task: Task) => void, isLoading: boolean }> = ({ task, onToggle, onDelete, onSetType, onEdit, isLoading }) => {
   return (
     <div className={cn(
-      "flex items-center justify-between p-3 rounded-lg border transition-all duration-150",
+      "flex items-center justify-between p-4 rounded-lg border transition-all duration-150", // Increased padding
       taskTypeColors[task.type],
       task.completed && "opacity-70"
     )}>
-      <div className="flex items-center gap-3 flex-grow min-w-0">
+      <div className="flex items-center gap-3 flex-grow min-w-0 mr-3">
         <Checkbox
           id={`task-${task.id}`}
           checked={task.completed}
           onCheckedChange={(checked) => onToggle(task.id, !!checked)}
           className={cn(
+            "h-5 w-5", // Slightly larger checkbox
              task.type === 'urgent' ? "border-red-500 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600"
             :task.type === 'important' ? "border-orange-500 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-600"
             : "border-primary data-[state=checked]:bg-primary"
@@ -102,20 +103,20 @@ const TaskItemDisplay: FC<{ task: Task, onToggle: (id: string, completed: boolea
         <label
           htmlFor={`task-${task.id}`}
           className={cn(
-            "text-sm font-medium leading-none cursor-pointer break-words w-full",
-            task.completed && "line-through"
+            "text-base font-medium leading-tight cursor-pointer break-words w-full", // Increased font size and adjusted leading
+            task.completed && "line-through text-muted-foreground"
           )}
         >
           {task.text}
         </label>
       </div>
-      <div className="flex items-center gap-1 ml-2 shrink-0">
+      <div className="flex items-center gap-1.5 ml-2 shrink-0">
         <TaskTypeSelector selectedType={task.type} onSelectType={(type) => onSetType(task.id, type)} disabled={isLoading} />
-         <Button variant="ghost" size="icon" onClick={() => onEdit(task)} className="h-7 w-7 hover:bg-black/5 disabled:opacity-50" disabled={isLoading}>
-          <Edit2 className="h-3.5 w-3.5" />
+         <Button variant="ghost" size="icon" onClick={() => onEdit(task)} className="h-8 w-8 hover:bg-black/5 disabled:opacity-50" disabled={isLoading}>
+          <Edit2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(task.id)} className="h-7 w-7 hover:bg-black/5 text-destructive/80 hover:text-destructive disabled:opacity-50" disabled={isLoading}>
-          <Trash2 className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="icon" onClick={() => onDelete(task.id)} className="h-8 w-8 hover:bg-black/5 text-destructive/80 hover:text-destructive disabled:opacity-50" disabled={isLoading}>
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
     </div>
@@ -242,7 +243,7 @@ export function AiTaskManagerPage() {
     } catch (e: any) {
       console.error("Erreur lors de l'ajout/modification manuelle de la tâche:", e);
       setError(`Échec de l'enregistrement: ${e.message}`);
-      toast({ title: "Erreur", description: e.message || "Impossible d'enregistrer la tâche.", variant: "destructive" });
+      toast({ title: "Erreur", description: "Impossible d'enregistrer la tâche.", variant: "destructive" });
     } finally {
       setIsManualTaskLoading(false);
     }
@@ -326,7 +327,7 @@ export function AiTaskManagerPage() {
           <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
             <Bot className="h-5 w-5 text-primary" /> Gérer avec l'IA
           </CardTitle>
-          <CardDescription className="text-xs md:text-sm">
+          <CardDescription className="text-sm md:text-base">
             L'IA peut réorganiser, ajouter ou modifier votre liste de tâches. Donnez des instructions claires (ex: "Ajoute 'relire chapitre X' comme urgent", "Marque toutes les tâches de lecture comme terminées").
           </CardDescription>
         </CardHeader>
@@ -351,10 +352,10 @@ export function AiTaskManagerPage() {
       {aiReasoning && (
         <Card className="bg-accent/10 border-accent/30 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-accent">Raisonnement de l'IA</CardTitle>
+            <CardTitle className="text-base font-medium text-accent">Raisonnement de l'IA</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-accent/80 whitespace-pre-wrap">{aiReasoning}</p>
+            <p className="text-sm text-accent/80 whitespace-pre-wrap">{aiReasoning}</p>
           </CardContent>
         </Card>
       )}
@@ -385,7 +386,7 @@ export function AiTaskManagerPage() {
             )}
           </div>
            {error && (
-            <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {error}</p>
+            <p className="text-sm text-destructive flex items-center gap-1 pt-1"><AlertTriangle className="h-3.5 w-3.5" /> {error}</p>
           )}
         </CardContent>
       </Card>
@@ -393,7 +394,7 @@ export function AiTaskManagerPage() {
       <Card className="flex-grow flex flex-col overflow-hidden shadow-md">
         <CardHeader>
           <CardTitle className="text-lg md:text-xl">Vos Tâches</CardTitle>
-          <CardDescription className="text-xs md:text-sm">{isFetchingTasks ? "Chargement..." : `${tasks.length} tâche(s) au total.`}</CardDescription>
+          <CardDescription className="text-sm md:text-base">{isFetchingTasks ? "Chargement..." : `${tasks.length} tâche(s) au total.`}</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
           {isFetchingTasks ? (
@@ -424,3 +425,5 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
+
+    
