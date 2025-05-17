@@ -9,7 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, CheckIcon, ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, CheckIcon } from 'lucide-react';
+import { ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react'; // Renamed for clarity
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -211,7 +212,7 @@ export function AiTaskManagerPage() {
     fetchTasks();
     const channel = supabase
       .channel('db-tasks-page-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => { // Explicitly ignore payload if not used
           fetchTasks();
       })
       .subscribe();
@@ -235,8 +236,8 @@ export function AiTaskManagerPage() {
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
 
-      // Delete all existing tasks. A more robust way might be to use specific IDs if needed.
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Dummy UUID to target all if no task has this ID
+      // Delete all existing tasks.
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Dummy UUID
       if (deleteError) {
         throw deleteError;
       }
@@ -474,7 +475,6 @@ export function AiTaskManagerPage() {
             </CardContent>
         </Card>
       )}
-
 
       <Card className="flex-grow flex flex-col shadow-md overflow-hidden">
         <CardHeader>
