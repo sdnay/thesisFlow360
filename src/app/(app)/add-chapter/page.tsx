@@ -17,13 +17,15 @@ import type { Chapter } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 interface ChapterCardItemProps {
   chapter: Chapter;
   onEditRequest: (chapter: Chapter) => void;
   onDeleteRequest: (chapterId: string) => void;
   onCommentManagerRequest: (chapter: Chapter) => void;
-  isLoadingActions: boolean;
+  isLoadingActionsForId: string | null;
 }
 
 const ChapterCardItem: FC<ChapterCardItemProps> = ({
@@ -31,11 +33,13 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({
   onEditRequest,
   onDeleteRequest,
   onCommentManagerRequest,
-  isLoadingActions,
+  isLoadingActionsForId,
 }) => {
   const lastComment = chapter.supervisor_comments && chapter.supervisor_comments.length > 0
     ? chapter.supervisor_comments[chapter.supervisor_comments.length - 1]
     : null;
+
+  const isLoading = isLoadingActionsForId === chapter.id;
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col h-full bg-card">
@@ -49,17 +53,17 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={isLoadingActions}>
-                <MoreVertical className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
                 <span className="sr-only">Options du chapitre</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEditRequest(chapter)} disabled={isLoadingActions}>
+              <DropdownMenuItem onClick={() => onEditRequest(chapter)} disabled={isLoading}>
                 <Edit className="mr-2 h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDeleteRequest(chapter.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled={isLoadingActions}>
+              <DropdownMenuItem onClick={() => onDeleteRequest(chapter.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled={isLoading}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Supprimer
               </DropdownMenuItem>
@@ -70,17 +74,26 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({
       <CardContent className="flex-grow py-2 space-y-2">
         <div className="mb-1 text-xs md:text-sm font-medium">Progression : {chapter.progress}%</div>
         <Progress value={chapter.progress} className="w-full h-2.5 md:h-3" aria-label={`Progression ${chapter.progress}%`} />
-        
+
         {chapter.supervisor_comments && chapter.supervisor_comments.length > 0 && (
           <div className="mt-3 pt-2 border-t border-border/50">
             <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-semibold text-muted-foreground">Dernier Commentaire :</h4>
-                <Badge variant="outline" className="text-xs">{chapter.supervisor_comments.length} commentaire(s)</Badge>
+              <h4 className="text-xs font-semibold text-muted-foreground">Dernier Commentaire :</h4>
+              <Badge variant="outline" className="text-xs">{chapter.supervisor_comments.length} commentaire(s)</Badge>
             </div>
             {lastComment && (
-              <p className="text-xs text-muted-foreground italic line-clamp-2" title={lastComment}>
-                {lastComment}
-              </p>
+               <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger className="w-full text-left">
+                    <p className="text-xs text-muted-foreground italic line-clamp-2">
+                      {lastComment}
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="start" className="max-w-xs whitespace-pre-wrap bg-popover text-popover-foreground p-2 rounded-md shadow-lg border">
+                    <p>{lastComment}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
         )}
@@ -90,10 +103,10 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({
           variant="outline"
           size="sm"
           onClick={() => onCommentManagerRequest(chapter)}
-          disabled={isLoadingActions}
+          disabled={isLoading}
           className="w-full text-xs text-muted-foreground hover:text-primary hover:bg-primary/5"
         >
-          <MessageSquare className="mr-1.5 h-3.5 w-3.5" /> 
+          <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
           Gérer les Commentaires ({chapter.supervisor_comments?.length || 0})
         </Button>
       </CardFooter>
@@ -105,14 +118,14 @@ export default function ManageThesisPlanPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
-  
+
   const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> | null>(null);
   const [chapterForComment, setChapterForComment] = useState<Chapter | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
 
-  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false); // For modal save/update
   const [isFetchingChapters, setIsFetchingChapters] = useState(true);
-  const [isLoadingChapterActions, setIsLoadingChapterActions] = useState<string | null>(null); // Stores ID of chapter being acted upon
+  const [isLoadingChapterActionsForId, setIsLoadingChapterActionsForId] = useState<string | null>(null); // Stores ID of chapter being acted upon on the card
 
   const { toast } = useToast();
 
@@ -139,7 +152,7 @@ export default function ManageThesisPlanPage() {
     const channel = supabase
       .channel('db-chapters-manage-plan-page')
       .on<Chapter>('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, (_payload) => {
-        fetchChapters(); // Refetch all chapters on any change
+        fetchChapters(); // Re-fetch all chapters on any change from other clients or direct DB changes
       })
       .subscribe();
     return () => {
@@ -153,19 +166,20 @@ export default function ManageThesisPlanPage() {
   };
 
   const openModalForEdit = (chapter: Chapter) => {
-    setCurrentChapter(JSON.parse(JSON.stringify(chapter))); // Deep copy
+    setCurrentChapter(JSON.parse(JSON.stringify(chapter)));
     setIsEditModalOpen(true);
   };
 
   const openCommentManager = (chapter: Chapter) => {
-    setChapterForComment(JSON.parse(JSON.stringify(chapter))); // Deep copy
+    setChapterForComment(JSON.parse(JSON.stringify(chapter)));
+    setNewCommentText('');
     setIsCommentModalOpen(true);
   };
 
   const handleSaveChapter = async () => {
     if (!currentChapter || !currentChapter.name?.trim()) {
-        toast({title: "Erreur de validation", description: "Le nom du chapitre est requis.", variant: "destructive"});
-        return;
+      toast({ title: "Erreur de validation", description: "Le nom du chapitre est requis.", variant: "destructive" });
+      return;
     }
     setIsFormLoading(true);
     try {
@@ -176,18 +190,35 @@ export default function ManageThesisPlanPage() {
         supervisor_comments: currentChapter.supervisor_comments || [],
       };
 
-      if (currentChapter.id) {
-        const { error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapter.id);
+      if (currentChapter.id) { // UPDATE
+        const { data: updatedChapterFromDb, error } = await supabase
+          .from('chapters')
+          .update(chapterPayload)
+          .eq('id', currentChapter.id)
+          .select()
+          .single();
         if (error) throw error;
+        if (updatedChapterFromDb) {
+          setChapters(prevChapters =>
+            prevChapters.map(ch => ch.id === updatedChapterFromDb.id ? updatedChapterFromDb : ch)
+          );
+        }
         toast({ title: "Chapitre modifié", description: `"${chapterPayload.name}" a été mis à jour.` });
-      } else {
-        const { error } = await supabase.from('chapters').insert([chapterPayload]);
+      } else { // INSERT
+        const { data: newChapterFromDb, error } = await supabase
+          .from('chapters')
+          .insert(chapterPayload) // Removed array for single insert
+          .select()
+          .single();
         if (error) throw error;
+        if (newChapterFromDb) {
+          // Realtime will handle the fetch, but for instant UI add, we can do this:
+           setChapters(prevChapters => [...prevChapters, newChapterFromDb].sort((a, b) => a.name.localeCompare(b.name)));
+        }
         toast({ title: "Chapitre ajouté", description: `"${chapterPayload.name}" a été ajouté.` });
       }
       setIsEditModalOpen(false);
       setCurrentChapter(null);
-      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -195,63 +226,77 @@ export default function ManageThesisPlanPage() {
       setIsFormLoading(false);
     }
   };
-  
+
   const handleDeleteChapter = async (chapterId: string) => {
-    setIsLoadingChapterActions(chapterId);
+    setIsLoadingChapterActionsForId(chapterId);
     try {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
+      setChapters(prevChapters => prevChapters.filter(ch => ch.id !== chapterId));
       toast({ title: "Chapitre supprimé" });
-      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
     } finally {
-      setIsLoadingChapterActions(null);
+      setIsLoadingChapterActionsForId(null);
     }
   };
 
   const handleSaveComment = async () => {
     if (!chapterForComment || !newCommentText.trim()) return;
-    setIsLoadingChapterActions(chapterForComment.id); // Indicate loading for this specific chapter
+    setIsLoadingChapterActionsForId(chapterForComment.id);
     try {
       const updatedComments = [...(chapterForComment.supervisor_comments || []), newCommentText.trim()];
-      const { error } = await supabase
+      const { data: updatedChapterFromDb, error } = await supabase
         .from('chapters')
         .update({ supervisor_comments: updatedComments })
-        .eq('id', chapterForComment.id);
+        .eq('id', chapterForComment.id)
+        .select()
+        .single();
+
       if (error) throw error;
+      if (updatedChapterFromDb) {
+        setChapters(prevChapters =>
+          prevChapters.map(ch => ch.id === updatedChapterFromDb.id ? updatedChapterFromDb : ch)
+        );
+        setChapterForComment(updatedChapterFromDb); // Update the chapter in the modal
+      }
       toast({ title: "Commentaire ajouté" });
       setNewCommentText('');
-      // Optimistically update local state for comment modal, listener will refresh main list
-      setChapterForComment(prev => prev ? { ...prev, supervisor_comments: updatedComments } : null);
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleSaveComment:", e);
     } finally {
-      setIsLoadingChapterActions(null);
+      setIsLoadingChapterActionsForId(null);
     }
   };
-  
+
   const handleDeleteComment = async (commentIndex: number) => {
-      if (!chapterForComment || !chapterForComment.supervisor_comments) return;
-      setIsLoadingChapterActions(chapterForComment.id);
-      try {
-          const updatedComments = chapterForComment.supervisor_comments.filter((_, index) => index !== commentIndex);
-          const { error } = await supabase
-              .from('chapters')
-              .update({ supervisor_comments: updatedComments })
-              .eq('id', chapterForComment.id);
-          if (error) throw error;
-          toast({ title: "Commentaire supprimé" });
-           // Optimistically update local state for comment modal
-           setChapterForComment(prev => prev ? { ...prev, supervisor_comments: updatedComments } : null);
-      } catch (e:any) {
-          toast({ title: "Erreur de suppression du commentaire", description: e.message, variant: "destructive" });
-          console.error("Erreur handleDeleteComment:", e);
-      } finally {
-          setIsLoadingChapterActions(null);
+    if (!chapterForComment || !chapterForComment.supervisor_comments) return;
+    setIsLoadingChapterActionsForId(chapterForComment.id);
+    try {
+      const updatedComments = chapterForComment.supervisor_comments.filter((_, index) => index !== commentIndex);
+      const { data: updatedChapterFromDb, error } = await supabase
+        .from('chapters')
+        .update({ supervisor_comments: updatedComments })
+        .eq('id', chapterForComment.id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      if (updatedChapterFromDb) {
+         setChapters(prevChapters =>
+          prevChapters.map(ch => ch.id === updatedChapterFromDb.id ? updatedChapterFromDb : ch)
+        );
+        setChapterForComment(updatedChapterFromDb); // Update the chapter in the modal
       }
+      toast({ title: "Commentaire supprimé" });
+    } catch (e: any) {
+      toast({ title: "Erreur de suppression du commentaire", description: (e as Error).message, variant: "destructive" });
+      console.error("Erreur handleDeleteComment:", e);
+    } finally {
+      setIsLoadingChapterActionsForId(null);
+    }
   };
 
   return (
@@ -270,13 +315,13 @@ export default function ManageThesisPlanPage() {
 
       {isFetchingChapters ? (
         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
-             <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-             <p className="text-muted-foreground">Chargement des chapitres...</p>
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">Chargement des chapitres...</p>
         </Card>
       ) : chapters.length === 0 ? (
         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
           <CardHeader className="items-center">
-            <FolderOpen className="h-16 w-16 text-muted-foreground/50 mb-4"/>
+            <FolderOpen className="h-16 w-16 text-muted-foreground/50 mb-4" />
             <CardTitle className="text-xl">Commencez à structurer votre thèse !</CardTitle>
           </CardHeader>
           <CardContent>
@@ -297,13 +342,13 @@ export default function ManageThesisPlanPage() {
               onEditRequest={openModalForEdit}
               onDeleteRequest={handleDeleteChapter}
               onCommentManagerRequest={openCommentManager}
-              isLoadingActions={isLoadingChapterActions === chapter.id}
+              isLoadingActionsForId={isLoadingChapterActionsForId}
             />
           ))}
         </div>
       )}
 
-      <Dialog open={isEditModalOpen} onOpenChange={(open) => {if (!isFormLoading) setIsEditModalOpen(open)}}>
+      <Dialog open={isEditModalOpen} onOpenChange={(open) => { if (!isFormLoading) setIsEditModalOpen(open) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{currentChapter?.id ? 'Modifier le Chapitre' : 'Ajouter un Nouveau Chapitre'}</DialogTitle>
@@ -346,7 +391,7 @@ export default function ManageThesisPlanPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {if(!isFormLoading) setIsEditModalOpen(false)}} disabled={isFormLoading}>Annuler</Button>
+            <Button variant="outline" onClick={() => { if (!isFormLoading) setIsEditModalOpen(false) }} disabled={isFormLoading}>Annuler</Button>
             <Button onClick={handleSaveChapter} disabled={isFormLoading || !currentChapter?.name?.trim()}>
               {isFormLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {isFormLoading ? 'Enregistrement...' : (currentChapter?.id ? 'Mettre à Jour' : 'Ajouter')}
@@ -355,52 +400,52 @@ export default function ManageThesisPlanPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+      <Dialog open={isCommentModalOpen} onOpenChange={(open) => {if (isLoadingChapterActionsForId !== chapterForComment?.id) setIsCommentModalOpen(open)}}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Commentaires pour "{chapterForComment?.name}"</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="max-h-[40vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                {chapterForComment?.supervisor_comments && chapterForComment.supervisor_comments.length > 0 ? (
+              {chapterForComment?.supervisor_comments && chapterForComment.supervisor_comments.length > 0 ? (
                 chapterForComment.supervisor_comments.map((comment, index) => (
-                    <div key={index} className="p-2.5 border rounded-md bg-muted/50 flex justify-between items-start gap-2 text-sm">
-                        <p className="whitespace-pre-wrap flex-grow leading-relaxed">{comment}</p>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 shrink-0" 
-                            onClick={() => handleDeleteComment(index)} 
-                            disabled={isLoadingChapterActions === chapterForComment?.id}
-                            title="Supprimer ce commentaire"
-                        >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive/70 hover:text-destructive"/>
-                        </Button>
-                    </div>
+                  <div key={index} className="p-2.5 border rounded-md bg-muted/50 flex justify-between items-start gap-2 text-sm">
+                    <p className="whitespace-pre-wrap flex-grow leading-relaxed">{comment}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => handleDeleteComment(index)}
+                      disabled={isLoadingChapterActionsForId === chapterForComment?.id}
+                      title="Supprimer ce commentaire"
+                    >
+                      {isLoadingChapterActionsForId === chapterForComment?.id && isLoadingChapterActionsForId === chapterForComment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-destructive/70 hover:text-destructive" />}
+                    </Button>
+                  </div>
                 ))
-                ) : (
+              ) : (
                 <p className="text-sm text-muted-foreground text-center py-4">Aucun commentaire pour ce chapitre.</p>
-                )}
+              )}
             </div>
             <div className="pt-4 border-t">
               <Label htmlFor="newComment" className="block mb-1.5 text-sm font-medium">Ajouter un commentaire</Label>
-              <Textarea 
+              <Textarea
                 id="newComment"
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="Écrivez votre commentaire ici..."
                 rows={3}
-                disabled={isLoadingChapterActions === chapterForComment?.id}
+                disabled={isLoadingChapterActionsForId === chapterForComment?.id}
                 className="text-sm"
               />
             </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
-                <Button variant="outline" disabled={isLoadingChapterActions === chapterForComment?.id}>Fermer</Button>
+              <Button variant="outline" disabled={isLoadingChapterActionsForId === chapterForComment?.id}>Fermer</Button>
             </DialogClose>
-            <Button onClick={handleSaveComment} disabled={isLoadingChapterActions === chapterForComment?.id || !newCommentText.trim()}>
-              {isLoadingChapterActions === chapterForComment?.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+            <Button onClick={handleSaveComment} disabled={isLoadingChapterActionsForId === chapterForComment?.id || !newCommentText.trim()}>
+              {isLoadingChapterActionsForId === chapterForComment?.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Enregistrer
             </Button>
           </DialogFooter>
