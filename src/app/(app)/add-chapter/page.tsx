@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListTree, Save } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListTree, Save, FolderOpen } from 'lucide-react';
 import type { Chapter } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -26,11 +26,11 @@ interface ChapterCardItemProps {
 const ChapterCardItem: FC<ChapterCardItemProps> = ({ chapter, onEdit, onDelete, onAddCommentRequest, isLoadingActions }) => {
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 pt-4">
         <div className="flex justify-between items-start gap-2">
           <div className="flex-grow">
-            <CardTitle className="text-base md:text-lg">{chapter.name}</CardTitle>
-            <CardDescription className="text-xs md:text-sm">{chapter.status}</CardDescription>
+            <CardTitle className="text-base md:text-lg leading-tight">{chapter.name}</CardTitle>
+            <CardDescription className="text-xs md:text-sm pt-0.5">{chapter.status}</CardDescription>
           </div>
           <div className="flex gap-1 shrink-0">
             <Button variant="outline" size="icon" onClick={() => onEdit(chapter)} aria-label="Modifier le chapitre" disabled={isLoadingActions} className="h-8 w-8">
@@ -42,7 +42,7 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({ chapter, onEdit, onDelete, 
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-grow">
+      <CardContent className="flex-grow py-2">
         <div className="mb-1 text-xs md:text-sm font-medium">Progression : {chapter.progress}%</div>
         <Progress value={chapter.progress} className="w-full h-2.5 md:h-3" />
         {chapter.supervisor_comments && chapter.supervisor_comments.length > 0 && (
@@ -56,7 +56,7 @@ const ChapterCardItem: FC<ChapterCardItemProps> = ({ chapter, onEdit, onDelete, 
           </div>
         )}
       </CardContent>
-      <CardFooter className="pt-3 border-t">
+      <CardFooter className="pt-3 pb-4 border-t">
         <Button variant="ghost" size="sm" onClick={() => onAddCommentRequest(chapter.id)} disabled={isLoadingActions} className="w-full text-xs text-muted-foreground hover:text-primary">
           <MessageSquare className="mr-1.5 h-3.5 w-3.5" /> Ajouter/Voir Commentaires
         </Button>
@@ -156,6 +156,7 @@ export default function ManageThesisPlanPage() {
       }
       setIsEditModalOpen(false);
       setCurrentChapter(null);
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -170,6 +171,7 @@ export default function ManageThesisPlanPage() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -190,6 +192,7 @@ export default function ManageThesisPlanPage() {
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
       setNewCommentText('');
+      // Update local state for immediate feedback, listener will also refresh
       const updatedChapter = { ...chapterForComment, supervisor_comments: updatedComments };
       setChapterForComment(updatedChapter); 
       setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
@@ -215,8 +218,8 @@ export default function ManageThesisPlanPage() {
           if (error) throw error;
           toast({ title: "Commentaire supprimé" });
            const updatedChapter = { ...chapterToUpdate, supervisor_comments: updatedComments };
-           setChapterForComment(updatedChapter); // Update the state for the modal
-           setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch)); // Update the main list
+           setChapterForComment(updatedChapter); 
+           setChapters(prev => prev.map(ch => ch.id === updatedChapter.id ? updatedChapter : ch));
       } catch (e:any) {
           toast({ title: "Erreur de suppression du commentaire", description: e.message, variant: "destructive" });
       } finally {
@@ -240,18 +243,22 @@ export default function ManageThesisPlanPage() {
       </div>
 
       {isFetchingChapters ? (
-        <div className="flex-grow flex justify-center items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : chapters.length === 0 ? (
         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+             <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+             <p className="text-muted-foreground">Chargement des chapitres...</p>
+        </Card>
+      ) : chapters.length === 0 ? (
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed">
           <CardHeader>
-            <CardTitle>Commencez votre plan !</CardTitle>
+            <FolderOpen className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4"/>
+            <CardTitle className="text-xl">Commencez votre plan de thèse !</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground mb-4">Aucun chapitre défini pour le moment. Ajoutez votre premier chapitre pour structurer votre thèse.</p>
-            <Button onClick={openModalForNew} disabled={isFormLoading}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Créer le premier chapitre
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Aucun chapitre n'a encore été défini. Organisez votre travail en ajoutant les sections principales de votre thèse.
+            </p>
+            <Button onClick={openModalForNew} disabled={isFormLoading} size="lg">
+              <PlusCircle className="mr-2 h-5 w-5" /> Créer le premier chapitre
             </Button>
           </CardContent>
         </Card>

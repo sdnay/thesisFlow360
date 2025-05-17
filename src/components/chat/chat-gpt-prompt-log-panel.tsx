@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry } from '@/types';
 import { processUserRequest, type ThesisAgentInput, type ThesisAgentOutput } from '@/ai/flows/thesis-agent-flow';
-import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, Edit } from 'lucide-react'; // Thumbs up/down removed for now
+import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, Edit } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -37,13 +37,15 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
 
   return (
     <Card className="shadow-sm bg-card/80">
-      <CardHeader className="pb-2 pt-3">
-        <CardTitle className="text-xs font-semibold text-primary">Prompt Original</CardTitle>
-        <CardDescription className="text-xs text-muted-foreground">
-          {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr })}
-        </CardDescription>
+      <CardHeader className="pb-2 pt-3 px-3">
+        <div className="flex justify-between items-center">
+            <CardTitle className="text-xs font-semibold text-primary">Prompt Original</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr })}
+            </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent className="text-xs space-y-1.5 pb-2">
+      <CardContent className="text-xs space-y-1.5 pb-2 px-3">
         <div className="p-2 border rounded-md bg-background relative">
           <p className="whitespace-pre-wrap text-foreground/90">{entry.original_prompt}</p>
           <TooltipProvider delayDuration={100}>
@@ -97,7 +99,7 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
           </div>
         )}
       </CardContent>
-      <CardFooter className="pt-2 pb-3">
+      <CardFooter className="pt-2 pb-3 px-3">
         <Button variant="outline" size="xs" onClick={() => onUsePrompt(entry.refined_prompt || entry.original_prompt)} className="text-xs">
           <Edit className="mr-1.5 h-3 w-3" /> Utiliser ce Prompt
         </Button>
@@ -133,7 +135,7 @@ export function ChatGPTPromptLogPanel() {
         .from('prompt_log_entries')
         .select('*')
         .order('timestamp', { ascending: false })
-        .limit(5); // Limit to 5 recent logs for brevity in this panel
+        .limit(5); 
 
       if (supabaseError) throw supabaseError;
       setPromptLogs(data || []);
@@ -224,7 +226,7 @@ export function ChatGPTPromptLogPanel() {
         
         <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 overflow-hidden p-3 md:p-4">
           <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar">
-            <div className="space-y-3">
+            <div className="space-y-3 py-2 px-1">
               {conversation.length === 0 && !isLoadingAgent && (
                 <div className="text-sm text-muted-foreground text-center py-6">
                   <Sparkles className="mx-auto h-8 w-8 text-primary/70 mb-2"/>
@@ -298,9 +300,10 @@ export function ChatGPTPromptLogPanel() {
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : promptLogs.length === 0 ? (
-                <div className="text-center py-4">
-                  <History className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2"/>
-                  <p className="text-muted-foreground text-center text-sm">Le journal des prompts est vide.</p>
+                <div className="text-center py-4 text-muted-foreground text-sm border rounded-md p-4 bg-muted/30">
+                  <History className="mx-auto h-10 w-10 opacity-50 mb-2"/>
+                  <p className="font-medium">Le journal des prompts est vide.</p>
+                  <p className="text-xs">Les prompts affinés par l'IA apparaîtront ici.</p>
                 </div>
               ) : (
                 <ScrollArea className="flex-grow max-h-60 pr-2 custom-scrollbar">

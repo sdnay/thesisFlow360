@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import type { Source } from '@/types';
-import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save, FileArchive } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -25,7 +25,7 @@ const SourceTypeIcon: FC<{ type: Source['type'], className?: string }> = ({ type
     case 'website': return <LinkIconLucide {...iconProps} />;
     case 'interview': return <Mic {...iconProps} />;
     case 'field_notes': return <BookOpen {...iconProps} />;
-    default: return <FileText {...iconProps} />;
+    default: return <FileArchive {...iconProps} />;
   }
 };
 
@@ -45,11 +45,11 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
   const isExternalLink = source.source_link_or_path && (source.source_link_or_path.startsWith('http://') || source.source_link_or_path.startsWith('https://'));
   return (
     <Card className="shadow-md hover:shadow-xl transition-shadow duration-200 flex flex-col">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 pt-4">
         <div className="flex justify-between items-start gap-2">
           <div className="flex items-center gap-2 flex-grow min-w-0">
-            <SourceTypeIcon type={source.type} className="text-primary shrink-0" />
-            <CardTitle className="text-base md:text-lg truncate" title={source.title}>{source.title}</CardTitle>
+            <SourceTypeIcon type={source.type} className="text-primary shrink-0 h-5 w-5" />
+            <CardTitle className="text-base md:text-lg leading-tight truncate" title={source.title}>{source.title}</CardTitle>
           </div>
           <div className="flex gap-1 shrink-0">
             <Button variant="outline" size="icon" onClick={() => onEdit(source)} aria-label="Modifier la source" disabled={isLoading} className="h-8 w-8">
@@ -60,11 +60,11 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
             </Button>
           </div>
         </div>
-        <CardDescription className="text-xs pt-1">
+        <CardDescription className="text-xs pt-1 pl-7"> {/* Pl-7 to align with title if icon is present */}
           Type : {sourceTypeText(source.type)} | Ajouté le : {format(new Date(source.created_at), "d MMM yyyy", { locale: fr })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-xs md:text-sm flex-grow space-y-2 py-2">
+      <CardContent className="text-xs md:text-sm flex-grow space-y-2 py-3">
         {source.source_link_or_path && (
           <div className="flex items-center gap-1.5">
             <LinkIconLucide className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -82,6 +82,9 @@ const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onD
                 <h4 className="text-xs font-semibold text-muted-foreground mb-0.5">Notes :</h4>
                 <p className="text-muted-foreground whitespace-pre-wrap text-xs max-h-24 overflow-y-auto custom-scrollbar pr-1">{source.notes}</p>
             </div>
+        )}
+         {!source.source_link_or_path && !source.notes && (
+            <p className="text-muted-foreground italic text-xs">Aucun lien ou note supplémentaire.</p>
         )}
       </CardContent>
     </Card>
@@ -161,6 +164,7 @@ export function SourceLibrarySection() {
       }
       setIsModalOpen(false);
       setCurrentSource(null);
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleSaveSource:", e);
@@ -175,6 +179,7 @@ export function SourceLibrarySection() {
       const { error } = await supabase.from('sources').delete().eq('id', sourceId);
       if (error) throw error;
       toast({ title: "Source supprimée" });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteSource:", e);
@@ -196,14 +201,18 @@ export function SourceLibrarySection() {
       </div>
 
       {isFetching ? (
-        <div className="flex-grow flex justify-center items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Chargement de la bibliothèque...</p>
+        </Card>
       ) : sources.length === 0 ? (
-        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
-            <Library className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
-            <p className="text-muted-foreground">Aucune source ajoutée pour le moment.</p>
-            <p className="text-xs text-muted-foreground">Commencez à construire votre bibliothèque de références !</p>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed">
+            <Library className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4"/>
+            <CardTitle className="text-xl">Votre bibliothèque est vide.</CardTitle>
+            <p className="text-muted-foreground my-2 max-w-md mx-auto">Commencez à construire votre base de connaissances en ajoutant des articles, des livres, des sites web et d'autres références utiles.</p>
+            <Button onClick={openModalForNew} disabled={isFormLoading} size="lg" className="mt-2">
+                <PlusCircle className="mr-2 h-5 w-5" /> Ajouter la première source
+            </Button>
         </Card>
       ) : (
         <div className="flex-grow grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 items-start overflow-y-auto custom-scrollbar pr-1 pb-4">

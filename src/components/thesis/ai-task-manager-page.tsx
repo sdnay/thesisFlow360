@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks } from 'lucide-react';
 import { ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -262,6 +262,7 @@ export function AiTaskManagerPage() {
       setAiReasoning(result.reasoning);
       setInstructions('');
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la modification avec l'IA: ${errorMessage}`);
@@ -306,6 +307,7 @@ export function AiTaskManagerPage() {
       }
       setManualTaskText('');
       setManualTaskType('secondary');
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de l'enregistrement: ${errorMessage}`);
@@ -327,6 +329,7 @@ export function AiTaskManagerPage() {
       if (updateError) {
         throw updateError;
       }
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        setError(`Échec du changement de statut: ${errorMessage}`);
@@ -352,6 +355,7 @@ export function AiTaskManagerPage() {
           setManualTaskType('secondary');
       }
       toast({ title: "Tâche supprimée" });
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la suppression: ${errorMessage}`);
@@ -373,6 +377,7 @@ export function AiTaskManagerPage() {
       if (updateError) {
         throw updateError;
       }
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        setError(`Échec du changement de type: ${errorMessage}`);
@@ -432,7 +437,7 @@ export function AiTaskManagerPage() {
           <CardHeader className="pb-2 pt-3">
             <CardTitle className="text-sm font-medium text-accent">Raisonnement de l'IA</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="py-3">
             <p className="text-xs text-accent/80 whitespace-pre-wrap">{aiReasoning}</p>
           </CardContent>
         </Card>
@@ -442,7 +447,7 @@ export function AiTaskManagerPage() {
         <CardHeader>
           <CardTitle className="text-lg">{editingTask ? 'Modifier la Tâche' : 'Ajouter une Tâche Manuellement'}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 py-4">
           <Input
             value={manualTaskText}
             onChange={(e) => setManualTaskText(e.target.value)}
@@ -484,14 +489,18 @@ export function AiTaskManagerPage() {
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
           {isFetchingTasks ? (
-             <div className="flex justify-center items-center h-full py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+             <div className="flex-grow flex justify-center items-center py-10">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                 <p className="ml-3 text-muted-foreground">Chargement des tâches...</p>
              </div>
           ) : tasks.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-                <ListTodo className="mx-auto h-12 w-12 opacity-50 mb-3"/>
-                <p className="font-medium">Aucune tâche pour le moment.</p>
-                <p className="text-xs">Ajoutez-en manuellement ou utilisez l'IA !</p>
+            <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md">
+                <ListChecks className="mx-auto h-16 w-16 opacity-50 mb-4"/>
+                <p className="font-medium text-lg mb-1">Aucune tâche pour le moment.</p>
+                <p className="text-sm mb-4">Utilisez les formulaires ci-dessus pour ajouter des tâches manuellement ou demandez à l'IA de vous aider !</p>
+                <Button onClick={() => document.getElementById('manual-task-card')?.scrollIntoView({behavior: 'smooth'})}>
+                    <PlusCircle className="mr-2 h-4 w-4"/> Ajouter une tâche
+                </Button>
             </div>
           ) : (
             tasks.map((task) => (

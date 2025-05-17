@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import * as DialogComponents from '@/components/ui/dialog';
 import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession, TaskType } from '@/types';
-import { PlusCircle, Edit3, Eye, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Edit3, Eye, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon, AlertTriangle, FolderOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -44,16 +44,16 @@ interface ChapterProgressCardProps {
 const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEditModalOpen }) => {
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col bg-card">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-base md:text-lg">{chapter.name}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => onEditModalOpen(chapter)} aria-label="Modifier le chapitre" className="h-7 w-7 text-muted-foreground hover:text-primary">
+      <CardHeader className="pb-3 pt-4">
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-base md:text-lg leading-tight">{chapter.name}</CardTitle>
+          <Button variant="ghost" size="icon" onClick={() => onEditModalOpen(chapter)} aria-label="Modifier le chapitre" className="h-7 w-7 text-muted-foreground hover:text-primary shrink-0">
             <Edit3 className="h-4 w-4" />
           </Button>
         </div>
-        <CardDescription className="text-xs">{chapter.status}</CardDescription>
+        <CardDescription className="text-xs pt-0.5">{chapter.status}</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow">
+      <CardContent className="flex-grow py-2">
         <div className="mb-1 text-xs font-medium">Progression : {chapter.progress}%</div>
         <Progress value={chapter.progress} className="w-full h-2.5" />
         {chapter.supervisor_comments && chapter.supervisor_comments.length > 0 && (
@@ -67,8 +67,8 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEditModa
           </div>
         )}
       </CardContent>
-      <CardFooter className="pt-3 border-t">
-        <Button asChild variant="outline" size="sm" className="w-full text-xs">
+      <CardFooter className="pt-3 pb-4 border-t">
+        <Button asChild variant="outline" size="xs" className="w-full text-xs">
             <Link href="/add-chapter"><Eye className="mr-1.5 h-3.5 w-3.5" /> Voir/Gérer Plan Détaillé</Link>
         </Button>
       </CardFooter>
@@ -186,6 +186,7 @@ export function ThesisDashboardSection() {
         .update({ completed })
         .eq('id', id);
       if (error) throw error;
+      // No toast here, change is reflected in UI
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleToggleObjective:", e);
@@ -229,6 +230,7 @@ export function ThesisDashboardSection() {
       }
       setIsChapterModalOpen(false);
       setCurrentChapterForModal(null);
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -268,6 +270,17 @@ export function ThesisDashboardSection() {
       </div>
     );
   }
+  
+  const renderLoadingState = (title: string) => (
+    <Card>
+      <CardHeader className="pb-3 pt-4">
+        <CardTitle className="text-base md:text-lg">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex justify-center items-center py-10">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="p-3 md:p-4 space-y-4 md:space-y-6">
@@ -286,13 +299,13 @@ export function ThesisDashboardSection() {
       ) : (
         <>
           <Card className="shadow-lg border-primary/20 bg-gradient-to-br from-card to-muted/20">
-            <CardHeader>
+            <CardHeader className="pb-3 pt-4">
               <CardTitle className="flex items-center text-primary text-lg md:text-xl">
                 <TrendingUp className="mr-2 h-5 w-5" />
                 Progression Globale de la Thèse
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="py-3">
               {isLoadingChapters ? (
                 <div className="flex justify-center py-2"><Loader2 className="h-5 w-5 animate-spin" /></div>
               ) : (
@@ -306,20 +319,24 @@ export function ThesisDashboardSection() {
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-4 md:space-y-6">
               <Card className="h-full flex flex-col">
-                <CardHeader>
+                <CardHeader className="pb-3 pt-4">
                   <CardTitle className="text-base md:text-lg">Progression des Chapitres</CardTitle>
                   <CardDescription className="text-xs md:text-sm">Avancement détaillé de chaque section.</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow">
+                <CardContent className="flex-grow py-3">
                   {isLoadingChapters ? (
-                    <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                    <div className="flex justify-center items-center py-10 min-h-[150px]">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
                   ) : chapters.length === 0 ? (
-                    <div className="text-center py-6">
-                        <p className="text-muted-foreground mb-3">Aucun chapitre défini.</p>
-                        <Button asChild variant="default" size="sm">
-                            <Link href="/add-chapter"><PlusCircle className="mr-2 h-4 w-4"/>Commencer le Plan</Link>
+                    <div className="text-center py-6 text-muted-foreground">
+                        <FolderOpen className="mx-auto h-10 w-10 opacity-50 mb-2"/>
+                        <p className="font-medium">Aucun chapitre défini.</p>
+                        <p className="text-xs">Commencez à structurer votre thèse !</p>
+                        <Button asChild variant="default" size="sm" className="mt-3">
+                            <Link href="/add-chapter"><PlusCircle className="mr-2 h-4 w-4"/>Créer un chapitre</Link>
                         </Button>
                     </div>
                   ) : (
@@ -346,11 +363,17 @@ export function ThesisDashboardSection() {
                       {objectivesCompletedCount} / {objectivesTotalCount} complété(s) ({objectivesCompletionPercentage}%)
                    </CardDescription>
                 </CardHeader>
-                <CardContent className="max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                <CardContent className="max-h-40 overflow-y-auto custom-scrollbar pr-1 py-3">
                   {isLoadingObjectives ? (
                     <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : dailyObjectives.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-xs py-2">Aucun objectif défini.</p>
+                    <div className="text-center py-3 text-muted-foreground text-xs">
+                        <TargetIcon className="mx-auto h-8 w-8 opacity-50 mb-1"/>
+                        <p>Aucun objectif pour aujourd'hui.</p>
+                        <Button asChild variant="link" size="xs" className="mt-1">
+                            <Link href="/daily-plan">Définir des objectifs</Link>
+                        </Button>
+                    </div>
                   ) : (
                     <ul className="space-y-1.5 text-xs">
                       {dailyObjectives.map(obj => (
@@ -393,9 +416,17 @@ export function ThesisDashboardSection() {
                       {tasksPending.length} en attente / {allTasks.length} au total.
                    </CardDescription>
                 </CardHeader>
-                <CardContent className="max-h-48 overflow-y-auto custom-scrollbar pr-1 text-xs">
+                <CardContent className="max-h-48 overflow-y-auto custom-scrollbar pr-1 py-3 text-xs">
                   {isLoadingTasks ? (
                     <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : allTasks.length === 0 ? (
+                    <div className="text-center py-3 text-muted-foreground text-xs">
+                        <ListChecks className="mx-auto h-8 w-8 opacity-50 mb-1"/>
+                        <p>Aucune tâche en cours.</p>
+                         <Button asChild variant="link" size="xs" className="mt-1">
+                            <Link href="/tasks">Ajouter des tâches</Link>
+                        </Button>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       <div>
@@ -443,11 +474,17 @@ export function ThesisDashboardSection() {
                       {brainDumpsToProcessCount} note(s) "capturée(s)" à traiter.
                    </CardDescription>
                 </CardHeader>
-                <CardContent className="max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                <CardContent className="max-h-32 overflow-y-auto custom-scrollbar pr-1 py-3">
                   {isLoadingBrainDumps ? (
                     <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : recentBrainDumps.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-xs py-2">Aucune note récente.</p>
+                     <div className="text-center py-3 text-muted-foreground text-xs">
+                        <Notebook className="mx-auto h-8 w-8 opacity-50 mb-1"/>
+                        <p>Aucune note récente.</p>
+                         <Button asChild variant="link" size="xs" className="mt-1">
+                            <Link href="/brain-dump">Noter une idée</Link>
+                        </Button>
+                    </div>
                   ) : (
                     <ul className="space-y-1.5 text-xs">
                       {recentBrainDumps.map(dump => (
@@ -473,11 +510,17 @@ export function ThesisDashboardSection() {
                      {recentPomodoros.length} récentes ({pomodoroTotalMinutesRecent} min au total).
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                <CardContent className="max-h-32 overflow-y-auto custom-scrollbar pr-1 py-3">
                   {isLoadingPomodoros ? (
                     <div className="flex justify-center py-3"><Loader2 className="h-5 w-5 animate-spin" /></div>
                   ) : recentPomodoros.length === 0 ? (
-                    <p className="text-muted-foreground text-center text-xs py-2">Aucune session récente.</p>
+                     <div className="text-center py-3 text-muted-foreground text-xs">
+                        <TimerIcon className="mx-auto h-8 w-8 opacity-50 mb-1"/>
+                        <p>Aucune session récente.</p>
+                         <Button asChild variant="link" size="xs" className="mt-1">
+                            <Link href="/pomodoro">Démarrer une session</Link>
+                        </Button>
+                    </div>
                   ) : (
                     <ul className="space-y-1.5 text-xs">
                       {recentPomodoros.map(pomo => (

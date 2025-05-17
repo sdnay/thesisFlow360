@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { DailyObjective } from '@/types';
-import { PlusCircle, Trash2, Edit3, Loader2, Target, Save } from 'lucide-react'; // Removed Check
+import { PlusCircle, Trash2, Edit3, Loader2, Target, Save, ListChecks } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +24,7 @@ interface DailyObjectiveItemProps {
 const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, onDelete, onEdit, isLoading }) => {
   return (
     <div className={cn(
-      "flex items-center justify-between p-3 rounded-lg border transition-colors duration-150",
+      "flex items-center justify-between p-3.5 rounded-lg border transition-colors duration-150",
       objective.completed ? "bg-green-50 border-green-300 hover:bg-green-100" : "bg-card hover:bg-muted/30"
     )}>
       <div className="flex items-center gap-3 flex-grow min-w-0">
@@ -34,23 +34,23 @@ const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, 
           onCheckedChange={(checked) => onToggle(objective.id, !!checked)}
           aria-label={objective.completed ? 'Marquer comme non terminé' : 'Marquer comme terminé'}
           disabled={isLoading}
-          className={cn(objective.completed ? "data-[state=checked]:bg-green-600 data-[state=checked]:border-green-700" : "border-primary")}
+          className={cn("h-5 w-5", objective.completed ? "data-[state=checked]:bg-green-600 data-[state=checked]:border-green-700" : "border-primary")}
         />
         <label
           htmlFor={`obj-${objective.id}`}
           className={cn(
-            "text-sm font-medium leading-none cursor-pointer break-words w-full",
+            "text-sm font-medium leading-normal cursor-pointer break-words w-full",
             objective.completed && "line-through text-muted-foreground"
           )}
         >
           {objective.text}
         </label>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="icon" onClick={() => onEdit(objective)} aria-label="Modifier l'objectif" disabled={isLoading} className="h-7 w-7 hover:bg-black/5">
+      <div className="flex items-center gap-1 shrink-0 ml-2">
+        <Button variant="ghost" size="icon" onClick={() => onEdit(objective)} aria-label="Modifier l'objectif" disabled={isLoading} className="h-8 w-8 hover:bg-black/5">
           <Edit3 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(objective.id)} aria-label="Supprimer l'objectif" className="text-destructive/70 hover:text-destructive h-7 w-7 hover:bg-destructive/10" disabled={isLoading}>
+        <Button variant="ghost" size="icon" onClick={() => onDelete(objective.id)} aria-label="Supprimer l'objectif" className="text-destructive/70 hover:text-destructive h-8 w-8 hover:bg-destructive/10" disabled={isLoading}>
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -119,6 +119,7 @@ export function DailyPlanSection() {
         toast({ title: "Objectif ajouté" });
       }
       setNewObjectiveText('');
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddOrUpdateObjective:", e);
@@ -135,6 +136,7 @@ export function DailyPlanSection() {
         .update({ completed })
         .eq('id', id);
       if (error) throw error;
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleToggleObjective:", e);
@@ -153,6 +155,7 @@ export function DailyPlanSection() {
         setEditingObjective(null);
       }
       toast({ title: "Objectif supprimé" });
+       // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteObjective:", e);
@@ -184,7 +187,7 @@ export function DailyPlanSection() {
           <CardTitle className="text-lg md:text-xl">{editingObjective ? "Modifier l'Objectif" : 'Nouvel Objectif Quotidien'}</CardTitle>
           <CardDescription className="text-xs md:text-sm">Définissez vos priorités pour aujourd'hui (max 5 actifs).</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-2">
           <div className="flex flex-col sm:flex-row gap-2">
             <Input
               value={newObjectiveText}
@@ -195,7 +198,7 @@ export function DailyPlanSection() {
               disabled={isFormLoading || isFetching}
               aria-label="Texte de l'objectif"
             />
-            <Button onClick={handleAddOrUpdateObjective} disabled={isFormLoading || !newObjectiveText.trim() || isFetching} className="w-full sm:w-auto">
+            <Button onClick={handleAddOrUpdateObjective} disabled={isFormLoading || !newObjectiveText.trim() || isFetching || (objectives.filter(obj => !obj.completed).length >= 5 && !editingObjective)} className="w-full sm:w-auto">
               {isFormLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingObjective ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)}
               {editingObjective ? 'Enregistrer' : 'Ajouter'}
             </Button>
@@ -203,20 +206,24 @@ export function DailyPlanSection() {
               <Button variant="outline" onClick={() => { setEditingObjective(null); setNewObjectiveText(''); }} disabled={isFormLoading} className="w-full sm:w-auto">Annuler</Button>
             )}
           </div>
+           {objectives.filter(obj => !obj.completed).length >= 5 && !editingObjective && (
+                <p className="text-xs text-orange-600 mt-2">Vous avez atteint la limite de 5 objectifs actifs. Complétez-en certains avant d'en ajouter de nouveaux.</p>
+            )}
         </CardContent>
       </Card>
 
       {isFetching ? (
-        <div className="flex-grow flex justify-center items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Chargement des objectifs...</p>
+        </Card>
       ) : (
         <>
         <Card className="shadow-sm">
             <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-base md:text-lg">Progression Journalière</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="py-3">
                 <Progress value={completionPercentage} className="w-full h-3 mb-1" />
                 <p className="text-xs text-muted-foreground text-center">
                     {completedCount} / {objectives.length} objectif(s) complété(s) ({completionPercentage}%)
@@ -224,10 +231,13 @@ export function DailyPlanSection() {
             </CardContent>
         </Card>
         {objectives.length === 0 ? (
-            <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
-                <Target className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
-                <p className="text-muted-foreground">Aucun objectif défini pour aujourd'hui.</p>
-                <p className="text-xs text-muted-foreground">Ajoutez-en pour structurer votre journée !</p>
+            <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed">
+                <Target className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4"/>
+                <CardTitle className="text-xl">Aucun objectif pour aujourd'hui !</CardTitle>
+                <p className="text-muted-foreground my-2 max-w-md mx-auto">Définissez 1 à 3 objectifs majeurs pour guider votre journée de travail et maximiser votre productivité.</p>
+                <Button onClick={() => document.querySelector('input')?.focus()} size="lg" className="mt-2">
+                    <PlusCircle className="mr-2 h-5 w-5" /> Définir un objectif
+                </Button>
             </Card>
             ) : (
             <div className="flex-grow space-y-3 overflow-y-auto custom-scrollbar pr-1 pb-4">

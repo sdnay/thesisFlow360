@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
-import { Play, Pause, RotateCcw, Trash2, Loader2, Timer } from 'lucide-react'; // Removed ListChecks, Save
+import { Play, Pause, RotateCcw, Trash2, Loader2, Timer, ListChecks } from 'lucide-react'; 
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -29,17 +29,17 @@ interface PomodoroLogItemProps {
 
 const PomodoroLogItem: FC<PomodoroLogItemProps> = ({ session, onDelete, isLoading }) => {
   return (
-    <li className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-lg bg-card hover:bg-muted/30 transition-colors shadow-sm">
-      <div className="flex-grow mb-2 sm:mb-0">
+    <li className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 border rounded-lg bg-card hover:bg-muted/30 transition-colors shadow-sm">
+      <div className="flex-grow mb-2 sm:mb-0 space-y-1">
         <p className="text-sm font-medium">
           Session de <span className="text-primary font-semibold">{session.duration} min</span>
         </p>
         <p className="text-xs text-muted-foreground">
           {format(new Date(session.start_time), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}
         </p>
-        {session.notes && <p className="text-xs text-foreground mt-1.5 pt-1.5 border-t border-dashed">Notes : {session.notes}</p>}
+        {session.notes && <p className="text-xs text-foreground mt-1.5 pt-1.5 border-t border-dashed whitespace-pre-wrap">Notes : {session.notes}</p>}
       </div>
-       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-7 w-7 self-start sm:self-center" disabled={isLoading}>
+       <Button variant="ghost" size="icon" onClick={() => onDelete(session.id)} aria-label="Supprimer la session" className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-8 w-8 self-start sm:self-center" disabled={isLoading}>
         <Trash2 className="h-4 w-4" />
       </Button>
     </li>
@@ -108,6 +108,7 @@ export function PomodoroSection() {
       
       setSessionNotes(''); 
       toast({ title: "Session enregistrée" });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur logSession:", e);
@@ -168,11 +169,12 @@ export function PomodoroSection() {
   };
   
   const deleteLogItem = async (id: string) => {
-    setIsLogging(true);
+    setIsLogging(true); // Use isLogging for individual item action as well
     try {
       const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id);
       if (error) throw error;
       toast({ title: "Session supprimée du journal" });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur deleteLogItem:", e);
@@ -205,15 +207,15 @@ export function PomodoroSection() {
       </div>
 
       <Card className="shadow-lg">
-        <CardHeader className="items-center">
+        <CardHeader className="items-center pt-6 pb-4">
           <CardTitle className="text-5xl md:text-6xl font-mono tracking-wider text-primary">
             {formatTime(timeLeft)}
           </CardTitle>
-          <CardDescription className="text-center text-xs md:text-sm">
+          <CardDescription className="text-center text-sm md:text-base pt-1">
             Concentrez-vous pendant {durationMinutes} minutes.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 px-4 md:px-6">
+        <CardContent className="space-y-4 px-4 md:px-6 pb-4">
           <Progress value={isActive ? progressPercentage : 0} className="w-full h-3 md:h-4" />
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
             <Label htmlFor="duration" className="text-sm font-medium whitespace-nowrap">Durée (min) :</Label>
@@ -238,7 +240,7 @@ export function PomodoroSection() {
             disabled={isLogging}
           />
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 p-4 md:p-6">
+        <CardFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 p-4 md:p-6 border-t">
           <Button onClick={toggleTimer} size="lg" className="w-full sm:w-36" disabled={isLogging}>
             {isActive && !isPaused ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
             {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Reprendre' : 'Démarrer')}
@@ -256,14 +258,18 @@ export function PomodoroSection() {
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
           {isFetching ? (
-            <div className="flex justify-center items-center h-full py-10">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex-grow flex justify-center items-center py-10">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="ml-3 text-muted-foreground">Chargement du journal...</p>
             </div>
           ) : pomodoroLog.length === 0 ? (
-            <div className="text-center py-10">
-                <Timer className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
-                <p className="text-muted-foreground">Aucune session enregistrée.</p>
-                <p className="text-xs text-muted-foreground">Utilisez le minuteur pour commencer !</p>
+            <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md">
+                <ListChecks className="mx-auto h-16 w-16 opacity-50 mb-4"/>
+                <p className="font-medium text-lg mb-1">Aucune session enregistrée.</p>
+                <p className="text-sm mb-4">Utilisez le minuteur ci-dessus pour enregistrer vos sessions de travail focus !</p>
+                <Button onClick={() => document.getElementById('duration')?.focus()} >
+                    <Timer className="mr-2 h-4 w-4"/> Démarrer une session
+                </Button>
             </div>
           ) : (
             <ul className="space-y-3">

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { BrainDumpEntry } from '@/types';
-import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore } from 'lucide-react'; // Removed CheckSquare as ListChecks is used for 'task'
+import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore, PlusCircle } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -21,11 +21,12 @@ interface BrainDumpItemCardProps {
   isLoading: boolean;
 }
 
-const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<any>; color: string; actions?: Array<{ toStatus: BrainDumpEntry['status']; label: string; icon: FC<any>; condition?: (entry: BrainDumpEntry) => boolean }> }> = {
+const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<any>; color: string; description: string; actions?: Array<{ toStatus: BrainDumpEntry['status']; label: string; icon: FC<any>; condition?: (entry: BrainDumpEntry) => boolean }> }> = {
   captured: {
     label: 'Capturé',
     icon: Zap,
-    color: 'bg-blue-50 border-blue-300 text-blue-700',
+    color: 'bg-blue-50 border-blue-400 text-blue-700',
+    description: 'Pensées brutes, à trier.',
     actions: [
       { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
       { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
@@ -35,7 +36,8 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
   task: {
     label: 'Tâche',
     icon: ListChecks,
-    color: 'bg-amber-50 border-amber-300 text-amber-700',
+    color: 'bg-amber-50 border-amber-400 text-amber-700',
+    description: 'Actions concrètes à planifier.',
     actions: [
       { toStatus: 'idea', label: 'Vers Idée', icon: Lightbulb },
       { toStatus: 'discarded', label: 'Écarter', icon: Archive },
@@ -44,7 +46,8 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
   idea: {
     label: 'Idée',
     icon: Lightbulb,
-    color: 'bg-lime-50 border-lime-300 text-lime-700',
+    color: 'bg-lime-50 border-lime-400 text-lime-700',
+    description: 'Concepts à explorer ou développer.',
     actions: [
       { toStatus: 'task', label: 'Vers Tâche', icon: ListChecks },
       { toStatus: 'discarded', label: 'Écarter', icon: Archive },
@@ -54,6 +57,7 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
     label: 'Écarté',
     icon: Archive,
     color: 'bg-gray-100 border-gray-300 text-gray-600 opacity-70',
+    description: 'Notes jugées non pertinentes.',
     actions: [
       { toStatus: 'captured', label: 'Restaurer', icon: ArchiveRestore },
     ],
@@ -64,20 +68,20 @@ const statusConfig: Record<BrainDumpEntry['status'], { label: string; icon: FC<a
 const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading }) => {
   const config = statusConfig[entry.status];
   return (
-    <Card className={cn("shadow-sm hover:shadow-lg transition-shadow flex flex-col", config.color, "border")}>
-      <CardHeader className="pb-2 pt-3">
+    <Card className={cn("shadow-sm hover:shadow-lg transition-shadow flex flex-col", config.color, "border-2")}>
+      <CardHeader className="pb-2 pt-3 px-4">
         <div className="flex justify-between items-center">
-            <Badge variant="outline" className={cn("text-xs", config.color, "border-current")}>
+            <Badge variant="outline" className={cn("text-xs font-medium", config.color, "border-current")}>
                 <config.icon className="mr-1.5 h-3.5 w-3.5" />
                 {config.label}
             </Badge>
             <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: fr })}</span>
         </div>
       </CardHeader>
-      <CardContent className="pt-1 pb-3 flex-grow">
-        <p className="text-sm whitespace-pre-wrap">{entry.text}</p>
+      <CardContent className="pt-1 pb-3 px-4 flex-grow">
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">{entry.text}</p>
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 pb-3 border-t">
+      <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-2 pb-3 px-4 border-t">
         <div className="flex gap-1 flex-wrap">
           {config.actions?.map(action => {
             if (action.condition && !action.condition(entry)) return null;
@@ -89,7 +93,7 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
                 onClick={() => onUpdateStatus(entry.id, action.toStatus)} 
                 title={action.label} 
                 disabled={isLoading}
-                className="text-xs bg-card hover:bg-muted/50"
+                className="text-xs bg-card hover:bg-muted/50 text-foreground"
               >
                 <action.icon className="mr-1 h-3 w-3" /> {action.label}
               </Button>
@@ -153,6 +157,7 @@ export function BrainDumpSection() {
       if (error) throw error;
       setNewDumpText('');
       toast({ title: "Note ajoutée", description: "Votre pensée a été capturée." });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'ajout", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddDump:", e);
@@ -166,6 +171,7 @@ export function BrainDumpSection() {
     try {
       const { error } = await supabase.from('brain_dump_entries').update({ status }).eq('id', id);
       if (error) throw error;
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleUpdateStatus:", e);
@@ -180,6 +186,7 @@ export function BrainDumpSection() {
       const { error } = await supabase.from('brain_dump_entries').delete().eq('id', id);
       if (error) throw error;
       toast({ title: "Note supprimée" });
+      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteDump:", e);
@@ -208,7 +215,7 @@ export function BrainDumpSection() {
           <CardTitle className="text-lg md:text-xl">Capturer une Pensée / Idée</CardTitle>
           <CardDescription className="text-xs md:text-sm">Notez rapidement tout ce qui vous vient à l'esprit.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-2">
           <Textarea
             value={newDumpText}
             onChange={(e) => setNewDumpText(e.target.value)}
@@ -227,34 +234,39 @@ export function BrainDumpSection() {
       </Card>
 
       {isFetching ? (
-        <div className="flex-grow flex justify-center items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Chargement des notes...</p>
+        </Card>
       ) : brainDumps.length === 0 && !newDumpText ? (
-         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-muted/30">
-            <Brain className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3"/>
-            <p className="text-muted-foreground">Votre esprit est clair !</p>
-            <p className="text-xs text-muted-foreground">Utilisez le formulaire ci-dessus pour commencer à décharger vos pensées.</p>
+         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed">
+            <Brain className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4"/>
+            <CardTitle className="text-xl">Votre esprit est clair !</CardTitle>
+            <p className="text-muted-foreground my-2 max-w-md mx-auto">Le vide-cerveau est l'endroit idéal pour noter rapidement des idées, des tâches ou des pensées fugaces avant de les oublier.</p>
+            <Button onClick={() => document.querySelector('textarea')?.focus()} size="lg" className="mt-2">
+                <PlusCircle className="mr-2 h-5 w-5"/>Noter la première idée
+            </Button>
         </Card>
       ) : (
         <div className="flex-grow space-y-6 overflow-y-auto custom-scrollbar pr-1 pb-4">
           {statusOrder.map(statusKey => {
             const entries = groupedDumps[statusKey] || [];
             const config = statusConfig[statusKey];
-            if (entries.length === 0 && statusKey !== 'captured' && statusKey !== 'idea' && statusKey !== 'task') return null; 
+            if (entries.length === 0 && statusKey !== 'captured' ) return null; 
 
             return (
               <div key={statusKey}>
-                <h2 className="text-base md:text-lg font-semibold mb-2 flex items-center gap-2">
+                <h2 className="text-lg md:text-xl font-semibold mb-3 flex items-center gap-2">
                   <config.icon className={cn("h-5 w-5", config.color.replace(/bg-(\w+)-50/, 'text-$1-600'))} />
-                  {config.label} ({entries.length})
+                  {config.label} <Badge variant="secondary" className="text-sm">{entries.length}</Badge>
                 </h2>
+                 <CardDescription className="ml-7 -mt-2 mb-3 text-sm">{config.description}</CardDescription>
                 {entries.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {entries.map(entry => <BrainDumpItemCard key={entry.id} entry={entry} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteDump} isLoading={isCardLoading === entry.id} />)}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic ml-7">Aucune note dans cette catégorie.</p>
+                  <p className="text-sm text-muted-foreground italic ml-7 py-4">Aucune note dans cette catégorie pour le moment.</p>
                 )}
               </div>
             )
