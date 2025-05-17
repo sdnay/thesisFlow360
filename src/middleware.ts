@@ -9,39 +9,54 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  const { pathname } = request.nextUrl;
+  console.log(`[Middleware] === Nouvelle requête ===`);
+  console.log(`[Middleware] URL demandée: ${request.url}`);
+  console.log(`[Middleware] Pathname extrait: ${pathname}`);
+
+  // --- Vérification des variables d'environnement Supabase ---
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Vérifications initiales des variables d'environnement
   if (!supabaseUrl) {
-    console.error("Middleware Critical Error: La variable d'environnement NEXT_PUBLIC_SUPABASE_URL n'est pas définie.");
-    // Permettre à la page de connexion de tenter de s'afficher même en cas d'erreur de configuration critique
-    if (request.nextUrl.pathname === '/auth/login') {
-      console.warn("Tentative d'accès à /auth/login malgré l'absence de SUPABASE_URL.");
-      return response; // Laisse passer vers la page de login
+    console.error("[Middleware] ERREUR CRITIQUE: NEXT_PUBLIC_SUPABASE_URL n'est pas défini.");
+    if (pathname === '/login') {
+        console.warn("[Middleware] Tentative d'accès à /login malgré l'absence de SUPABASE_URL.");
+        return response;
     }
     return new NextResponse("Erreur de configuration serveur : URL Supabase manquante.", { status: 500 });
   }
 
   if (!(supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://'))) {
-    console.error(`Middleware Critical Error: L'URL Supabase (NEXT_PUBLIC_SUPABASE_URL) semble invalide : '${supabaseUrl}'. Elle doit commencer par 'http://' ou 'https://'.`);
-    if (request.nextUrl.pathname === '/auth/login') {
-      console.warn("Tentative d'accès à /auth/login malgré une URL Supabase invalide.");
-      return response;
+    console.error(`[Middleware] ERREUR CRITIQUE: L'URL Supabase (NEXT_PUBLIC_SUPABASE_URL) semble invalide : '${supabaseUrl}'. Elle doit commencer par 'http://' ou 'https://'.`);
+     if (pathname === '/login') {
+        console.warn("[Middleware] Tentative d'accès à /login malgré une URL Supabase invalide.");
+        return response;
     }
     return new NextResponse("Erreur de configuration serveur : URL Supabase invalide.", { status: 500 });
   }
 
   if (!supabaseAnonKey) {
-    console.error("Middleware Critical Error: La variable d'environnement NEXT_PUBLIC_SUPABASE_ANON_KEY n'est pas définie.");
-    if (request.nextUrl.pathname === '/auth/login') {
-      console.warn("Tentative d'accès à /auth/login malgré l'absence de SUPABASE_ANON_KEY.");
-      return response;
+    console.error("[Middleware] ERREUR CRITIQUE: NEXT_PUBLIC_SUPABASE_ANON_KEY n'est pas défini.");
+    if (pathname === '/login') {
+        console.warn("[Middleware] Tentative d'accès à /login malgré l'absence de SUPABASE_ANON_KEY.");
+        return response;
     }
     return new NextResponse("Erreur de configuration serveur : Clé anonyme Supabase manquante.", { status: 500 });
   }
+  // --- Fin de la vérification des variables d'environnement ---
+
+  // Redirection défensive : si /auth/login est atteint, forcer vers /login
+  // Cela ne devrait pas être nécessaire si toutes les autres parties de l'application et les redirections
+  // pointent correctement vers /login.
+  if (pathname === '/auth/login') {
+    const correctLoginUrl = new URL('/login', request.url);
+    console.warn(`[Middleware] Redirection défensive : Pathname était '/auth/login'. Redirection vers ${correctLoginUrl.toString()}`);
+    return NextResponse.redirect(correctLoginUrl);
+  }
 
   try {
+    console.log(`[Middleware] Initialisation du client Supabase pour le middleware...`);
     const supabase = createServerClient(
       supabaseUrl,
       supabaseAnonKey,
@@ -52,55 +67,67 @@ export async function middleware(request: NextRequest) {
           },
           set(name: string, value: string, options: CookieOptions) {
             // Il est crucial de recréer l'objet `response` si les cookies sont modifiés.
-            // Cf: https://supabase.com/docs/guides/auth/server-side/nextjs#managing-session-with-middleware
-            const newResponseHeaders = new Headers(request.headers);
-            const newRequest = new NextRequest(request.nextUrl, {
-                headers: newResponseHeaders,
-            });
-            response = NextResponse.next({ request: newRequest });
+            // Assurez-vous que `response` est la variable de portée du middleware.
+            const currentHeaders = new Headers(response.headers); // Utiliser les headers de la réponse actuelle
+            const newReq = new NextRequest(request.nextUrl.clone(), { headers: currentHeaders }); // Cloner la requête originale
+            response = NextResponse.next({ request: newReq }); // Recréer la réponse
             response.cookies.set({ name, value, ...options });
           },
           remove(name: string, options: CookieOptions) {
-            const newResponseHeaders = new Headers(request.headers);
-            const newRequest = new NextRequest(request.nextUrl, {
-                headers: newResponseHeaders,
-            });
-            response = NextResponse.next({ request: newRequest });
+            const currentHeaders = new Headers(response.headers);
+            const newReq = new NextRequest(request.nextUrl.clone(), { headers: currentHeaders });
+            response = NextResponse.next({ request: newReq });
             response.cookies.set({ name, value: '', ...options });
           },
         },
       }
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const { pathname } = request.nextUrl;
+    console.log(`[Middleware] Récupération de la session Supabase...`);
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    // Rediriger vers la page de connexion si l'utilisateur n'est pas authentifié et essaie d'accéder à une page protégée
-    if (!session && pathname.startsWith('/app')) {
-      const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('redirectTo', pathname);
-      console.log(`Middleware: Utilisateur non authentifié redirigé de ${pathname} vers ${loginUrl.toString()}`);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    // Rediriger vers la page d'accueil si l'utilisateur est authentifié et essaie d'accéder à la page de connexion
-    if (session && pathname === '/auth/login') {
-      console.log("Middleware: Utilisateur authentifié redirigé de /auth/login vers /");
-      return NextResponse.redirect(new URL('/', request.url));
+    if (sessionError) {
+      console.error(`[Middleware] Erreur lors de la récupération de la session: ${sessionError.message}`);
+      // En cas d'erreur de session, laissez passer vers /login pour éviter une boucle, sinon erreur 500
+      if (pathname === '/login') return response;
+      return new NextResponse("Erreur interne lors de la récupération de la session.", { status: 500 });
     }
     
-    // Si la page est /auth/login et qu'il n'y a pas de session, on laisse passer.
-    if (pathname === '/auth/login' && !session) {
-      console.log("Middleware: Autorisation de passage vers /auth/login pour utilisateur non authentifié.");
+    console.log(`[Middleware] Session utilisateur: ${session ? 'Présente (connecté)' : 'Absente (déconnecté)'}`);
+
+    const isAppRoute = pathname.startsWith('/app') || pathname === '/'; // Protéger la racine et /app/*
+    
+    // Si l'utilisateur n'est pas connecté
+    if (!session) {
+      if (pathname === '/login') {
+        console.log(`[Middleware] Utilisateur non authentifié sur /login. Autorisation.`);
+        return response; // Autoriser l'accès à la page de connexion
+      }
+      if (isAppRoute) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('redirectTo', pathname);
+        console.log(`[Middleware] Utilisateur non authentifié essayant d'accéder à une route protégée (${pathname}). Redirection vers ${loginUrl.toString()}`);
+        return NextResponse.redirect(loginUrl);
+      }
+      console.log(`[Middleware] Utilisateur non authentifié sur une route non gérée spécifiquement (${pathname}). Autorisation par défaut.`);
+      return response; // Pour les autres routes (ex: assets)
     }
 
+    // Si l'utilisateur EST connecté
+    if (session) {
+      if (pathname === '/login') {
+        console.log(`[Middleware] Utilisateur authentifié essayant d'accéder à /login. Redirection vers /.`);
+        return NextResponse.redirect(new URL('/', request.url));
+      }
+    }
+
+    console.log(`[Middleware] Autorisation de passage pour ${pathname} (Session: ${!!session}).`);
     return response;
 
   } catch (e: any) {
-    console.error('Middleware Error: Une erreur inattendue est survenue lors de l\'opération Supabase ou de la gestion de session.', e.message, e.stack);
-    
-    if (request.nextUrl.pathname === '/auth/login') {
-      console.warn("Middleware: Passage autorisé vers /auth/login malgré une erreur interne du middleware.");
+    console.error('[Middleware] Erreur inattendue dans le bloc try/catch principal:', e.message, e.stack);
+    if (pathname === '/login') {
+      console.warn("[Middleware] Erreur interne, mais autorisation de passage vers /login pour éviter boucle de redirection.");
       // Retourner une nouvelle réponse `NextResponse.next()` pour s'assurer qu'elle n'est pas "corrompue"
       return NextResponse.next({
         request: {
@@ -108,7 +135,6 @@ export async function middleware(request: NextRequest) {
         },
       });
     }
-
     return new NextResponse(
         'Une erreur interne est survenue dans le middleware. Veuillez réessayer plus tard.',
         { status: 500 }
@@ -118,9 +144,15 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/', // Pour gérer la redirection de la page d'accueil si l'utilisateur est connecté ou non
-    '/app/:path*', // Protéger toutes les routes sous /app
-    '/auth/login', // Gérer spécifiquement la page de connexion
-    // Ajoutez ici d'autres routes d'authentification si nécessaire (ex: '/auth/signup')
+    /*
+     * Faire correspondre tous les chemins de requête sauf ceux commençant par :
+     * - api (routes API)
+     * - _next/static (fichiers statiques)
+     * - _next/image (fichiers d'optimisation d'image)
+     * - favicon.ico (fichier favicon)
+     * - sounds/ (si vous avez des fichiers audio publics)
+     * Assurez-vous que ce pattern correspond à vos besoins.
+     */
+    '/((?!api|_next/static|_next/image|sounds/|favicon.ico).*)',
   ],
 };

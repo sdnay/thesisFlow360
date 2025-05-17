@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -16,6 +17,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+    ],
+  },
+  experimental: {
+    allowedDevOrigins: [
+        '*.cloudworkstations.dev', // Permet les sous-domaines de cloudworkstations.dev
+        // Ajoutez d'autres origines si nécessaire, par exemple pour des tunnels locaux
+        // 'http://localhost:3000', // Si vous accédez parfois via un port différent
     ],
   },
 };
