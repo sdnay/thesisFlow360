@@ -6,14 +6,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import type { Chapter, DailyObjective, Task, BrainDumpEntry, PomodoroSession } from '@/types';
-import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, MessageSquare, Loader2, ListChecks, CheckCircle, Notebook, TimerIcon, TrendingUp, Target as TargetIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface ChapterProgressCardProps {
   chapter: Chapter;
@@ -73,9 +75,9 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
       <CardFooter className="flex flex-col items-start gap-2 pt-4">
         {showCommentInput ? (
           <div className="w-full flex gap-2 items-center">
-            <Input 
-              value={comment} 
-              onChange={(e) => setComment(e.target.value)} 
+            <Input
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
               placeholder="Nouveau commentaire..."
               className="flex-grow text-sm"
               disabled={isAddingComment || isLoadingCardActions}
@@ -96,17 +98,17 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
   );
 };
 
-
 export function ThesisDashboardSection() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [dailyObjectives, setDailyObjectives] = useState<DailyObjective[]>([]);
   const [tasksSummary, setTasksSummary] = useState<{ total: number, pending: number, completed: number }>({ total: 0, pending: 0, completed: 0 });
   const [recentBrainDumps, setRecentBrainDumps] = useState<BrainDumpEntry[]>([]);
   const [recentPomodoros, setRecentPomodoros] = useState<PomodoroSession[]>([]);
+  const [overallProgress, setOverallProgress] = useState(0);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> | null>(null);
-  
+
   const [isLoadingChapters, setIsLoadingChapters] = useState(true);
   const [isLoadingObjectives, setIsLoadingObjectives] = useState(true);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
@@ -114,6 +116,8 @@ export function ThesisDashboardSection() {
   const [isLoadingPomodoros, setIsLoadingPomodoros] = useState(true);
   const [isSavingChapter, setIsSavingChapter] = useState(false);
   const [isLoadingCardActions, setIsLoadingCardActions] = useState(false);
+  const [isLoadingObjectiveToggle, setIsLoadingObjectiveToggle] = useState<string | null>(null);
+
 
   const { toast } = useToast();
 
@@ -123,6 +127,12 @@ export function ThesisDashboardSection() {
       const { data, error } = await supabase.from('chapters').select('*').order('name');
       if (error) throw error;
       setChapters(data || []);
+      if (data && data.length > 0) {
+        const totalProgress = data.reduce((sum, chapter) => sum + chapter.progress, 0);
+        setOverallProgress(Math.round(totalProgress / data.length));
+      } else {
+        setOverallProgress(0);
+      }
     } catch (e: any) {
       toast({ title: "Erreur Chapitres", description: "Impossible de charger les chapitres.", variant: "destructive" });
       console.error("Erreur fetchChapters:", e);
@@ -134,7 +144,8 @@ export function ThesisDashboardSection() {
   const fetchDailyObjectives = useCallback(async () => {
     setIsLoadingObjectives(true);
     try {
-      const { data, error } = await supabase.from('daily_objectives').select('*').eq('completed', false).limit(3);
+      // Fetch all objectives, not just completed:false
+      const { data, error } = await supabase.from('daily_objectives').select('*').order('text');
       if (error) throw error;
       setDailyObjectives(data || []);
     } catch (e: any) {
@@ -144,6 +155,26 @@ export function ThesisDashboardSection() {
       setIsLoadingObjectives(false);
     }
   }, [toast]);
+
+  const handleToggleObjective = async (id: string, completed: boolean) => {
+    setIsLoadingObjectiveToggle(id);
+    try {
+      const { error } = await supabase
+        .from('daily_objectives')
+        .update({ completed })
+        .eq('id', id);
+      if (error) throw error;
+      // Re-fetch or update local state
+      setDailyObjectives(prev => prev.map(obj => obj.id === id ? {...obj, completed} : obj));
+      toast({ title: "Objectif mis à jour" });
+    } catch (e: any) {
+      toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
+      console.error("Erreur handleToggleObjective:", e);
+    } finally {
+       setIsLoadingObjectiveToggle(null);
+    }
+  };
+
 
   const fetchTasksSummary = useCallback(async () => {
     setIsLoadingTasks(true);
@@ -229,18 +260,18 @@ export function ThesisDashboardSection() {
         supervisor_comments: currentChapter.supervisor_comments || [],
       };
 
-      if (currentChapter.id) { 
+      if (currentChapter.id) {
         const { error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapter.id);
         if (error) throw error;
         toast({ title: "Chapitre modifié", description: `"${chapterPayload.name}" a été mis à jour.` });
-      } else { 
+      } else {
         const { error } = await supabase.from('chapters').insert([chapterPayload]);
         if (error) throw error;
         toast({ title: "Chapitre ajouté", description: `"${chapterPayload.name}" a été ajouté.` });
       }
       setIsModalOpen(false);
       setCurrentChapter(null);
-      await fetchChapters();
+      await fetchChapters(); // Refetch to update overall progress too
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -248,15 +279,15 @@ export function ThesisDashboardSection() {
       setIsSavingChapter(false);
     }
   };
-  
+
   const handleDeleteChapter = async (chapterId: string) => {
     setIsLoadingCardActions(true);
     try {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      await fetchChapters();
-    } catch (e: any) {
+      await fetchChapters(); // Refetch to update overall progress
+    } catch (e: any)      {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
     } finally {
@@ -303,152 +334,189 @@ export function ThesisDashboardSection() {
           <p className="ml-2">Chargement du tableau de bord...</p>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Chapters Section */}
-          <Card className="lg:col-span-2">
+        <>
+          <Card>
             <CardHeader>
-              <CardTitle>Progression des Chapitres</CardTitle>
-              <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
+              <CardTitle className="flex items-center">
+                <TrendingUp className="mr-2 h-6 w-6 text-primary" />
+                Progression Globale de la Thèse
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoadingChapters ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-              ) : chapters.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
+                <div className="flex justify-center py-2"><Loader2 className="h-5 w-5 animate-spin" /></div>
               ) : (
-                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                  {chapters.map((chapter) => (
-                    <ChapterProgressCard 
-                      key={chapter.id} 
-                      chapter={chapter} 
-                      onEdit={openModalForEditChapter}
-                      onDelete={handleDeleteChapter}
-                      onAddComment={handleAddCommentToChapter}
-                      isLoadingCardActions={isLoadingCardActions}
-                    />
-                  ))}
-                </div>
+                <>
+                  <Progress value={overallProgress} className="w-full h-4 mb-2" />
+                  <p className="text-center text-lg font-semibold">{overallProgress}%</p>
+                </>
               )}
             </CardContent>
-             <CardFooter>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/add-chapter"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan Détaillé</Link>
-                </Button>
-            </CardFooter>
           </Card>
 
-          {/* Other Summaries Column */}
-          <div className="space-y-6">
-            {/* Daily Objectives Summary */}
-            <Card>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* Chapters Section */}
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Objectifs du Jour Actifs</CardTitle>
-                 <CardDescription>Vos priorités pour aujourd'hui.</CardDescription>
+                <CardTitle>Progression des Chapitres</CardTitle>
+                <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingObjectives ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                ) : dailyObjectives.length === 0 ? (
-                  <p className="text-muted-foreground text-center text-sm py-2">Aucun objectif actif pour aujourd'hui.</p>
+                {isLoadingChapters ? (
+                  <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                ) : chapters.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
                 ) : (
-                  <ul className="space-y-2 text-sm">
-                    {dailyObjectives.map(obj => (
-                      <li key={obj.id} className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500" /> {obj.text}
-                      </li>
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                    {chapters.map((chapter) => (
+                      <ChapterProgressCard
+                        key={chapter.id}
+                        chapter={chapter}
+                        onEdit={openModalForEditChapter}
+                        onDelete={handleDeleteChapter}
+                        onAddComment={handleAddCommentToChapter}
+                        isLoadingCardActions={isLoadingCardActions}
+                      />
                     ))}
-                  </ul>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/daily-plan"><ListChecks className="mr-2 h-4 w-4" /> Voir le Plan du Jour</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Tasks Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Résumé des Tâches</CardTitle>
-                 <CardDescription>Votre charge de travail actuelle.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingTasks ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                ) : (
-                  <div className="space-y-1 text-sm">
-                    <p>Total des tâches : <span className="font-semibold">{tasksSummary.total}</span></p>
-                    <p>En attente : <span className="font-semibold text-orange-600">{tasksSummary.pending}</span></p>
-                    <p>Terminées : <span className="font-semibold text-green-600">{tasksSummary.completed}</span></p>
                   </div>
                 )}
               </CardContent>
-               <CardFooter>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/tasks"><ListChecks className="mr-2 h-4 w-4" /> Gérer les Tâches</Link>
-                </Button>
+              <CardFooter>
+                  <Button asChild variant="outline" size="sm">
+                      <Link href="/add-chapter"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan Détaillé</Link>
+                  </Button>
               </CardFooter>
             </Card>
 
-            {/* Recent Brain Dumps */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Notes Récentes (Vide-Cerveau)</CardTitle>
-                 <CardDescription>Vos dernières idées et pensées.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingBrainDumps ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                ) : recentBrainDumps.length === 0 ? (
-                  <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {recentBrainDumps.map(dump => (
-                      <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
-                        {dump.text} <span className="text-xs text-muted-foreground ml-1">({dump.status})</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/brain-dump"><Notebook className="mr-2 h-4 w-4" /> Aller au Vide-Cerveau</Link>
-                </Button>
-              </CardFooter>
-            </Card>
+            {/* Other Summaries Column */}
+            <div className="space-y-6">
+              {/* Daily Objectives Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center"><TargetIcon className="mr-2 h-5 w-5 text-green-600" />Objectifs du Jour</CardTitle>
+                  <CardDescription>Vos priorités pour aujourd'hui.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingObjectives ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : dailyObjectives.length === 0 ? (
+                    <p className="text-muted-foreground text-center text-sm py-2">Aucun objectif défini pour aujourd'hui.</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm max-h-60 overflow-y-auto">
+                      {dailyObjectives.map(obj => (
+                        <li key={obj.id} className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/30">
+                          <Checkbox
+                            id={`dash-obj-${obj.id}`}
+                            checked={obj.completed}
+                            onCheckedChange={(checked) => handleToggleObjective(obj.id, !!checked)}
+                            disabled={isLoadingObjectiveToggle === obj.id}
+                            aria-label={obj.completed ? "Marquer comme non terminé" : "Marquer comme terminé"}
+                          />
+                          <label
+                            htmlFor={`dash-obj-${obj.id}`}
+                            className={cn(
+                              "flex-grow cursor-pointer",
+                              obj.completed && "line-through text-muted-foreground"
+                            )}
+                          >
+                            {obj.text}
+                          </label>
+                          {isLoadingObjectiveToggle === obj.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" size="sm">
+                      <Link href="/daily-plan"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan du Jour</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
 
-            {/* Recent Pomodoro Sessions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sessions Pomodoro Récentes</CardTitle>
-                <CardDescription>Votre historique de travail focus.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingPomodoros ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                ) : recentPomodoros.length === 0 ? (
-                  <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {recentPomodoros.map(pomo => (
-                       <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
-                        <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
-                        {pomo.notes && <p className="text-xs text-muted-foreground truncate">Notes: {pomo.notes}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/pomodoro"><TimerIcon className="mr-2 h-4 w-4" /> Aller au Minuteur Pomodoro</Link>
-                </Button>
-              </CardFooter>
-            </Card>
+              {/* Tasks Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Résumé des Tâches</CardTitle>
+                  <CardDescription>Votre charge de travail actuelle.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingTasks ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : (
+                    <div className="space-y-1 text-sm">
+                      <p>Total des tâches : <span className="font-semibold">{tasksSummary.total}</span></p>
+                      <p>En attente : <span className="font-semibold text-orange-600">{tasksSummary.pending}</span></p>
+                      <p>Terminées : <span className="font-semibold text-green-600">{tasksSummary.completed}</span></p>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" size="sm">
+                      <Link href="/tasks"><ListChecks className="mr-2 h-4 w-4" /> Gérer les Tâches</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              {/* Recent Brain Dumps */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notes Récentes (Vide-Cerveau)</CardTitle>
+                  <CardDescription>Vos dernières idées et pensées.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingBrainDumps ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : recentBrainDumps.length === 0 ? (
+                    <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {recentBrainDumps.map(dump => (
+                        <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
+                          {dump.text} <span className="text-xs text-muted-foreground ml-1">({dump.status})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" size="sm">
+                      <Link href="/brain-dump"><Notebook className="mr-2 h-4 w-4" /> Aller au Vide-Cerveau</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              {/* Recent Pomodoro Sessions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sessions Pomodoro Récentes</CardTitle>
+                  <CardDescription>Votre historique de travail focus.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingPomodoros ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                  ) : recentPomodoros.length === 0 ? (
+                    <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {recentPomodoros.map(pomo => (
+                        <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
+                          <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
+                          {pomo.notes && <p className="text-xs text-muted-foreground truncate">Notes: {pomo.notes}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" size="sm">
+                      <Link href="/pomodoro"><TimerIcon className="mr-2 h-4 w-4" /> Aller au Minuteur Pomodoro</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <Dialog open={isModalOpen} onOpenChange={(open) => {if (!isSavingChapter) setIsModalOpen(open)}}>
