@@ -147,7 +147,7 @@ export function ThesisDashboardSection() {
         pomodorosRes,
       ] = await Promise.all([
         supabase.from('chapters').select('*').order('name'),
-        supabase.from('daily_objectives').select('*').order('text'),
+        supabase.from('daily_objectives').select('*').order('created_at'),
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
         supabase.from('brain_dump_entries').select('*').order('created_at', { ascending: false }).limit(5),
         supabase.from('pomodoro_sessions').select('*').order('start_time', { ascending: false }).limit(5),
@@ -183,6 +183,7 @@ export function ThesisDashboardSection() {
       console.error("Erreur fetchAllData:", e);
       setErrorLoading(e.message || "Une erreur est survenue lors du chargement des données du tableau de bord.");
       toast({ title: "Erreur de chargement", description: e.message, variant: "destructive" });
+      // Set all loading states to false on error
       setIsLoadingChapters(false);
       setIsLoadingObjectives(false);
       setIsLoadingTasks(false);
@@ -206,7 +207,7 @@ export function ThesisDashboardSection() {
         .eq('id', id);
       if (error) throw error;
       setDailyObjectives(prev => prev.map(obj => obj.id === id ? {...obj, completed} : obj));
-      toast({ title: "Objectif mis à jour" });
+      // toast({ title: "Objectif mis à jour" }); // Peut-être trop verbeux pour le dashboard
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleToggleObjective:", e);
@@ -250,7 +251,7 @@ export function ThesisDashboardSection() {
       }
       setIsModalOpen(false);
       setCurrentChapter(null);
-      await fetchAllData();
+      await fetchAllData(); // Refresh all dashboard data
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -265,7 +266,7 @@ export function ThesisDashboardSection() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      await fetchAllData();
+      await fetchAllData(); // Refresh all dashboard data
     } catch (e: any)      {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -287,7 +288,7 @@ export function ThesisDashboardSection() {
         .eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
-      await fetchAllData();
+      await fetchAllData(); // Refresh all dashboard data
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddCommentToChapter:", e);
@@ -328,7 +329,7 @@ export function ThesisDashboardSection() {
   }
   
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6"> {/* Ajout de h-full overflow-y-auto ici */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h1>
         <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter}>
@@ -336,7 +337,7 @@ export function ThesisDashboardSection() {
         </Button>
       </div>
 
-      {isLoadingAnyData && !chapters.length && !dailyObjectives.length ? (
+      {isLoadingAnyData && !chapters.length && !dailyObjectives.length && !allTasks.length? (
         <div className="flex justify-center items-center py-10">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="ml-2">Chargement du tableau de bord...</p>
@@ -364,7 +365,7 @@ export function ThesisDashboardSection() {
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chapters Section */}
+            {/* Chapters Section - Prend plus de place */}
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
@@ -377,7 +378,7 @@ export function ThesisDashboardSection() {
                   ) : chapters.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
                   ) : (
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2"> {/* Scroll interne pour les chapitres si la liste est longue */}
                       {chapters.map((chapter) => (
                         <ChapterProgressCard
                           key={chapter.id}
@@ -399,7 +400,7 @@ export function ThesisDashboardSection() {
               </Card>
             </div>
 
-            {/* KPIs Column */}
+            {/* KPIs Column - Prend le reste de l'espace */}
             <div className="lg:col-span-1 space-y-6">
               <Card>
                 <CardHeader>
@@ -415,7 +416,7 @@ export function ThesisDashboardSection() {
                   ) : dailyObjectives.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucun objectif défini pour aujourd'hui.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm max-h-60 overflow-y-auto">
+                    <ul className="space-y-2 text-sm max-h-48 overflow-y-auto"> {/* Scroll interne pour les objectifs */}
                       {dailyObjectives.map(obj => (
                         <li key={obj.id} className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/30">
                           <Checkbox
@@ -434,7 +435,7 @@ export function ThesisDashboardSection() {
                           >
                             {obj.text}
                           </label>
-                          {isLoadingObjectiveToggle === obj.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                          {isLoadingObjectiveToggle === obj.id && <Loader2 className="h-4 w-4 animate-spin ml-auto" />}
                         </li>
                       ))}
                     </ul>
@@ -452,7 +453,7 @@ export function ThesisDashboardSection() {
                   <CardTitle>Résumé des Tâches</CardTitle>
                    <CardDescription>
                      {isLoadingTasks ? <Loader2 className="h-4 w-4 animate-spin" /> : 
-                      `${allTasks.length} tâches au total.`}
+                      `${allTasks.length} tâche(s) au total.`}
                    </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -461,17 +462,18 @@ export function ThesisDashboardSection() {
                   ) : (
                     <div className="space-y-2 text-sm">
                       <p>En attente : <span className="font-semibold text-orange-600">{tasksPending.length}</span></p>
-                      <div className="pl-4 text-xs space-y-0.5">
-                        {Object.entries(taskTypeLabels).map(([type, label]) => {
-                            const count = tasksPendingByType[type as TaskType] || 0;
-                            if (count > 0) {
-                                return <p key={type}>{label}: <span className="font-medium">{count}</span></p>;
-                            }
-                            return null;
-                        })}
-                         {Object.keys(tasksPendingByType).length === 0 && tasksPending.length > 0 && <p className="text-muted-foreground">Aucune tâche en attente par type spécifique.</p>}
-
-                      </div>
+                      {tasksPending.length > 0 && (
+                        <div className="pl-4 text-xs space-y-0.5 max-h-32 overflow-y-auto"> {/* Scroll interne pour les types de tâches */}
+                          {Object.entries(taskTypeLabels).map(([type, label]) => {
+                              const count = tasksPendingByType[type as TaskType] || 0;
+                              if (count > 0) {
+                                  return <p key={type}>{label}: <span className="font-medium">{count}</span></p>;
+                              }
+                              return null;
+                          })}
+                          {Object.keys(tasksPendingByType).length === 0 && <p className="text-muted-foreground">Aucune tâche en attente par type.</p>}
+                        </div>
+                      )}
                       <p>Terminées : <span className="font-semibold text-green-600">{tasksCompletedCount}</span></p>
                     </div>
                   )}
@@ -497,10 +499,10 @@ export function ThesisDashboardSection() {
                   ) : recentBrainDumps.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm">
+                    <ul className="space-y-2 text-sm  max-h-40 overflow-y-auto"> {/* Scroll interne pour les notes */}
                       {recentBrainDumps.slice(0,3).map(dump => ( 
                         <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
-                          {dump.text} <Badge variant={dump.status === 'captured' ? 'default' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
+                          {dump.text} <Badge variant={dump.status === 'captured' ? 'destructive' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
                         </li>
                       ))}
                     </ul>
@@ -527,7 +529,7 @@ export function ThesisDashboardSection() {
                   ) : recentPomodoros.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm">
+                    <ul className="space-y-2 text-sm max-h-40 overflow-y-auto"> {/* Scroll interne pour les pomodoros */}
                       {recentPomodoros.slice(0,3).map(pomo => ( 
                          <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
                           <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
@@ -599,5 +601,3 @@ export function ThesisDashboardSection() {
     </div>
   );
 }
-
-    
