@@ -1,9 +1,9 @@
-
+// src/components/layout/sidebar-nav.tsx
 "use client";
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+// useEffect et useState pour currentHash ne sont plus nécessaires pour la navigation principale
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -17,54 +17,34 @@ import {
   Target,
   Timer,
   Library,
-  ListTree, // Nouvelle icône
+  ListTree,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const navItems = [
-  { href: '/#dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
-  { href: '/#tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
-  { href: '/#brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
-  { href: '/#daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
-  { href: '/#pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
-  { href: '/#sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
-  { href: '/add-chapter', label: 'Plan de Thèse', icon: ListTree, tooltip: 'Gérer la structure et les chapitres' }, // Libellé et icône mis à jour
+  { href: '/', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord & Assistant IA' },
+  { href: '/tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
+  { href: '/brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
+  { href: '/daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
+  { href: '/pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
+  { href: '/sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
+  { href: '/add-chapter', label: 'Plan de Thèse', icon: ListTree, tooltip: 'Gérer la structure et les chapitres' },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { state: sidebarState } = useSidebar();
-  const [currentHash, setCurrentHash] = useState('');
 
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash; // Includes '#'
-      setCurrentHash(hash);
-    };
-
-    handleHashChange(); 
-    window.addEventListener('hashchange', handleHashChange);
-
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []); 
-
+  // La logique de gestion du hash n'est plus nécessaire pour déterminer l'élément actif
+  // car chaque lien pointe vers une page distincte.
 
   return (
     <ScrollArea className="flex-1">
       <SidebarMenu>
         {navItems.map((item) => {
-          let isActive = false;
-          if (item.href.startsWith('/#')) {
-            isActive = pathname === '/' && item.href === currentHash;
-            if ((!currentHash || currentHash === '#') && item.href === '/#dashboard') {
-              isActive = pathname === '/'; // Activer Tableau de Bord si pas de hash ou juste # sur la page d'accueil
-            }
-          } else {
-            isActive = pathname === item.href;
-          }
+          // L'activité est maintenant déterminée par la correspondance exacte du chemin
+          const isActive = pathname === item.href;
           
           return (
             <SidebarMenuItem key={item.href}>
