@@ -5,8 +5,8 @@ import { useState, type FC, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import type { BrainDumpEntry } from '@/types';
-import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore, PlusCircle, EllipsisVertical, ChevronDown } from 'lucide-react'; 
+import type { BrainDumpEntry, BrainDumpEntryStatus } from '@/types'; // Ensure BrainDumpEntryStatus is imported
+import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore, PlusCircle, EllipsisVertical } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -17,15 +17,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-interface BrainDumpItemCardProps { 
-  entry: BrainDumpEntry;
-  onUpdateStatus: (id: string, status: BrainDumpEntry['status']) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  isLoading: boolean;
-  statusConfig: StatusConfigType;
-}
-
-// Déplacer statusConfig en dehors pour qu'il soit accessible par BrainDumpSection et BrainDumpItemCard
 const statusConfigDefinition = {
   captured: {
     label: 'Capturé',
@@ -38,9 +29,9 @@ const statusConfigDefinition = {
     },
     description: 'Pensées brutes, idées initiales à trier.',
     actions: [
-      { toStatus: 'task', label: 'Convertir en Tâche', icon: ListChecks },
-      { toStatus: 'idea', label: 'Convertir en Idée', icon: Lightbulb },
-      { toStatus: 'discarded', label: 'Écarter la note', icon: Archive },
+      { toStatus: 'task' as BrainDumpEntryStatus, label: 'Convertir en Tâche', icon: ListChecks },
+      { toStatus: 'idea' as BrainDumpEntryStatus, label: 'Convertir en Idée', icon: Lightbulb },
+      { toStatus: 'discarded' as BrainDumpEntryStatus, label: 'Écarter la note', icon: Archive },
     ],
   },
   idea: {
@@ -54,8 +45,8 @@ const statusConfigDefinition = {
     },
     description: 'Concepts à explorer ou développer.',
     actions: [
-      { toStatus: 'task', label: 'Convertir en Tâche', icon: ListChecks },
-      { toStatus: 'discarded', label: 'Écarter l\'idée', icon: Archive },
+      { toStatus: 'task' as BrainDumpEntryStatus, label: 'Convertir en Tâche', icon: ListChecks },
+      { toStatus: 'discarded' as BrainDumpEntryStatus, label: 'Écarter l\'idée', icon: Archive },
     ],
   },
   task: {
@@ -69,8 +60,8 @@ const statusConfigDefinition = {
     },
     description: 'Actions concrètes à planifier ou à réaliser.',
     actions: [
-      { toStatus: 'idea', label: 'Transformer en Idée', icon: Lightbulb },
-      { toStatus: 'discarded', label: 'Écarter la tâche', icon: Archive },
+      { toStatus: 'idea' as BrainDumpEntryStatus, label: 'Transformer en Idée', icon: Lightbulb },
+      { toStatus: 'discarded' as BrainDumpEntryStatus, label: 'Écarter la tâche', icon: Archive },
     ],
   },
   discarded: {
@@ -84,16 +75,30 @@ const statusConfigDefinition = {
     },
     description: 'Notes jugées non pertinentes ou terminées.',
     actions: [
-      { toStatus: 'captured', label: 'Restaurer (comme Capturé)', icon: ArchiveRestore },
+      { toStatus: 'captured' as BrainDumpEntryStatus, label: 'Restaurer (comme Capturé)', icon: ArchiveRestore },
     ],
   },
 } as const;
 
 type StatusConfigType = typeof statusConfigDefinition;
 
+interface BrainDumpItemCardProps {
+  entry: BrainDumpEntry;
+  onUpdateStatus: (id: string, status: BrainDumpEntryStatus) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  isLoading: boolean;
+}
 
-const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading, statusConfig }) => {
-  const config = statusConfig[entry.status];
+const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading }) => {
+  const config = statusConfigDefinition[entry.status];
+  if (!config) {
+    console.warn(`Invalid status for brain dump entry: ${entry.status}`);
+    return (
+      <Card className="border-l-4 border-red-500 p-3 text-red-700">
+        Erreur: Statut de note invalide ({entry.status}) pour "{entry.text.substring(0, 30)}...".
+      </Card>
+    );
+  }
   const availableActions = config.actions || [];
 
   return (
@@ -102,7 +107,7 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
         <div className="flex justify-between items-center">
             <Badge variant="outline" className={cn(
               "text-xs font-medium border-none",
-              config.colorClasses.badgeBg, 
+              config.colorClasses.badgeBg,
               config.colorClasses.badgeText
             )}>
                 <config.icon className={cn("mr-1.5 h-3.5 w-3.5", config.colorClasses.iconText)} />
@@ -118,9 +123,9 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
         {availableActions.length > 0 && (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
+                <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-primary"
                     disabled={isLoading}
                     title="Changer le statut"
@@ -130,7 +135,7 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                 {availableActions.map(action => (
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                         key={action.toStatus}
                         onClick={() => onUpdateStatus(entry.id, action.toStatus)}
                         disabled={isLoading}
@@ -148,8 +153,8 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
         </Button>
       </CardFooter>
     </Card>
-  )
-}
+  );
+};
 
 
 export function BrainDumpSection() {
@@ -167,7 +172,9 @@ export function BrainDumpSection() {
         .from('brain_dump_entries')
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       setBrainDumps(data || []);
     } catch (e: any) {
       toast({ title: "Erreur de chargement", description: "Impossible de charger les notes du vide-cerveau.", variant: "destructive" });
@@ -180,8 +187,10 @@ export function BrainDumpSection() {
   useEffect(() => {
     fetchBrainDumps();
     const channel = supabase
-      .channel('db-braindump-page-refactor')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'brain_dump_entries' }, (_payload) => fetchBrainDumps())
+      .channel('db-braindump-page-refactor-v2') // Changed channel name slightly for good measure
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brain_dump_entries' }, (_payload) => {
+        fetchBrainDumps();
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -197,49 +206,59 @@ export function BrainDumpSection() {
         status: 'captured',
       };
       const { error } = await supabase.from('brain_dump_entries').insert(newEntryPayload);
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       setNewDumpText('');
       toast({ title: "Note ajoutée", description: "Votre pensée a été capturée." });
     } catch (e: any) {
       toast({ title: "Erreur d'ajout", description: (e as Error).message, variant: "destructive" });
+      console.error("Erreur handleAddDump:", e);
     } finally {
       setIsAddingLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: BrainDumpEntry['status']) => {
+  const handleUpdateStatus = async (id: string, status: BrainDumpEntryStatus) => {
     setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').update({ status }).eq('id', id);
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       toast({ title: "Statut mis à jour" });
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
+      console.error("Erreur handleUpdateStatus:", e);
     } finally {
       setIsCardLoading(null);
     }
   };
-  
+
   const handleDeleteDump = async (id: string) => {
     setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').delete().eq('id', id);
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
       toast({ title: "Note supprimée" });
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
+      console.error("Erreur handleDeleteDump:", e);
     } finally {
       setIsCardLoading(null);
     }
   };
 
-  const mainStatusOrder: Array<keyof typeof statusConfigDefinition> = ['captured', 'idea', 'task'];
-  const discardedStatusKey: keyof typeof statusConfigDefinition = 'discarded';
+  const mainStatusOrder: Array<keyof StatusConfigType> = ['captured', 'idea', 'task'];
+  const discardedStatusKey: keyof StatusConfigType = 'discarded';
 
   const groupedDumps = brainDumps.reduce((acc, entry) => {
-    (acc[entry.status] = acc[entry.status] || []).push(entry);
+    const currentStatus = entry.status as BrainDumpEntryStatus; // Type assertion
+    (acc[currentStatus] = acc[currentStatus] || []).push(entry);
     return acc;
-  }, {} as Record<BrainDumpEntry['status'], BrainDumpEntry[]>);
+  }, {} as Record<BrainDumpEntryStatus, BrainDumpEntry[]>);
 
 
   if (isFetching) {
@@ -259,7 +278,7 @@ export function BrainDumpSection() {
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Vide-Cerveau</h1>
         </div>
       </div>
-      
+
       <Card className="shadow-md shrink-0">
         <CardHeader className="pb-3 pt-4">
           <CardTitle className="text-base md:text-lg">Capturer une nouvelle pensée ou idée</CardTitle>
@@ -289,7 +308,10 @@ export function BrainDumpSection() {
             <p className="text-muted-foreground my-2 max-w-md mx-auto text-sm">
               Utilisez cet espace pour noter rapidement idées, tâches fugaces ou réflexions avant qu'elles ne s'échappent.
             </p>
-            <Button onClick={() => document.querySelector('textarea')?.focus()} size="lg" className="mt-2">
+            <Button onClick={() => {
+                const textarea = document.querySelector('textarea');
+                if (textarea) textarea.focus();
+            }} size="lg" className="mt-2">
                 <PlusCircle className="mr-2 h-5 w-5"/>Noter la première idée
             </Button>
         </Card>
@@ -311,13 +333,12 @@ export function BrainDumpSection() {
                   <CardContent className="p-3 md:p-4 space-y-3 md:space-y-4">
                     {entries.length > 0 ? (
                       entries.map(entry => (
-                        <BrainDumpItemCard 
-                          key={entry.id} 
-                          entry={entry} 
-                          onUpdateStatus={handleUpdateStatus} 
-                          onDelete={handleDeleteDump} 
+                        <BrainDumpItemCard
+                          key={entry.id}
+                          entry={entry}
+                          onUpdateStatus={handleUpdateStatus}
+                          onDelete={handleDeleteDump}
                           isLoading={isCardLoading === entry.id}
-                          statusConfig={statusConfigDefinition}
                         />
                       ))
                     ) : (
@@ -331,13 +352,13 @@ export function BrainDumpSection() {
         </div>
       )}
 
-      {(groupedDumps[discardedStatusKey] && groupedDumps[discardedStatusKey].length > 0) || brainDumps.length > 0 && (
+      {( (groupedDumps[discardedStatusKey] && groupedDumps[discardedStatusKey].length > 0) || brainDumps.length > 0 ) && (
         <Accordion type="single" collapsible className="w-full shrink-0 pt-4 border-t">
           <AccordionItem value="discarded-notes">
             <AccordionTrigger className="text-base md:text-lg font-semibold text-muted-foreground hover:text-foreground py-3">
                 <div className="flex items-center gap-2">
                     <statusConfigDefinition[discardedStatusKey].icon className={cn("h-5 w-5", statusConfigDefinition[discardedStatusKey].colorClasses.iconText)} />
-                    Notes Écartées 
+                    Notes Écartées
                     <Badge variant="outline" className="ml-2">{groupedDumps[discardedStatusKey]?.length || 0}</Badge>
                 </div>
             </AccordionTrigger>
@@ -345,13 +366,12 @@ export function BrainDumpSection() {
               {groupedDumps[discardedStatusKey] && groupedDumps[discardedStatusKey].length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                   {groupedDumps[discardedStatusKey].map(entry => (
-                    <BrainDumpItemCard 
-                      key={entry.id} 
-                      entry={entry} 
-                      onUpdateStatus={handleUpdateStatus} 
-                      onDelete={handleDeleteDump} 
+                    <BrainDumpItemCard
+                      key={entry.id}
+                      entry={entry}
+                      onUpdateStatus={handleUpdateStatus}
+                      onDelete={handleDeleteDump}
                       isLoading={isCardLoading === entry.id}
-                      statusConfig={statusConfigDefinition}
                     />
                   ))}
                 </div>
