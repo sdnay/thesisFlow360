@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter, SortAsc } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter } from 'lucide-react';
 import { ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -31,28 +31,28 @@ const taskTypeLabels: Record<TaskType, string> = {
 };
 
 const taskTypeClasses: Record<TaskType, { border: string; badge: string; checkbox: string }> = {
-  urgent: { 
-    border: "border-l-red-500 dark:border-l-red-600", 
+  urgent: {
+    border: "border-l-red-500 dark:border-l-red-600",
     badge: "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
     checkbox: "border-red-400 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-600 dark:border-red-500 dark:data-[state=checked]:bg-red-600 dark:data-[state=checked]:border-red-700"
   },
-  important: { 
-    border: "border-l-orange-500 dark:border-l-orange-600", 
+  important: {
+    border: "border-l-orange-500 dark:border-l-orange-600",
     badge: "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700",
     checkbox: "border-orange-400 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-600 dark:border-orange-500 dark:data-[state=checked]:bg-orange-600 dark:data-[state=checked]:border-orange-700"
   },
-  reading: { 
-    border: "border-l-green-500 dark:border-l-green-600", 
+  reading: {
+    border: "border-l-green-500 dark:border-l-green-600",
     badge: "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700",
     checkbox: "border-green-400 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-600 dark:border-green-500 dark:data-[state=checked]:bg-green-600 dark:data-[state=checked]:border-green-700"
   },
-  chatgpt: { 
-    border: "border-l-blue-500 dark:border-l-blue-600", 
+  chatgpt: {
+    border: "border-l-blue-500 dark:border-l-blue-600",
     badge: "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
     checkbox: "border-blue-400 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-600 dark:border-blue-500 dark:data-[state=checked]:bg-blue-600 dark:data-[state=checked]:border-blue-700"
   },
-  secondary: { 
-    border: "border-l-gray-400 dark:border-l-gray-500", 
+  secondary: {
+    border: "border-l-gray-400 dark:border-l-gray-500",
     badge: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700/40 dark:text-gray-300 dark:border-gray-500",
     checkbox: "border-gray-400 data-[state=checked]:bg-gray-500 data-[state=checked]:border-gray-600 dark:border-gray-500 dark:data-[state=checked]:bg-gray-600 dark:data-[state=checked]:border-gray-700"
   },
@@ -120,9 +120,9 @@ const TaskTypeSelector: FC<{
 
 interface TaskItemCardProps {
   task: Task;
-  onToggle: (id: string, completed: boolean) => void;
-  onDelete: (id: string) => void;
-  onSetType: (id: string, type: TaskType) => void;
+  onToggle: (id: string, completed: boolean) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onSetType: (id: string, type: TaskType) => Promise<void>;
   onEdit: (task: Task) => void;
   isCurrentItemLoading: boolean;
 }
@@ -185,7 +185,7 @@ const TaskItemCard: FC<TaskItemCardProps> = ({
               variant="outline"
               size="icon"
               onClick={() => onEdit(task)}
-              className="h-9 w-9 flex-grow sm:flex-grow-0"
+              className="h-9 w-9 flex-grow sm:flex-grow-0" // Maintained size for better click target
               disabled={isCurrentItemLoading}
               title="Modifier la tâche"
             >
@@ -195,7 +195,7 @@ const TaskItemCard: FC<TaskItemCardProps> = ({
               variant="destructiveOutline"
               size="icon"
               onClick={() => onDelete(task.id)}
-              className="h-9 w-9 flex-grow sm:flex-grow-0"
+              className="h-9 w-9 flex-grow sm:flex-grow-0" // Maintained size
               disabled={isCurrentItemLoading}
               title="Supprimer la tâche"
             >
@@ -244,7 +244,7 @@ export function AiTaskManagerPage() {
   const [manualTaskText, setManualTaskText] = useState('');
   const [manualTaskType, setManualTaskType] = useState<TaskType>('secondary');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  
+
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [sortOrder, setSortOrder] = useState<SortOrder>("date-newest");
@@ -258,14 +258,15 @@ export function AiTaskManagerPage() {
       const { data, error: supabaseError } = await supabase
         .from('tasks')
         .select('*')
-        .order('created_at', { ascending: false }); // Initial fetch always newest first
+        .order('created_at', { ascending: false });
 
       if (supabaseError) throw supabaseError;
       setTasks(data || []);
     } catch (e: any) {
-      const errorMessage = e.message || "Une erreur inconnue est survenue.";
+      const errorMessage = (e as Error).message || "Une erreur inconnue est survenue.";
       setError(`Échec de la récupération des tâches: ${errorMessage}`);
       toast({ title: "Erreur de Chargement", description: `Impossible de charger les tâches: ${errorMessage}`, variant: "destructive" });
+      console.error("Erreur fetchTasks:", e);
     } finally {
       setIsFetchingTasks(false);
     }
@@ -274,9 +275,9 @@ export function AiTaskManagerPage() {
   useEffect(() => {
     fetchTasks();
     const channel = supabase
-      .channel('db-tasks-page-updates-aitaskmanager')
+      .channel('db-tasks-page-updates-aitaskmanager-v2') // Changed channel name for potential caching
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => {
-        fetchTasks();
+        fetchTasks(); // Re-fetch all tasks on any change
       })
       .subscribe();
     return () => {
@@ -287,19 +288,16 @@ export function AiTaskManagerPage() {
   const filteredAndSortedTasks = useMemo(() => {
     let processedTasks = [...tasks];
 
-    // Filter by status
     if (filterStatus === "pending") {
       processedTasks = processedTasks.filter(task => !task.completed);
     } else if (filterStatus === "completed") {
       processedTasks = processedTasks.filter(task => task.completed);
     }
 
-    // Filter by type
     if (filterType !== "all") {
       processedTasks = processedTasks.filter(task => task.type === filterType);
     }
 
-    // Sort
     switch (sortOrder) {
       case "date-newest":
         processedTasks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -329,7 +327,7 @@ export function AiTaskManagerPage() {
       const input: ModifyTaskListInput = { instructions, taskList: currentTaskStrings };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
 
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all tasks
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       if (deleteError) throw deleteError;
 
       const newTasksToInsert: Array<Omit<Task, 'id' | 'created_at'>> = result.modifiedTaskList.map((taskText) => {
@@ -347,13 +345,15 @@ export function AiTaskManagerPage() {
         const { error: insertError } = await supabase.from('tasks').insert(newTasksToInsert);
         if (insertError) throw insertError;
       }
+      // Realtime will handle the fetchTasks call to update the UI
       setAiReasoning(result.reasoning);
       setInstructions('');
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
     } catch (e: any) {
-      const errorMessage = e.message || "Une erreur inconnue est survenue lors de la modification par l'IA.";
+      const errorMessage = (e as Error).message || "Une erreur inconnue est survenue lors de la modification par l'IA.";
       setError(errorMessage);
       toast({ title: "Erreur IA", description: errorMessage, variant: "destructive" });
+      console.error("Erreur handleAiModifyTasks:", e);
     } finally {
       setIsAiLoading(false);
     }
@@ -369,10 +369,20 @@ export function AiTaskManagerPage() {
     const taskPayload = { text: manualTaskText.trim(), type: manualTaskType, completed: editingTask ? editingTask.completed : false };
     try {
       if (editingTask) {
-        const { error: updateError } = await supabase.from('tasks').update(taskPayload).eq('id', editingTask.id);
+        const { data: updatedTaskFromDb, error: updateError } = await supabase
+          .from('tasks')
+          .update(taskPayload)
+          .eq('id', editingTask.id)
+          .select()
+          .single();
         if (updateError) throw updateError;
+        if (updatedTaskFromDb) {
+          setTasks(prevTasks => prevTasks.map(t => t.id === updatedTaskFromDb.id ? updatedTaskFromDb : t));
+        }
         toast({ title: "Tâche mise à jour", description: `"${manualTaskText}" a été modifiée.` });
       } else {
+        // For new tasks, we rely on Realtime to update the list via fetchTasks
+        // Supabase will generate id and created_at
         const { error: insertError } = await supabase.from('tasks').insert(taskPayload);
         if (insertError) throw insertError;
         toast({ title: "Tâche ajoutée", description: `"${manualTaskText}" a été ajoutée.` });
@@ -381,9 +391,10 @@ export function AiTaskManagerPage() {
       setManualTaskText('');
       setManualTaskType('secondary');
     } catch (e: any) {
-      const errorMessage = e.message || "Une erreur inconnue est survenue.";
+      const errorMessage = (e as Error).message || "Une erreur inconnue est survenue.";
       setError(`Échec de l'enregistrement: ${errorMessage}`);
       toast({ title: "Erreur d'enregistrement", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
+      console.error("Erreur handleAddOrUpdateManualTask:", e);
     } finally {
       setIsManualTaskLoading(false);
     }
@@ -393,12 +404,21 @@ export function AiTaskManagerPage() {
     setIsTaskItemLoading(id);
     setError(null);
     try {
-      const { error: updateError } = await supabase.from('tasks').update({ completed }).eq('id', id);
+      const { data: updatedTask, error: updateError } = await supabase
+        .from('tasks')
+        .update({ completed })
+        .eq('id', id)
+        .select()
+        .single();
       if (updateError) throw updateError;
+      if (updatedTask) {
+        setTasks(prevTasks => prevTasks.map(t => t.id === id ? updatedTask : t));
+      }
     } catch (e: any) {
-      const errorMessage = e.message || "Impossible de changer le statut.";
+      const errorMessage = (e as Error).message || "Impossible de changer le statut.";
       setError(errorMessage);
       toast({ title: "Erreur de Mise à Jour", description: errorMessage, variant: "destructive" });
+      console.error("Erreur handleToggleTask:", e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -410,14 +430,16 @@ export function AiTaskManagerPage() {
     try {
       const { error: deleteError } = await supabase.from('tasks').delete().eq('id', id);
       if (deleteError) throw deleteError;
+      // Realtime will handle UI update via fetchTasks
       if (editingTask && editingTask.id === id) {
         setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');
       }
       toast({ title: "Tâche supprimée" });
     } catch (e: any) {
-      const errorMessage = e.message || "Impossible de supprimer la tâche.";
+      const errorMessage = (e as Error).message || "Impossible de supprimer la tâche.";
       setError(errorMessage);
       toast({ title: "Erreur de Suppression", description: errorMessage, variant: "destructive" });
+      console.error("Erreur handleDeleteTask:", e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -427,12 +449,21 @@ export function AiTaskManagerPage() {
     setIsTaskItemLoading(id);
     setError(null);
     try {
-      const { error: updateError } = await supabase.from('tasks').update({ type }).eq('id', id);
+      const { data: updatedTask, error: updateError } = await supabase
+        .from('tasks')
+        .update({ type })
+        .eq('id', id)
+        .select()
+        .single();
       if (updateError) throw updateError;
+      if (updatedTask) {
+        setTasks(prevTasks => prevTasks.map(t => t.id === id ? updatedTask : t));
+      }
     } catch (e: any) {
-      const errorMessage = e.message || "Impossible de changer le type.";
+      const errorMessage = (e as Error).message || "Impossible de changer le type.";
       setError(errorMessage);
       toast({ title: "Erreur de Mise à Jour", description: errorMessage, variant: "destructive" });
+      console.error("Erreur handleSetTaskType:", e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -561,8 +592,8 @@ export function AiTaskManagerPage() {
             <CardHeader>
               <CardTitle className="text-lg">Vos Tâches</CardTitle>
               <CardDescription className="text-sm">
-                {isFetchingTasks ? "Chargement..." : 
-                  `${filteredAndSortedTasks.length} tâche(s) ${filterStatus !== 'all' || filterType !== 'all' ? 'correspondant aux filtres' : 'au total'}. 
+                {isFetchingTasks ? "Chargement..." :
+                  `${filteredAndSortedTasks.length} tâche(s) ${filterStatus !== 'all' || filterType !== 'all' ? 'correspondant aux filtres' : 'au total'}.
                    ${tasks.filter(t => !t.completed).length} en attente.`
                 }
               </CardDescription>
@@ -590,7 +621,14 @@ export function AiTaskManagerPage() {
                     {tasks.length === 0 ? "Utilisez les formulaires pour ajouter des tâches." : "Essayez d'ajuster vos filtres."}
                   </p>
                   {tasks.length === 0 && (
-                    <Button onClick={() => document.getElementById('manual-task-card-content')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Button onClick={() => {
+                      const manualTaskCard = document.getElementById('manual-task-card-content');
+                      if (manualTaskCard) {
+                        manualTaskCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        const inputField = manualTaskCard.querySelector('input');
+                        if (inputField) inputField.focus();
+                      }
+                    }}>
                       <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une tâche
                     </Button>
                   )}
@@ -615,4 +653,3 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
-
