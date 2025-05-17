@@ -21,9 +21,16 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     allowedDevOrigins: [
-        '*.cloudworkstations.dev', // Permet les sous-domaines de cloudworkstations.dev
-        // Ajoutez d'autres origines si nécessaire, par exemple pour des tunnels locaux
-        // 'http://localhost:3000', // Si vous accédez parfois via un port différent
+        '*.cloudworkstations.dev',         // Joker pour tous les sous-domaines
+        'http://*.cloudworkstations.dev',  // Explicitement pour HTTP
+        'https://*.cloudworkstations.dev', // Explicitement pour HTTPS
+        // Ajoutez d'autres origines spécifiques si les logs en révèlent d'autres
+        // Par exemple, si vous voyez des erreurs spécifiques pour des ports :
+        // 'http://9000-*.cloudworkstations.dev',
+        // 'https://9000-*.cloudworkstations.dev',
+        // 'http://6000-*.cloudworkstations.dev',
+        // 'https://6000-*.cloudworkstations.dev',
+        // Pour l'instant, les jokers de sous-domaines devraient suffire.
     ],
   },
 };
