@@ -2,64 +2,63 @@
 export type TaskType = "urgent" | "important" | "reading" | "chatgpt" | "secondary";
 
 export interface Task {
-  id: string; // Sera un UUID de Supabase
+  id: string; 
   text: string;
   completed: boolean;
   type: TaskType;
-  created_at: string; // Nom de colonne Supabase standard, sera string ISO
+  created_at: string; 
 }
 
 export interface Chapter {
-  id: string; // UUID
+  id: string; 
   name: string;
-  progress: number; // 0-100
+  progress: number; 
   status: string; 
-  supervisor_comments: string[]; // Supabase: text[]
-  // created_at pourrait être ajouté si nécessaire
+  supervisor_comments: string[]; 
+  created_at?: string; // Rendu optionnel car pas toujours présent à l'insertion manuelle
 }
 
 export interface PomodoroSession {
-  id: string; // UUID
-  start_time: string; // Supabase: timestamptz (string ISO)
-  duration: number; // en minutes
+  id: string; 
+  start_time: string; 
+  duration: number; 
   notes?: string;
-  // created_at pourrait être ajouté
+  created_at?: string;
 }
 
 export interface BrainDumpEntry {
-  id: string; // UUID
+  id: string; 
   text: string;
-  created_at: string; // Supabase: timestamptz (string ISO)
+  created_at: string; 
   status: "captured" | "task" | "idea" | "discarded"; 
 }
 
 export interface Source {
-  id: string; // UUID
+  id: string; 
   title: string;
   type: "pdf" | "website" | "interview" | "field_notes" | "other"; 
   source_link_or_path?: string;
   notes?: string;
-  created_at: string; // Supabase: timestamptz (string ISO)
+  created_at: string; 
 }
 
 export interface PromptLogEntry {
-  id: string; // UUID
+  id: string; 
   original_prompt: string;
   refined_prompt?: string;
   reasoning?: string;
-  timestamp: string; // Supabase: timestamptz (string ISO)
-  tags?: string[]; // Supabase: text[]
+  timestamp: string; 
+  tags?: string[]; 
 }
 
 export interface DailyObjective {
-  id: string; // UUID
+  id: string; 
   text: string;
   completed: boolean;
-  // created_at pourrait être ajouté
+  created_at?: string;
 }
 
-// Ce type est pour générer les types Supabase, à faire avec `supabase gen types typescript > src/types/supabase.ts`
-// Pour l'instant, nous allons le définir de manière basique pour que le client Supabase fonctionne.
+
 export type Json =
   | string
   | number
@@ -74,37 +73,37 @@ export type Database = {
       tasks: {
         Row: Task;
         Insert: Omit<Task, 'id' | 'created_at'> & { created_at?: string };
-        Update: Partial<Task>;
+        Update: Partial<Omit<Task, 'id' | 'created_at'>>;
       };
       chapters: {
         Row: Chapter;
-        Insert: Omit<Chapter, 'id'>;
-        Update: Partial<Chapter>;
+        Insert: Omit<Chapter, 'id' | 'created_at'> & { created_at?: string };
+        Update: Partial<Omit<Chapter, 'id' | 'created_at'>>;
       };
       pomodoro_sessions: {
         Row: PomodoroSession;
-        Insert: Omit<PomodoroSession, 'id'>;
-        Update: Partial<PomodoroSession>;
+        Insert: Omit<PomodoroSession, 'id' | 'created_at'> & { created_at?: string };
+        Update: Partial<Omit<PomodoroSession, 'id' | 'created_at'>>;
       };
       brain_dump_entries: {
         Row: BrainDumpEntry;
         Insert: Omit<BrainDumpEntry, 'id' | 'created_at'> & { created_at?: string };
-        Update: Partial<BrainDumpEntry>;
+        Update: Partial<Omit<BrainDumpEntry, 'id' | 'created_at'>>;
       };
       sources: {
         Row: Source;
         Insert: Omit<Source, 'id' | 'created_at'> & { created_at?: string };
-        Update: Partial<Source>;
+        Update: Partial<Omit<Source, 'id' | 'created_at'>>;
       };
       prompt_log_entries: {
         Row: PromptLogEntry;
         Insert: Omit<PromptLogEntry, 'id' | 'timestamp'> & { timestamp?: string, tags?: string[] };
-        Update: Partial<PromptLogEntry>;
+        Update: Partial<Omit<PromptLogEntry, 'id' | 'timestamp'>>;
       };
       daily_objectives: {
         Row: DailyObjective;
-        Insert: Omit<DailyObjective, 'id'>;
-        Update: Partial<DailyObjective>;
+        Insert: Omit<DailyObjective, 'id' | 'created_at'> & { created_at?: string };
+        Update: Partial<Omit<DailyObjective, 'id' | 'created_at'>>;
       };
     };
     Views: {
