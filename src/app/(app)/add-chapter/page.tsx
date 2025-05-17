@@ -123,9 +123,9 @@ export default function ManageThesisPlanPage() {
   const [chapterForComment, setChapterForComment] = useState<Chapter | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
 
-  const [isFormLoading, setIsFormLoading] = useState(false); // For modal save/update
+  const [isFormLoading, setIsFormLoading] = useState(false); 
   const [isFetchingChapters, setIsFetchingChapters] = useState(true);
-  const [isLoadingChapterActionsForId, setIsLoadingChapterActionsForId] = useState<string | null>(null); // Stores ID of chapter being acted upon on the card
+  const [isLoadingChapterActionsForId, setIsLoadingChapterActionsForId] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -150,9 +150,9 @@ export default function ManageThesisPlanPage() {
   useEffect(() => {
     fetchChapters();
     const channel = supabase
-      .channel('db-chapters-manage-plan-page')
-      .on<Chapter>('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, (_payload) => {
-        fetchChapters(); // Re-fetch all chapters on any change from other clients or direct DB changes
+      .channel('db-chapters-manage-plan-page-v2') // Changed channel name slightly for potential cache busting
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, (_payload) => {
+        fetchChapters(); 
       })
       .subscribe();
     return () => {
@@ -207,12 +207,11 @@ export default function ManageThesisPlanPage() {
       } else { // INSERT
         const { data: newChapterFromDb, error } = await supabase
           .from('chapters')
-          .insert(chapterPayload) // Removed array for single insert
+          .insert(chapterPayload)
           .select()
           .single();
         if (error) throw error;
         if (newChapterFromDb) {
-          // Realtime will handle the fetch, but for instant UI add, we can do this:
            setChapters(prevChapters => [...prevChapters, newChapterFromDb].sort((a, b) => a.name.localeCompare(b.name)));
         }
         toast({ title: "Chapitre ajouté", description: `"${chapterPayload.name}" a été ajouté.` });
@@ -244,7 +243,7 @@ export default function ManageThesisPlanPage() {
 
   const handleSaveComment = async () => {
     if (!chapterForComment || !newCommentText.trim()) return;
-    setIsLoadingChapterActionsForId(chapterForComment.id);
+    setIsLoadingChapterActionsForId(chapterForComment.id); // Use chapterForComment.id for loading state
     try {
       const updatedComments = [...(chapterForComment.supervisor_comments || []), newCommentText.trim()];
       const { data: updatedChapterFromDb, error } = await supabase
@@ -259,7 +258,7 @@ export default function ManageThesisPlanPage() {
         setChapters(prevChapters =>
           prevChapters.map(ch => ch.id === updatedChapterFromDb.id ? updatedChapterFromDb : ch)
         );
-        setChapterForComment(updatedChapterFromDb); // Update the chapter in the modal
+        setChapterForComment(updatedChapterFromDb); 
       }
       toast({ title: "Commentaire ajouté" });
       setNewCommentText('');
@@ -273,7 +272,7 @@ export default function ManageThesisPlanPage() {
 
   const handleDeleteComment = async (commentIndex: number) => {
     if (!chapterForComment || !chapterForComment.supervisor_comments) return;
-    setIsLoadingChapterActionsForId(chapterForComment.id);
+    setIsLoadingChapterActionsForId(chapterForComment.id); // Use chapterForComment.id for loading state
     try {
       const updatedComments = chapterForComment.supervisor_comments.filter((_, index) => index !== commentIndex);
       const { data: updatedChapterFromDb, error } = await supabase
@@ -288,7 +287,7 @@ export default function ManageThesisPlanPage() {
          setChapters(prevChapters =>
           prevChapters.map(ch => ch.id === updatedChapterFromDb.id ? updatedChapterFromDb : ch)
         );
-        setChapterForComment(updatedChapterFromDb); // Update the chapter in the modal
+        setChapterForComment(updatedChapterFromDb); 
       }
       toast({ title: "Commentaire supprimé" });
     } catch (e: any) {
@@ -419,7 +418,7 @@ export default function ManageThesisPlanPage() {
                       disabled={isLoadingChapterActionsForId === chapterForComment?.id}
                       title="Supprimer ce commentaire"
                     >
-                      {isLoadingChapterActionsForId === chapterForComment?.id && isLoadingChapterActionsForId === chapterForComment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-destructive/70 hover:text-destructive" />}
+                      {isLoadingChapterActionsForId === chapterForComment?.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-destructive/70 hover:text-destructive" />}
                     </Button>
                   </div>
                 ))
