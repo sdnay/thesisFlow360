@@ -12,8 +12,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { supabase } from '@/lib/supabaseClient';
-import type { PromptLogEntry } from '@/types'; // Removed RefinePromptInput, RefinePromptOutput as they are local to refine-prompt flow
-import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt'; // Importer la fonction d'affinage et ses types
+import type { PromptLogEntry } from '@/types'; 
+import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
+import { generateThesisPlan, type GenerateThesisPlanInput, type GenerateThesisPlanOutput } from '@/ai/flows/generate-thesis-plan-flow';
 
 // --- Définitions des Outils ---
 
@@ -225,6 +226,37 @@ const refinePromptTool = ai.defineTool(
   }
 );
 
+const CreateThesisPlanToolInputSchema = z.object({
+  topicOrInstructions: z.string().describe("Le sujet de la thèse ou des instructions spécifiques pour générer le plan."),
+});
+const createThesisPlanTool = ai.defineTool(
+  {
+    name: 'createThesisPlanTool',
+    description: 'Génère un plan de thèse ou de mémoire détaillé basé sur un sujet ou des instructions fournies par l\'utilisateur. Le plan sera retourné sous forme de texte structuré.',
+    inputSchema: CreateThesisPlanToolInputSchema,
+    outputSchema: z.object({
+      plan: z.string().describe("Le plan de thèse généré."),
+      message: z.string().describe("Un message de confirmation ou d'erreur."),
+      success: z.boolean().describe("Indique si l'opération a réussi.")
+    }),
+  },
+  async (input) => {
+    try {
+      const result: GenerateThesisPlanOutput = await generateThesisPlan({ topicOrInstructions: input.topicOrInstructions });
+      if (result.plan) {
+        // Log the plan somewhere if needed, e.g., as a new 'source' or 'brain_dump_entry'
+        // For now, just return it.
+        return { plan: result.plan, message: `Plan de thèse généré pour "${input.topicOrInstructions.substring(0, 50)}...".`, success: true };
+      } else {
+        return { plan: "", message: "La génération du plan n'a pas retourné de contenu.", success: false };
+      }
+    } catch (e: any) {
+      console.error("Erreur createThesisPlanTool:", e);
+      return { plan: "", message: `Erreur lors de la génération du plan de thèse: ${e.message}`, success: false };
+    }
+  }
+);
+
 
 // --- Flux Principal de l'Agent ---
 
@@ -253,7 +285,8 @@ const thesisAgentMainPrompt = ai.definePrompt({
     addDailyObjectiveTool, 
     addSourceTool, 
     addTaskTool,
-    refinePromptTool
+    refinePromptTool,
+    createThesisPlanTool // Ajout du nouvel outil
   ],
   prompt: `Tu es ThesisBot, un assistant IA avancé pour l'application ThesisFlow360, conçue pour aider les étudiants dans la rédaction de leur thèse.
 Ta mission est de comprendre les requêtes de l'utilisateur en français et d'utiliser les outils disponibles pour y répondre efficacement.
@@ -268,15 +301,17 @@ Voici les actions que tu peux entreprendre avec les outils :
     - Pour toute autre demande d'ajout de tâche (ex: "ajoute une tâche pour contacter mon superviseur").
     Utilise \`addTaskTool\` dans les deux cas.
 - **Affiner un prompt** : Si l'utilisateur demande explicitement d'améliorer, d'affiner ou de reformuler un prompt pour une meilleure interaction avec une IA. Utilise \`refinePromptTool\`.
+- **Créer un plan de thèse** : Si l'utilisateur demande de générer un plan de thèse, un plan de mémoire, ou une structure pour son travail de recherche pour un sujet donné (ex: "fais-moi un plan de mémoire sur l'impact des réseaux sociaux sur les adolescents"). Utilise \`createThesisPlanTool\`. Le plan généré sera retourné dans le message de réponse.
 
 Instructions importantes :
 - Réponds toujours en français.
 - Sois concis et direct. Confirme l'action effectuée (ex: "Chapitre 'Conclusion' ajouté.").
-- Si un outil est utilisé avec succès, le champ \`message\` de la sortie de l'outil devrait être utilisé pour formuler ta réponse.
+- Si un outil est utilisé avec succès, le champ \`message\` de la sortie de l'outil devrait être utilisé pour formuler ta réponse. Si l'outil retourne des données (comme un plan de thèse), inclus-les clairement dans ta réponse.
 - Si un outil échoue, informe l'utilisateur de l'échec et de la raison si possible (contenue dans le champ \`message\` de la sortie de l'outil en cas d'échec).
 - Si la demande de l'utilisateur n'est pas claire ou ne correspond à aucun outil, demande des clarifications. N'invente pas d'actions.
 - N'hésite pas à utiliser les outils dès que tu es raisonnablement sûr de l'intention de l'utilisateur. Ne demande pas de confirmation superflue avant d'agir.
 - Si plusieurs outils sont appelés, essaie de synthétiser les résultats.
+- Pour l'outil \`createThesisPlanTool\`, ta réponse doit inclure le plan généré. Par exemple : "Voici un plan de thèse pour votre sujet : \n\n[Plan de thèse ici]\n\n".
 
 Demande de l'utilisateur : {{{userRequest}}}
 
@@ -290,6 +325,11 @@ Si tu poses une question pour clarification, cette question doit être la valeur
 Exemple si une action a été effectuée :
 {
   "responseMessage": "J'ai ajouté le chapitre 'Introduction'."
+}
+
+Exemple si tu as généré un plan :
+{
+  "responseMessage": "Voici le plan de thèse que j'ai généré pour vous :\\n\\n## 1. Introduction\\n   - Contexte\\n   - Problématique\\n\\n## 2. Revue de littérature..."
 }
 
 Exemple si tu as besoin de clarification :
@@ -308,58 +348,46 @@ const thesisAgentFlow = ai.defineFlow(
   async (input) => {
     const llmResponse = await thesisAgentMainPrompt(input);
     const agentOutput = llmResponse.output;
-
-    if (!agentOutput || !agentOutput.responseMessage) { // Check for responseMessage specifically
-      // Construct a default error message if the LLM failed to provide a structured response
-      let errorMessage = "Désolé, une erreur interne est survenue et je n'ai pas pu traiter votre demande.";
-      if (llmResponse.candidates && llmResponse.candidates.length > 0) {
-          const candidate = llmResponse.candidates[0];
-          if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'TOOL_CALLS') {
-              errorMessage = `Ma réponse a été interrompue (raison: ${candidate.finishReason}). Veuillez réessayer ou reformuler.`;
-          }
-      }
-      // Even if agentOutput is null, we ensure the flow returns a valid ThesisAgentOutput
-      return { 
-          responseMessage: errorMessage,
-          actionsTaken: llmResponse.toolRequests?.map(req => ({ // Map tool requests if they exist
-              toolName: req.toolName,
-              toolInput: req.input,
-              toolOutput: req.output, // This is the tool's direct output
-          })) || undefined
-      };
-    }
     
-    let finalMessage = agentOutput.responseMessage;
-    
+    let finalMessage = "";
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
-     if (llmResponse.toolRequests && llmResponse.toolRequests.length > 0) {
+
+    // Prioriser le message de l'outil s'il existe et est significatif (comme un plan)
+    if (llmResponse.toolRequests && llmResponse.toolRequests.length > 0) {
         for (const toolRequest of llmResponse.toolRequests) {
              actionsTakenDetails.push({
                 toolName: toolRequest.toolName,
                 toolInput: toolRequest.input,
                 toolOutput: toolRequest.output, 
             });
-        }
-        // The LLM should have already formulated a good responseMessage based on tool outputs as per prompt.
-        // If for some reason it's missing, but tools were called, we can add a generic one.
-        if (!finalMessage && actionsTakenDetails.length > 0) {
-             const successfulActions = actionsTakenDetails.filter(a => a.toolOutput?.success).length;
-             const failedActions = actionsTakenDetails.length - successfulActions;
-
-            if (successfulActions > 0 && failedActions === 0) {
-                finalMessage = `J'ai complété votre demande avec succès en utilisant ${successfulActions} outil(s).`;
-            } else if (successfulActions > 0 && failedActions > 0) {
-                finalMessage = `J'ai partiellement complété votre demande. ${successfulActions} action(s) réussie(s), ${failedActions} échec(s).`;
-            } else if (failedActions > 0) {
-                finalMessage = `Désolé, ${failedActions} action(s) ont échoué.`;
-            } else { 
-                 finalMessage = `J'ai traité votre demande en utilisant des outils.`;
+            // Si l'outil est createThesisPlanTool et a réussi, son output.plan est le message principal.
+            if (toolRequest.toolName === 'createThesisPlanTool' && toolRequest.output?.success && toolRequest.output?.plan) {
+                finalMessage = `Voici le plan que j'ai généré pour vous :\n\n${toolRequest.output.plan}`;
+            } else if (toolRequest.output?.message && !finalMessage) { 
+                // Utiliser le message de l'outil si aucun message plus spécifique n'a été défini
+                finalMessage = toolRequest.output.message;
             }
         }
-    } else if (!finalMessage) {
-         // This case (no tool calls, no responseMessage from LLM) should be rare with the new prompt instructions
-         finalMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler votre demande ?";
     }
+    
+    // Si l'LLM a fourni un responseMessage et qu'aucun message d'outil prioritaire n'a été défini
+    if (agentOutput?.responseMessage && !finalMessage) {
+        finalMessage = agentOutput.responseMessage;
+    } else if (!finalMessage) { // Fallback si aucun message du tout
+         if (llmResponse.candidates && llmResponse.candidates.length > 0) {
+            const candidate = llmResponse.candidates[0];
+            if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'TOOL_CALLS') {
+                finalMessage = `Ma réponse a été interrompue (raison: ${candidate.finishReason}). Veuillez réessayer ou reformuler.`;
+            } else if (actionsTakenDetails.length > 0) {
+                finalMessage = `J'ai traité votre demande en utilisant ${actionsTakenDetails.length} outil(s).`;
+            } else {
+                finalMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler votre demande ?";
+            }
+        } else {
+            finalMessage = "Désolé, une erreur interne est survenue et je n'ai pas pu traiter votre demande.";
+        }
+    }
+
 
     return {
       responseMessage: finalMessage,

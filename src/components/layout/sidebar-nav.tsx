@@ -1,9 +1,8 @@
-
 "use client";
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-// useEffect et useState pour currentHash ne sont plus nécessaires
+import { useEffect, useState } from 'react';
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -17,33 +16,50 @@ import {
   Target,
   Timer,
   Library,
-  // HomeIcon n'est plus utilisé de la même manière
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Définition des éléments de navigation de la barre latérale avec les nouvelles routes
+// Navigation items point to hashes on the main page
 const navItems = [
-  { href: '/dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
-  { href: '/tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
-  { href: '/brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
-  { href: '/daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
-  { href: '/pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
-  { href: '/sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
+  { href: '/#dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, tooltip: 'Tableau de Bord de la Thèse' },
+  { href: '/#tasks', label: 'Gestion Tâches', icon: ListTodo, tooltip: 'Gestion de tâches par IA' },
+  { href: '/#brain-dump', label: 'Vide-Cerveau', icon: Brain, tooltip: 'Capturer les Idées' },
+  { href: '/#daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
+  { href: '/#pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
+  { href: '/#sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const { state: sidebarState } = useSidebar();
-  // currentHash et son useEffect sont supprimés
+  const [currentHash, setCurrentHash] = useState('');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      // Default to #dashboard if hash is empty or just '/', otherwise use the actual hash
+      const hash = window.location.hash || '#dashboard';
+      setCurrentHash(hash);
+    };
+
+    handleHashChange(); // Set initial hash based on URL
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Also update hash if pathname changes to ensure consistency, though for this app structure it might be less critical
+    // if all these links point to the same page ('/').
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [pathname]);
+
 
   return (
     <ScrollArea className="flex-1">
       <SidebarMenu>
         {navItems.map((item) => {
-          // La logique isActive est simplifiée pour correspondre au pathname exact
-          const isActive = pathname === item.href;
-
+          // isActive if current path is root AND item's href (e.g., /#dashboard) matches current full hash path (e.g., /#dashboard)
+          const isActive = pathname === '/' && item.href === `/${currentHash}`;
+          
           return (
             <SidebarMenuItem key={item.href}>
               <Link href={item.href} passHref legacyBehavior>

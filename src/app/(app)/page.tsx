@@ -1,10 +1,22 @@
 // src/app/(app)/page.tsx
-import { redirect } from 'next/navigation';
+"use client";
+
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { ThesisWorkspace } from '@/components/thesis/thesis-workspace';
+import { ChatGPTPromptLogPanel } from '@/components/chat/chat-gpt-prompt-log-panel';
 
 export default function HomePage() {
-  // Redirige vers la page du tableau de bord par défaut
-  redirect('/dashboard');
-  // Le contenu précédent avec ThesisWorkspace et ChatGPTPromptLogPanel est supprimé
-  // car chaque section a maintenant sa propre page.
-  // return null; // La redirection s'en chargera
+  return (
+    <div className="h-[calc(100vh-theme(space.16))]"> {/* Ajusté pour la hauteur du header (h-16 = 4rem) */}
+      <ResizablePanelGroup direction="horizontal" className="h-full w-full rounded-lg border">
+        <ResizablePanel defaultSize={65} minSize={30}>
+          <ThesisWorkspace />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={35} minSize={25}>
+          <ChatGPTPromptLogPanel />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
+  );
 }
