@@ -1,12 +1,11 @@
-
 "use client";
 
 import { useState, type FC, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import type { BrainDumpEntry, BrainDumpEntryStatus } from '@/types'; // Ensure BrainDumpEntryStatus is imported
-import { Lightbulb, ListChecks, Trash2, Archive, Save, Loader2, Brain, Zap, ArchiveRestore, PlusCircle, EllipsisVertical } from 'lucide-react';
+import type { BrainDumpEntry, BrainDumpEntryStatus } from '@/types';
+import { Lightbulb, ListChecks, Trash2, Archive, Loader2, Brain, Zap, ArchiveRestore, PlusCircle, EllipsisVertical } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
@@ -17,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// ----- CONFIG -----
 const statusConfigDefinition = {
   captured: {
     label: 'Capturé',
@@ -37,7 +37,7 @@ const statusConfigDefinition = {
   idea: {
     label: 'Idée',
     icon: Lightbulb,
-     colorClasses: {
+    colorClasses: {
       border: 'border-lime-500 dark:border-lime-600',
       badgeBg: 'bg-lime-100 dark:bg-lime-900/40',
       badgeText: 'text-lime-700 dark:text-lime-300',
@@ -89,10 +89,14 @@ interface BrainDumpItemCardProps {
   isLoading: boolean;
 }
 
-const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, onDelete, isLoading }) => {
+const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({
+  entry,
+  onUpdateStatus,
+  onDelete,
+  isLoading,
+}) => {
   const config = statusConfigDefinition[entry.status];
   if (!config) {
-    console.warn(`Invalid status for brain dump entry: ${entry.status}`);
     return (
       <Card className="border-l-4 border-red-500 p-3 text-red-700">
         Erreur: Statut de note invalide ({entry.status}) pour "{entry.text.substring(0, 30)}...".
@@ -105,15 +109,17 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
     <Card className={cn("shadow-sm hover:shadow-md transition-shadow duration-150 flex flex-col border-l-4", config.colorClasses.border)}>
       <CardHeader className="pb-2 pt-3 px-3">
         <div className="flex justify-between items-center">
-            <Badge variant="outline" className={cn(
-              "text-xs font-medium border-none",
-              config.colorClasses.badgeBg,
-              config.colorClasses.badgeText
-            )}>
-                <config.icon className={cn("mr-1.5 h-3.5 w-3.5", config.colorClasses.iconText)} />
-                {config.label}
-            </Badge>
-            <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: fr })}</span>
+          <Badge variant="outline" className={cn(
+            "text-xs font-medium border-none",
+            config.colorClasses.badgeBg,
+            config.colorClasses.badgeText
+          )}>
+            <config.icon className={cn("mr-1.5 h-3.5 w-3.5", config.colorClasses.iconText)} />
+            {config.label}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: fr })}
+          </span>
         </div>
       </CardHeader>
       <CardContent className="pt-1 pb-3 px-3 flex-grow min-h-[50px]">
@@ -121,41 +127,51 @@ const BrainDumpItemCard: FC<BrainDumpItemCardProps> = ({ entry, onUpdateStatus, 
       </CardContent>
       <CardFooter className="flex justify-end items-center gap-1 pt-2 pb-3 px-3 border-t">
         {availableActions.length > 0 && (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                    disabled={isLoading}
-                    title="Changer le statut"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                disabled={isLoading}
+                title="Changer le statut"
+              >
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {availableActions.map(action => (
+                <DropdownMenuItem
+                  key={action.toStatus}
+                  onClick={() => onUpdateStatus(entry.id, action.toStatus)}
+                  disabled={isLoading}
+                  className="text-sm cursor-pointer"
                 >
-                    <EllipsisVertical className="h-4 w-4" />
-                </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                {availableActions.map(action => (
-                    <DropdownMenuItem
-                        key={action.toStatus}
-                        onClick={() => onUpdateStatus(entry.id, action.toStatus)}
-                        disabled={isLoading}
-                        className="text-sm cursor-pointer"
-                    >
-                    <action.icon className="mr-2 h-4 w-4 text-muted-foreground" />
-                    {action.label}
-                    </DropdownMenuItem>
-                ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+                  <action.icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                  {action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        <Button variant="ghost" size="icon" onClick={() => onDelete(entry.id)} title="Supprimer Définitivement" className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-8 w-8" disabled={isLoading}>
-            <Trash2 className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(entry.id)}
+          title="Supprimer Définitivement"
+          className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+          disabled={isLoading}
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       </CardFooter>
     </Card>
   );
 };
 
+// --------------------
+//      MAIN EXPORT
+// --------------------
 
 export function BrainDumpSection() {
   const [brainDumps, setBrainDumps] = useState<BrainDumpEntry[]>([]);
@@ -172,13 +188,10 @@ export function BrainDumpSection() {
         .from('brain_dump_entries')
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       setBrainDumps(data || []);
     } catch (e: any) {
       toast({ title: "Erreur de chargement", description: "Impossible de charger les notes du vide-cerveau.", variant: "destructive" });
-      console.error("Erreur fetchBrainDumps:", e);
     } finally {
       setIsFetching(false);
     }
@@ -187,7 +200,7 @@ export function BrainDumpSection() {
   useEffect(() => {
     fetchBrainDumps();
     const channel = supabase
-      .channel('db-braindump-page-refactor-v2') // Changed channel name slightly for good measure
+      .channel('db-braindump-page-refactor-v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'brain_dump_entries' }, (_payload) => {
         fetchBrainDumps();
       })
@@ -206,14 +219,11 @@ export function BrainDumpSection() {
         status: 'captured',
       };
       const { error } = await supabase.from('brain_dump_entries').insert(newEntryPayload);
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       setNewDumpText('');
       toast({ title: "Note ajoutée", description: "Votre pensée a été capturée." });
     } catch (e: any) {
       toast({ title: "Erreur d'ajout", description: (e as Error).message, variant: "destructive" });
-      console.error("Erreur handleAddDump:", e);
     } finally {
       setIsAddingLoading(false);
     }
@@ -223,13 +233,10 @@ export function BrainDumpSection() {
     setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').update({ status }).eq('id', id);
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       toast({ title: "Statut mis à jour" });
     } catch (e: any) {
       toast({ title: "Erreur de mise à jour", description: (e as Error).message, variant: "destructive" });
-      console.error("Erreur handleUpdateStatus:", e);
     } finally {
       setIsCardLoading(null);
     }
@@ -239,13 +246,10 @@ export function BrainDumpSection() {
     setIsCardLoading(id);
     try {
       const { error } = await supabase.from('brain_dump_entries').delete().eq('id', id);
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       toast({ title: "Note supprimée" });
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
-      console.error("Erreur handleDeleteDump:", e);
     } finally {
       setIsCardLoading(null);
     }
@@ -255,11 +259,10 @@ export function BrainDumpSection() {
   const discardedStatusKey: keyof StatusConfigType = 'discarded';
 
   const groupedDumps = brainDumps.reduce((acc, entry) => {
-    const currentStatus = entry.status as BrainDumpEntryStatus; // Type assertion
+    const currentStatus = entry.status as BrainDumpEntryStatus;
     (acc[currentStatus] = acc[currentStatus] || []).push(entry);
     return acc;
   }, {} as Record<BrainDumpEntryStatus, BrainDumpEntry[]>);
-
 
   if (isFetching) {
     return (
@@ -274,8 +277,8 @@ export function BrainDumpSection() {
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="flex items-center gap-3">
-            <Brain className="h-7 w-7 text-primary" />
-            <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Vide-Cerveau</h1>
+          <Brain className="h-7 w-7 text-primary" />
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Vide-Cerveau</h1>
         </div>
       </div>
 
@@ -302,18 +305,18 @@ export function BrainDumpSection() {
       </Card>
 
       {brainDumps.length === 0 && !newDumpText ? (
-         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
-            <Brain className="mx-auto h-16 w-16 text-muted-foreground/30 mb-4"/>
-            <CardTitle className="text-lg md:text-xl">Votre esprit est un canevas vierge !</CardTitle>
-            <p className="text-muted-foreground my-2 max-w-md mx-auto text-sm">
-              Utilisez cet espace pour noter rapidement idées, tâches fugaces ou réflexions avant qu'elles ne s'échappent.
-            </p>
-            <Button onClick={() => {
-                const textarea = document.querySelector('textarea');
-                if (textarea) textarea.focus();
-            }} size="lg" className="mt-2">
-                <PlusCircle className="mr-2 h-5 w-5"/>Noter la première idée
-            </Button>
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
+          <Brain className="mx-auto h-16 w-16 text-muted-foreground/30 mb-4" />
+          <CardTitle className="text-lg md:text-xl">Votre esprit est un canevas vierge !</CardTitle>
+          <p className="text-muted-foreground my-2 max-w-md mx-auto text-sm">
+            Utilisez cet espace pour noter rapidement idées, tâches fugaces ou réflexions avant qu'elles ne s'échappent.
+          </p>
+          <Button onClick={() => {
+            const textarea = document.querySelector('textarea');
+            if (textarea) textarea.focus();
+          }} size="lg" className="mt-2">
+            <PlusCircle className="mr-2 h-5 w-5" />Noter la première idée
+          </Button>
         </Card>
       ) : (
         <div className="flex-grow flex flex-col lg:flex-row gap-4 md:gap-6 overflow-hidden">
@@ -352,18 +355,18 @@ export function BrainDumpSection() {
         </div>
       )}
 
-      {( (groupedDumps[discardedStatusKey] && groupedDumps[discardedStatusKey].length > 0) || brainDumps.length > 0 ) && (
+      {(groupedDumps[discardedStatusKey]?.length > 0 || brainDumps.length > 0) && (
         <Accordion type="single" collapsible className="w-full shrink-0 pt-4 border-t">
           <AccordionItem value="discarded-notes">
             <AccordionTrigger className="text-base md:text-lg font-semibold text-muted-foreground hover:text-foreground py-3">
-                <div className="flex items-center gap-2">
-                    <statusConfigDefinition[discardedStatusKey].icon className={cn("h-5 w-5", statusConfigDefinition[discardedStatusKey].colorClasses.iconText)} />
-                    Notes Écartées
-                    <Badge variant="outline" className="ml-2">{groupedDumps[discardedStatusKey]?.length || 0}</Badge>
-                </div>
+              <div className="flex items-center gap-2">
+                <Archive className={cn("h-5 w-5", statusConfigDefinition[discardedStatusKey].colorClasses.iconText)} />
+                Notes Écartées
+                <Badge variant="outline" className="ml-2">{groupedDumps[discardedStatusKey]?.length || 0}</Badge>
+              </div>
             </AccordionTrigger>
             <AccordionContent className="pt-2 pb-4">
-              {groupedDumps[discardedStatusKey] && groupedDumps[discardedStatusKey].length > 0 ? (
+              {groupedDumps[discardedStatusKey]?.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                   {groupedDumps[discardedStatusKey].map(entry => (
                     <BrainDumpItemCard
