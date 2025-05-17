@@ -285,8 +285,7 @@ export function AiTaskManagerPage() {
       }
       setManualTaskText('');
       setManualTaskType('secondary');
-    } catch (e: any)
-     {
+    } catch (e: any) { // Corrected: removed the stray '{' from the line below
       console.error("Erreur ajout/modif manuelle:", e);
       setError(`Échec de l'enregistrement: ${e.message || "Une erreur inconnue est survenue."}`);
       toast({ title: "Erreur", description: "Impossible d'enregistrer la tâche.", variant: "destructive" });
