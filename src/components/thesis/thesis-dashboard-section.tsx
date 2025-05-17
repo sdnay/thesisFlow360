@@ -110,7 +110,7 @@ const ChapterProgressCard: FC<ChapterProgressCardProps> = ({ chapter, onEdit, on
 export function ThesisDashboardSection() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [dailyObjectives, setDailyObjectives] = useState<DailyObjective[]>([]);
-  const [allTasks, setAllTasks] = useState<Task[]>([]); // Store all tasks for detailed summary
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [recentBrainDumps, setRecentBrainDumps] = useState<BrainDumpEntry[]>([]);
   const [recentPomodoros, setRecentPomodoros] = useState<PomodoroSession[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -183,7 +183,6 @@ export function ThesisDashboardSection() {
       console.error("Erreur fetchAllData:", e);
       setErrorLoading(e.message || "Une erreur est survenue lors du chargement des données du tableau de bord.");
       toast({ title: "Erreur de chargement", description: e.message, variant: "destructive" });
-      // Set all loading states to false in case of partial failure
       setIsLoadingChapters(false);
       setIsLoadingObjectives(false);
       setIsLoadingTasks(false);
@@ -251,7 +250,7 @@ export function ThesisDashboardSection() {
       }
       setIsModalOpen(false);
       setCurrentChapter(null);
-      await fetchAllData(); // Refetch all data to update dashboard
+      await fetchAllData();
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
@@ -266,7 +265,7 @@ export function ThesisDashboardSection() {
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Chapitre supprimé" });
-      await fetchAllData(); // Refetch to update overall progress
+      await fetchAllData();
     } catch (e: any)      {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
@@ -288,7 +287,7 @@ export function ThesisDashboardSection() {
         .eq('id', chapterId);
       if (error) throw error;
       toast({ title: "Commentaire ajouté" });
-      await fetchAllData(); // Refetch
+      await fetchAllData();
     } catch (e: any) {
       toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddCommentToChapter:", e);
@@ -299,7 +298,6 @@ export function ThesisDashboardSection() {
 
   const isLoadingAnyData = isLoadingChapters || isLoadingObjectives || isLoadingTasks || isLoadingBrainDumps || isLoadingPomodoros;
 
-  // KPIs Calculation
   const objectivesCompletedCount = dailyObjectives.filter(obj => obj.completed).length;
   const objectivesTotalCount = dailyObjectives.length;
   const objectivesCompletionPercentage = objectivesTotalCount > 0 ? Math.round((objectivesCompletedCount / objectivesTotalCount) * 100) : 0;
@@ -330,7 +328,7 @@ export function ThesisDashboardSection() {
   }
   
   return (
-    <div className="p-4 md:p-6 space-y-6"> {/* Removed h-full and overflow-y-auto here */}
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h1>
         <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter}>
@@ -365,43 +363,44 @@ export function ThesisDashboardSection() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Chapters Section */}
-            <Card className="lg:col-span-2 xl:col-span-3"> {/* Full width on large, span 3 on xl */}
-              <CardHeader>
-                <CardTitle>Progression des Chapitres</CardTitle>
-                <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingChapters ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                ) : chapters.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
-                ) : (
-                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2"> {/* Internal scroll for chapters list if too long */}
-                    {chapters.map((chapter) => (
-                      <ChapterProgressCard
-                        key={chapter.id}
-                        chapter={chapter}
-                        onEdit={openModalForEditChapter}
-                        onDelete={handleDeleteChapter}
-                        onAddComment={handleAddCommentToChapter}
-                        isLoadingCardActions={isLoadingCardActions}
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter>
-                  <Button asChild variant="outline" size="sm">
-                      <Link href="/add-chapter"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan Détaillé</Link>
-                  </Button>
-              </CardFooter>
-            </Card>
+            <div className="lg:col-span-2 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Progression des Chapitres</CardTitle>
+                  <CardDescription>Vue d'ensemble de l'avancement de votre thèse.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingChapters ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                  ) : chapters.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
+                  ) : (
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                      {chapters.map((chapter) => (
+                        <ChapterProgressCard
+                          key={chapter.id}
+                          chapter={chapter}
+                          onEdit={openModalForEditChapter}
+                          onDelete={handleDeleteChapter}
+                          onAddComment={handleAddCommentToChapter}
+                          isLoadingCardActions={isLoadingCardActions}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter>
+                    <Button asChild variant="outline" size="sm">
+                        <Link href="/add-chapter"><ListChecks className="mr-2 h-4 w-4" /> Gérer le Plan Détaillé</Link>
+                    </Button>
+                </CardFooter>
+              </Card>
+            </div>
 
             {/* KPIs Column */}
-            <div className="space-y-6 md:col-span-2 xl:col-span-1"> {/* Full width on md, 1 col on xl */}
-              {/* Daily Objectives Summary */}
+            <div className="lg:col-span-1 space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center"><TargetIcon className="mr-2 h-5 w-5 text-green-600" />Objectifs du Jour</CardTitle>
@@ -448,7 +447,6 @@ export function ThesisDashboardSection() {
                 </CardFooter>
               </Card>
 
-              {/* Tasks Summary */}
               <Card>
                 <CardHeader>
                   <CardTitle>Résumé des Tâches</CardTitle>
@@ -485,7 +483,6 @@ export function ThesisDashboardSection() {
                 </CardFooter>
               </Card>
 
-              {/* Recent Brain Dumps */}
               <Card>
                 <CardHeader>
                   <CardTitle>Vide-Cerveau</CardTitle>
@@ -501,7 +498,7 @@ export function ThesisDashboardSection() {
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
                   ) : (
                     <ul className="space-y-2 text-sm">
-                      {recentBrainDumps.slice(0,3).map(dump => ( // Show max 3 for summary
+                      {recentBrainDumps.slice(0,3).map(dump => ( 
                         <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
                           {dump.text} <Badge variant={dump.status === 'captured' ? 'default' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
                         </li>
@@ -516,7 +513,6 @@ export function ThesisDashboardSection() {
                 </CardFooter>
               </Card>
 
-              {/* Recent Pomodoro Sessions */}
               <Card>
                 <CardHeader>
                   <CardTitle>Sessions Pomodoro</CardTitle>
@@ -532,7 +528,7 @@ export function ThesisDashboardSection() {
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
                   ) : (
                     <ul className="space-y-2 text-sm">
-                      {recentPomodoros.slice(0,3).map(pomo => ( // Show max 3 for summary
+                      {recentPomodoros.slice(0,3).map(pomo => ( 
                          <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
                           <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
                           {pomo.notes && <p className="text-xs text-muted-foreground truncate">Notes: {pomo.notes}</p>}
@@ -604,3 +600,4 @@ export function ThesisDashboardSection() {
   );
 }
 
+    
