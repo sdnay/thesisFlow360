@@ -1,28 +1,27 @@
 
-
 export type TaskType = "urgent" | "important" | "reading" | "chatgpt" | "secondary";
 
 export interface Task {
-  id: string; 
+  id: string;
   text: string;
   completed: boolean;
   type: TaskType;
-  created_at: string; 
+  created_at: string;
 }
 
 export interface Chapter {
-  id: string; 
+  id: string;
   name: string;
-  progress: number; 
-  status: string; 
-  supervisor_comments: string[]; 
+  progress: number;
+  status: string;
+  supervisor_comments: string[];
   created_at?: string;
 }
 
 export interface PomodoroSession {
-  id: string; 
-  start_time: string; 
-  duration: number; 
+  id: string;
+  start_time: string;
+  duration: number;
   notes?: string;
   created_at?: string;
 }
@@ -30,37 +29,39 @@ export interface PomodoroSession {
 export type BrainDumpEntryStatus = "captured" | "task" | "idea" | "discarded";
 
 export interface BrainDumpEntry {
-  id: string; 
+  id: string;
   text: string;
-  created_at: string; 
-  status: BrainDumpEntryStatus; 
+  created_at: string;
+  status: BrainDumpEntryStatus;
 }
 
 export type SourceType = "pdf" | "website" | "interview" | "field_notes" | "other";
 
 export interface Source {
-  id: string; 
+  id: string;
   title: string;
-  type: SourceType; 
+  type: SourceType;
   source_link_or_path?: string;
   notes?: string;
-  created_at: string; 
+  created_at: string;
 }
 
 export interface PromptLogEntry {
-  id: string; 
+  id: string;
   original_prompt: string;
   refined_prompt?: string;
   reasoning?: string;
-  timestamp: string; 
-  tags?: string[]; 
+  timestamp: string;
+  tags?: string[];
 }
 
 export interface DailyObjective {
-  id: string; 
+  id: string;
   text: string;
   completed: boolean;
-  created_at?: string;
+  objective_date: string; // Format YYYY-MM-DD, NOT NULL
+  created_at: string; // NOT NULL
+  completed_at?: string | null; // TIMESTAMPTZ, can be null
 }
 
 
@@ -107,8 +108,8 @@ export type Database = {
       };
       daily_objectives: {
         Row: DailyObjective;
-        Insert: Omit<DailyObjective, 'id' | 'created_at'> & { created_at?: string };
-        Update: Partial<Omit<DailyObjective, 'id' | 'created_at'>>;
+        Insert: Omit<DailyObjective, 'id' | 'created_at'> & { created_at?: string, objective_date?: string, completed_at?: string | null };
+        Update: Partial<Omit<DailyObjective, 'id' | 'created_at'>> & { objective_date?: string, completed_at?: string | null };
       };
     };
     Views: {
@@ -118,9 +119,9 @@ export type Database = {
       [_ in never]: never
     };
     Enums: {
-      brain_dump_status: BrainDumpEntryStatus; // Assurez-vous que cet enum existe dans Supabase ou adaptez
-      source_type_enum: SourceType; // Assurez-vous que cet enum existe dans Supabase ou adaptez
-      task_type_enum: TaskType; // Assurez-vous que cet enum existe dans Supabase ou adaptez
+      brain_dump_status: BrainDumpEntryStatus;
+      source_type_enum: SourceType;
+      task_type_enum: TaskType;
     };
     CompositeTypes: {
       [_ in never]: never
