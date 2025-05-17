@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
 import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, CheckIcon } from 'lucide-react';
-import { ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react'; // Renamed for clarity
+import { ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -199,10 +199,10 @@ export function AiTaskManagerPage() {
       }
       setTasks(data || []);
     } catch (e: any) {
-      console.error("Erreur lors de la récupération des tâches:", e);
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la récupération des tâches: ${errorMessage}`);
       toast({ title: "Erreur", description: `Impossible de charger les tâches: ${errorMessage}`, variant: "destructive" });
+      console.error("Erreur lors de la récupération des tâches:", e);
     } finally {
       setIsFetchingTasks(false);
     }
@@ -212,7 +212,7 @@ export function AiTaskManagerPage() {
     fetchTasks();
     const channel = supabase
       .channel('db-tasks-page-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => { // Explicitly ignore payload if not used
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => {
           fetchTasks();
       })
       .subscribe();
@@ -236,8 +236,7 @@ export function AiTaskManagerPage() {
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
 
-      // Delete all existing tasks.
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Dummy UUID
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
       if (deleteError) {
         throw deleteError;
       }
@@ -264,10 +263,10 @@ export function AiTaskManagerPage() {
       setInstructions('');
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
     } catch (e: any) {
-      console.error("Erreur IA:", e);
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la modification avec l'IA: ${errorMessage}`);
       toast({ title: "Erreur IA", description: errorMessage, variant: "destructive" });
+      console.error("Erreur IA:", e);
     } finally {
       setIsAiLoading(false);
     }
@@ -287,6 +286,7 @@ export function AiTaskManagerPage() {
           .update({ text: manualTaskText, type: manualTaskType })
           .eq('id', editingTask.id);
         if (updateError) {
+            toast({ title: "Erreur", description: `Impossible de mettre à jour la tâche: ${updateError.message}`, variant: "destructive" });
             throw updateError;
         }
         setEditingTask(null);
@@ -299,6 +299,7 @@ export function AiTaskManagerPage() {
         };
         const { error: insertError } = await supabase.from('tasks').insert(newTaskPayload);
         if (insertError) {
+            toast({ title: "Erreur", description: `Impossible d'ajouter la tâche: ${insertError.message}`, variant: "destructive" });
             throw insertError;
         }
         toast({ title: "Tâche ajoutée", description: `"${manualTaskText}" a été ajoutée.` });
@@ -307,9 +308,14 @@ export function AiTaskManagerPage() {
       setManualTaskType('secondary');
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
-      console.error("Erreur ajout/modif manuelle:", errorMessage, e);
       setError(`Échec de l'enregistrement: ${errorMessage}`);
-      toast({ title: "Erreur", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
+      // Toast est déjà géré dans les blocs if/else pour les erreurs Supabase spécifiques.
+      // Un toast générique ici pourrait être redondant si une erreur Supabase s'est produite.
+      // S'il s'agit d'une autre erreur, un toast ici serait utile.
+      if (!(e && (e as any).message && ((e as any).message.includes("update") || (e as any).message.includes("insert")))) {
+         toast({ title: "Erreur", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
+      }
+      console.error("Erreur ajout/modif manuelle:", errorMessage, e);
     } finally {
       setIsManualTaskLoading(false);
     }
@@ -328,9 +334,9 @@ export function AiTaskManagerPage() {
       }
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
-       console.error("Erreur toggle tâche:", errorMessage, e);
        setError(`Échec du changement de statut: ${errorMessage}`);
        toast({ title: "Erreur", description: `Impossible de changer le statut: ${errorMessage}`, variant: "destructive" });
+       console.error("Erreur toggle tâche:", errorMessage, e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -353,9 +359,9 @@ export function AiTaskManagerPage() {
       toast({ title: "Tâche supprimée" });
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
-      console.error("Erreur suppression tâche:", errorMessage, e);
       setError(`Échec de la suppression: ${errorMessage}`);
       toast({ title: "Erreur", description: `Impossible de supprimer la tâche: ${errorMessage}`, variant: "destructive" });
+      console.error("Erreur suppression tâche:", errorMessage, e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -374,9 +380,9 @@ export function AiTaskManagerPage() {
       }
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
-       console.error("Erreur type tâche:", errorMessage, e);
        setError(`Échec du changement de type: ${errorMessage}`);
        toast({ title: "Erreur", description: `Impossible de changer le type: ${errorMessage}`, variant: "destructive" });
+       console.error("Erreur type tâche:", errorMessage, e);
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -510,3 +516,4 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
+    
