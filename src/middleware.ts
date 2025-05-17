@@ -88,19 +88,20 @@ export async function middleware(request: NextRequest) {
       console.log("Middleware: Utilisateur authentifié redirigé de /auth/login vers /");
       return NextResponse.redirect(new URL('/', request.url));
     }
+    
+    // Si la page est /auth/login et qu'il n'y a pas de session, on laisse passer.
+    if (pathname === '/auth/login' && !session) {
+      console.log("Middleware: Autorisation de passage vers /auth/login pour utilisateur non authentifié.");
+    }
 
-    // Si aucune redirection, retourner la réponse (potentiellement modifiée par les gestionnaires de cookies)
     return response;
 
   } catch (e: any) {
     console.error('Middleware Error: Une erreur inattendue est survenue lors de l\'opération Supabase ou de la gestion de session.', e.message, e.stack);
     
-    // Si une erreur survient et que l'utilisateur essaie d'accéder à la page de connexion,
-    // laisser passer la requête pour éviter des boucles de redirection ou de cacher des erreurs de la page elle-même.
     if (request.nextUrl.pathname === '/auth/login') {
       console.warn("Middleware: Passage autorisé vers /auth/login malgré une erreur interne du middleware.");
       // Retourner une nouvelle réponse `NextResponse.next()` pour s'assurer qu'elle n'est pas "corrompue"
-      // par un état précédent si les gestionnaires de cookies n'ont pas pu s'exécuter correctement.
       return NextResponse.next({
         request: {
           headers: request.headers,
@@ -108,7 +109,6 @@ export async function middleware(request: NextRequest) {
       });
     }
 
-    // Pour les autres pages, une erreur dans le middleware est critique.
     return new NextResponse(
         'Une erreur interne est survenue dans le middleware. Veuillez réessayer plus tard.',
         { status: 500 }
@@ -118,17 +118,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Correspond à tous les chemins de requête sauf ceux qui commencent par :
-     * - api (chemins API)
-     * - _next/static (fichiers statiques)
-     * - _next/image (optimisation d'images)
-     * - favicon.ico (fichier favicon)
-     * - /sounds/ (pour éviter que le middleware ne bloque les fichiers audio)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|sounds/).*)',
-    // Spécifiquement les pages de l'application principale et les pages d'authentification
-    '/app/:path*',
-    '/auth/:path*',
+    '/', // Pour gérer la redirection de la page d'accueil si l'utilisateur est connecté ou non
+    '/app/:path*', // Protéger toutes les routes sous /app
+    '/auth/login', // Gérer spécifiquement la page de connexion
+    // Ajoutez ici d'autres routes d'authentification si nécessaire (ex: '/auth/signup')
   ],
 };
