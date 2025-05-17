@@ -17,28 +17,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signInWithPassword, session, isLoading: isAuthLoading } = useAuth();
+  const { signInWithPassword, session, isLoading: isAuthContextLoading, initialAuthCheckCompleted } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Si l'authentification n'est PAS en cours de chargement ET qu'une session existe,
-    // rediriger l'utilisateur.
-    if (!isAuthLoading && session) {
+    // Rediriger si l'utilisateur est déjà connecté ET que la vérification initiale de la session est terminée
+    if (initialAuthCheckCompleted && session) {
       const redirectTo = searchParams.get('redirectTo') || '/';
-      console.log(`[LoginPage] Session active détectée (isAuthLoading: ${isAuthLoading}). Redirection vers: ${redirectTo}`);
+      console.log(`[LoginPage] Session active et vérification initiale terminée. Redirection vers: ${redirectTo}`);
       router.replace(redirectTo);
     }
-  }, [session, isAuthLoading, router, searchParams]);
+  }, [session, initialAuthCheckCompleted, router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     console.log(`[LoginPage] Tentative de connexion avec l'email: ${email}`);
 
-    // Directement utiliser les credentials. L'objet credential n'est pas nécessaire ici.
-    const { error, session: newSession } = await signInWithPassword({ email, password });
+    const { error } = await signInWithPassword({ email, password });
 
     if (error) {
       console.error("[LoginPage] Erreur de connexion Supabase:", error);
@@ -47,96 +45,86 @@ export default function LoginPage() {
         description: error.message || "Une erreur est survenue. Veuillez réessayer.",
         variant: "destructive",
       });
-    } else if (newSession) {
-      console.log("[LoginPage] Connexion réussie, nouvelle session:", newSession);
-      toast({
-        title: "Connexion réussie",
-        description: "Vous allez être redirigé.",
-      });
-      // La redirection est maintenant principalement gérée par onAuthStateChange dans AuthContext
-      // et par le useEffect de cette page.
     } else {
-      console.error("[LoginPage] Problème inattendu: pas de session ni d'erreur après la tentative de connexion.");
+      // La redirection est maintenant gérée par le listener onAuthStateChange dans AuthContext
+      // et par le useEffect de cette page si la session devient active.
+      console.log("[LoginPage] Appel à signInWithPassword terminé. La redirection sera gérée par AuthContext ou useEffect.");
       toast({
-        title: "Erreur inattendue",
-        description: "Un problème est survenu lors de la connexion. Veuillez réessayer.",
-        variant: "destructive",
+        title: "Connexion en cours...",
+        description: "Vous allez être redirigé.",
       });
     }
     setIsSubmitting(false);
   };
 
-  // Afficher le loader uniquement si l'état d'authentification est en cours de vérification.
-  // Si !isAuthLoading && session, le useEffect ci-dessus devrait s'occuper de la redirection.
-  if (isAuthLoading) {
+  // Si AuthContext est encore en train de vérifier la session initiale
+  if (isAuthContextLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Chargement...</p>
+        <p className="mt-4 text-muted-foreground">Chargement de la session...</p>
       </div>
     );
   }
 
-  // Si !isAuthLoading ET !session, afficher le formulaire.
-  // Si !isAuthLoading ET session, le useEffect devrait avoir redirigé.
-  // Si l'utilisateur voit toujours cette page avec une session, c'est qu'il y a un délai de redirection.
-  // Mais on ne veut pas afficher le loader de *cette page* indéfiniment dans ce cas.
-  if (!session) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
-        <Card className="w-full max-w-md shadow-xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight">Connexion à ThesisFlow360</CardTitle>
-            <CardDescription>Accédez à votre espace de travail.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Adresse e-mail</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nom@exemple.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                  autoComplete="email"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="********"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={isSubmitting}
-                  autoComplete="current-password"
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting || isAuthLoading}>
-                {isSubmitting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <LogIn className="mr-2 h-4 w-4" />
-                )}
-                {isSubmitting ? 'Connexion en cours...' : 'Se Connecter'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-  // Si on arrive ici, c'est que !isAuthLoading && session, et la redirection du useEffect est en cours.
-  // On peut retourner un loader simple en attendant que la redirection se fasse.
-  return (
-     <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/40">
+  // Si la vérification initiale est terminée et qu'il y a une session,
+  // le useEffect ci-dessus devrait rediriger. On affiche un loader pendant la redirection.
+  if (initialAuthCheckCompleted && session) {
+     return (
+       <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-4 text-muted-foreground">Redirection en cours...</p>
       </div>
+    );
+  }
+
+  // Sinon (vérification terminée, pas de session), afficher le formulaire
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold tracking-tight">Connexion à ThesisFlow360</CardTitle>
+          <CardDescription>Accédez à votre espace de travail.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">Adresse e-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="nom@exemple.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isSubmitting}
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isSubmitting}
+                autoComplete="current-password"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogIn className="mr-2 h-4 w-4" />
+              )}
+              {isSubmitting ? 'Connexion en cours...' : 'Se Connecter'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

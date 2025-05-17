@@ -12,37 +12,39 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, initialAuthCheckCompleted } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // console.log(`[DashboardLayout] isLoading: ${isLoading}, session: ${session ? 'Présente' : 'Absente'}`);
-    if (!isLoading && !session) {
-      // console.log("[DashboardLayout] Pas de session et chargement terminé. Redirection vers /login.");
+    console.log(`[DashboardLayout] isLoading: ${isLoading}, initialAuthCheckCompleted: ${initialAuthCheckCompleted}, session: ${session ? 'Présente' : 'Absente'}`);
+    // Rediriger seulement si la vérification initiale de l'authentification est terminée et qu'il n'y a pas de session
+    if (initialAuthCheckCompleted && !session) {
+      console.log("[DashboardLayout] Pas de session et vérification initiale terminée. Redirection vers /login.");
       router.replace('/login'); // Redirige si pas de session et que le chargement est terminé
     }
-  }, [isLoading, session, router]);
+  }, [initialAuthCheckCompleted, session, router, isLoading]); // Ajout de isLoading pour ré-évaluer si cet état change
 
+  // Afficher un loader tant que la vérification initiale de l'authentification n'est pas terminée
   if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-3 text-lg text-muted-foreground">Chargement de la session...</p>
+        <p className="ml-3 text-lg text-muted-foreground">Vérification de la session...</p>
       </div>
     );
   }
 
+  // Si la vérification est terminée mais qu'il n'y a toujours pas de session,
+  // le useEffect ci-dessus devrait avoir redirigé. On peut afficher un loader en attendant.
   if (!session) {
-    // Affiche un état de chargement ou rien en attendant la redirection gérée par le useEffect.
-    // Cela évite un flash de contenu non protégé si le middleware n'a pas encore agi (moins probable avec le matcher actuel).
     return (
        <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-3 text-lg text-muted-foreground">Vérification de l'authentification...</p>
+        <p className="ml-3 text-lg text-muted-foreground">Redirection vers la connexion...</p>
       </div>
     );
   }
 
-  // Si l'utilisateur est connecté (session existe), afficher le layout de l'application
+  // Si l'utilisateur est connecté (session existe et vérification initiale terminée), afficher le layout de l'application
   return <AppLayout>{children}</AppLayout>;
 }
