@@ -147,7 +147,7 @@ export function ThesisDashboardSection() {
         pomodorosRes,
       ] = await Promise.all([
         supabase.from('chapters').select('*').order('name'),
-        supabase.from('daily_objectives').select('*').order('created_at'),
+        supabase.from('daily_objectives').select('*').order('text'), // Correction ici
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
         supabase.from('brain_dump_entries').select('*').order('created_at', { ascending: false }).limit(5),
         supabase.from('pomodoro_sessions').select('*').order('start_time', { ascending: false }).limit(5),
@@ -329,7 +329,7 @@ export function ThesisDashboardSection() {
   }
   
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6"> {/* Ajout de h-full overflow-y-auto ici */}
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Aperçu Général du Projet de Thèse</h1>
         <Button onClick={openModalForNewChapter} disabled={isLoadingAnyData || isSavingChapter}>
@@ -365,7 +365,7 @@ export function ThesisDashboardSection() {
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chapters Section - Prend plus de place */}
+            {/* Chapters Section */}
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
@@ -378,7 +378,7 @@ export function ThesisDashboardSection() {
                   ) : chapters.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">Aucun chapitre défini. <Link href="/add-chapter" className="text-primary hover:underline">Gérez votre plan de thèse ici.</Link></p>
                   ) : (
-                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2"> {/* Scroll interne pour les chapitres si la liste est longue */}
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                       {chapters.map((chapter) => (
                         <ChapterProgressCard
                           key={chapter.id}
@@ -400,7 +400,7 @@ export function ThesisDashboardSection() {
               </Card>
             </div>
 
-            {/* KPIs Column - Prend le reste de l'espace */}
+            {/* KPIs Column */}
             <div className="lg:col-span-1 space-y-6">
               <Card>
                 <CardHeader>
@@ -416,7 +416,7 @@ export function ThesisDashboardSection() {
                   ) : dailyObjectives.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucun objectif défini pour aujourd'hui.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm max-h-48 overflow-y-auto"> {/* Scroll interne pour les objectifs */}
+                    <ul className="space-y-2 text-sm max-h-48 overflow-y-auto">
                       {dailyObjectives.map(obj => (
                         <li key={obj.id} className="flex items-center gap-2 p-2 border rounded-md hover:bg-muted/30">
                           <Checkbox
@@ -463,7 +463,7 @@ export function ThesisDashboardSection() {
                     <div className="space-y-2 text-sm">
                       <p>En attente : <span className="font-semibold text-orange-600">{tasksPending.length}</span></p>
                       {tasksPending.length > 0 && (
-                        <div className="pl-4 text-xs space-y-0.5 max-h-32 overflow-y-auto"> {/* Scroll interne pour les types de tâches */}
+                        <div className="pl-4 text-xs space-y-0.5 max-h-32 overflow-y-auto">
                           {Object.entries(taskTypeLabels).map(([type, label]) => {
                               const count = tasksPendingByType[type as TaskType] || 0;
                               if (count > 0) {
@@ -499,7 +499,7 @@ export function ThesisDashboardSection() {
                   ) : recentBrainDumps.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune note récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm  max-h-40 overflow-y-auto"> {/* Scroll interne pour les notes */}
+                    <ul className="space-y-2 text-sm  max-h-40 overflow-y-auto">
                       {recentBrainDumps.slice(0,3).map(dump => ( 
                         <li key={dump.id} className="truncate p-2 border rounded-md bg-muted/30">
                           {dump.text} <Badge variant={dump.status === 'captured' ? 'destructive' : 'secondary'} className="ml-1 text-xs">{dump.status}</Badge>
@@ -529,7 +529,7 @@ export function ThesisDashboardSection() {
                   ) : recentPomodoros.length === 0 ? (
                     <p className="text-muted-foreground text-center text-sm py-2">Aucune session récente.</p>
                   ) : (
-                    <ul className="space-y-2 text-sm max-h-40 overflow-y-auto"> {/* Scroll interne pour les pomodoros */}
+                    <ul className="space-y-2 text-sm max-h-40 overflow-y-auto">
                       {recentPomodoros.slice(0,3).map(pomo => ( 
                          <li key={pomo.id} className="p-2 border rounded-md bg-muted/30">
                           <p>{pomo.duration} min - {format(new Date(pomo.start_time), "d MMM, HH:mm", { locale: fr })}</p>
@@ -601,3 +601,5 @@ export function ThesisDashboardSection() {
     </div>
   );
 }
+
+    
