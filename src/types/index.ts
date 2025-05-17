@@ -1,4 +1,5 @@
 
+
 export type TaskType = "urgent" | "important" | "reading" | "chatgpt" | "secondary";
 
 export interface Task {
@@ -15,7 +16,7 @@ export interface Chapter {
   progress: number; 
   status: string; 
   supervisor_comments: string[]; 
-  created_at?: string; // Rendu optionnel car pas toujours présent à l'insertion manuelle
+  created_at?: string;
 }
 
 export interface PomodoroSession {
@@ -26,17 +27,21 @@ export interface PomodoroSession {
   created_at?: string;
 }
 
+export type BrainDumpEntryStatus = "captured" | "task" | "idea" | "discarded";
+
 export interface BrainDumpEntry {
   id: string; 
   text: string;
   created_at: string; 
-  status: "captured" | "task" | "idea" | "discarded"; 
+  status: BrainDumpEntryStatus; 
 }
+
+export type SourceType = "pdf" | "website" | "interview" | "field_notes" | "other";
 
 export interface Source {
   id: string; 
   title: string;
-  type: "pdf" | "website" | "interview" | "field_notes" | "other"; 
+  type: SourceType; 
   source_link_or_path?: string;
   notes?: string;
   created_at: string; 
@@ -113,7 +118,9 @@ export type Database = {
       [_ in never]: never
     };
     Enums: {
-      [_ in never]: never
+      brain_dump_status: BrainDumpEntryStatus; // Assurez-vous que cet enum existe dans Supabase ou adaptez
+      source_type_enum: SourceType; // Assurez-vous que cet enum existe dans Supabase ou adaptez
+      task_type_enum: TaskType; // Assurez-vous que cet enum existe dans Supabase ou adaptez
     };
     CompositeTypes: {
       [_ in never]: never
