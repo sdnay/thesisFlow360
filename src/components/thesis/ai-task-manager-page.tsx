@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
 import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks } from 'lucide-react';
-import { ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react'; 
+import { ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -51,14 +51,14 @@ const TaskTypeSelector: FC<{
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-[150px] justify-between text-sm font-normal", buttonClassName)}
+          className={cn("w-[160px] justify-between text-sm font-normal", buttonClassName)}
           disabled={disabled}
         >
           {taskTypeLabels[selectedType]}
           <ChevronUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[150px] p-0">
+      <PopoverContent className="w-[160px] p-0">
         <Command>
           <CommandInput placeholder="Rechercher type..." className="h-9 text-sm" />
           <CommandList>
@@ -105,9 +105,9 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
     <Card className={cn(
       "relative overflow-hidden border-l-4 shadow-sm transition-all duration-150 hover:shadow-md",
       taskTypeBorderColors[task.type],
-      task.completed && "opacity-70 bg-muted/30"
+      task.completed && "opacity-60 bg-muted/20"
     )}>
-      <CardContent className="p-4 flex items-start gap-4">
+      <CardContent className="p-3 md:p-4 flex items-start gap-3">
         <Checkbox
           id={`task-${task.id}`}
           checked={task.completed}
@@ -121,10 +121,10 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
           disabled={isCurrentItemLoading}
           aria-label={task.completed ? "Marquer comme non terminée" : "Marquer comme terminée"}
         />
-        <div className="flex-grow space-y-1.5 min-w-0">
+        <div className="flex-grow space-y-1 min-w-0">
           <p
             className={cn(
-              "text-base font-medium leading-snug break-words",
+              "text-sm sm:text-base font-medium leading-relaxed break-words",
               task.completed && "line-through text-muted-foreground"
             )}
           >
@@ -139,24 +139,24 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
             selectedType={task.type}
             onSelectType={(type) => onSetType(task.id, type)}
             disabled={isCurrentItemLoading}
-            buttonClassName="h-8"
+            buttonClassName="h-9" // Agrandissement du bouton
           />
           <div className="flex gap-1.5">
             <Button
               variant="outline"
-              size="icon"
+              size="icon" // Utilise la taille par défaut pour les boutons d'icône (h-10 w-10)
               onClick={() => onEdit(task)}
-              className="h-8 w-8 hover:bg-accent/50 disabled:opacity-50"
+              className="hover:bg-accent/50 disabled:opacity-50"
               disabled={isCurrentItemLoading}
               title="Modifier la tâche"
             >
-              <Edit2 className="h-4 w-4" />
+              <Edit2 className="h-4 w-4" /> {/* L'icône reste petite, le bouton est plus grand */}
             </Button>
             <Button
               variant="outline"
-              size="icon"
+              size="icon" // Utilise la taille par défaut
               onClick={() => onDelete(task.id)}
-              className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
               disabled={isCurrentItemLoading}
               title="Supprimer la tâche"
             >
@@ -208,7 +208,7 @@ export function AiTaskManagerPage() {
   }, [toast]);
 
   useEffect(() => {
-    fetchTasks(); 
+    fetchTasks();
     const channel = supabase
       .channel('db-tasks-page-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (_payload) => {
@@ -235,7 +235,7 @@ export function AiTaskManagerPage() {
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
 
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); 
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Placeholder ID
       if (deleteError) {
         throw deleteError;
       }
@@ -262,7 +262,6 @@ export function AiTaskManagerPage() {
       setAiReasoning(result.reasoning);
       setInstructions('');
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
-       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la modification avec l'IA: ${errorMessage}`);
@@ -275,6 +274,7 @@ export function AiTaskManagerPage() {
 
   const handleAddOrUpdateManualTask = async () => {
     if (manualTaskText.trim() === '') {
+        toast({ title: "Validation", description: "La description de la tâche ne peut pas être vide.", variant: "default" });
         return;
     }
     setIsManualTaskLoading(true);
@@ -287,7 +287,6 @@ export function AiTaskManagerPage() {
           .update({ text: manualTaskText, type: manualTaskType })
           .eq('id', editingTask.id);
         if (updateError) {
-            toast({ title: "Erreur", description: `Impossible de mettre à jour la tâche: ${updateError.message}`, variant: "destructive" });
             throw updateError;
         }
         setEditingTask(null);
@@ -300,14 +299,12 @@ export function AiTaskManagerPage() {
         };
         const { error: insertError } = await supabase.from('tasks').insert(newTaskPayload);
         if (insertError) {
-            toast({ title: "Erreur", description: `Impossible d'ajouter la tâche: ${insertError.message}`, variant: "destructive" });
             throw insertError;
         }
         toast({ title: "Tâche ajoutée", description: `"${manualTaskText}" a été ajoutée.` });
       }
       setManualTaskText('');
       setManualTaskType('secondary');
-       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de l'enregistrement: ${errorMessage}`);
@@ -329,7 +326,6 @@ export function AiTaskManagerPage() {
       if (updateError) {
         throw updateError;
       }
-       // Data will be refetched by Supabase listener
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        setError(`Échec du changement de statut: ${errorMessage}`);
@@ -355,7 +351,6 @@ export function AiTaskManagerPage() {
           setManualTaskType('secondary');
       }
       toast({ title: "Tâche supprimée" });
-       // Data will be refetched by Supabase listener
     } catch (e: any) {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       setError(`Échec de la suppression: ${errorMessage}`);
@@ -377,7 +372,6 @@ export function AiTaskManagerPage() {
       if (updateError) {
         throw updateError;
       }
-       // Data will be refetched by Supabase listener
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        setError(`Échec du changement de type: ${errorMessage}`);
@@ -457,14 +451,14 @@ export function AiTaskManagerPage() {
             aria-label="Description de la tâche"
           />
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} disabled={isManualTaskLoading} />
+            <TaskTypeSelector selectedType={manualTaskType} onSelectType={setManualTaskType} disabled={isManualTaskLoading} buttonClassName="h-10"/>
             <div className="flex-grow flex gap-2">
-              <Button onClick={handleAddOrUpdateManualTask} className="flex-1" disabled={isManualTaskLoading || !manualTaskText.trim()}>
+              <Button onClick={handleAddOrUpdateManualTask} className="flex-1 h-10" disabled={isManualTaskLoading || !manualTaskText.trim()}>
                 {isManualTaskLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingTask ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)}
                 {isManualTaskLoading ? (editingTask ? 'Mise à jour...' : 'Ajout...') : (editingTask ? 'Enregistrer Modifs' : 'Ajouter la Tâche')}
               </Button>
               {editingTask && (
-                  <Button variant="outline" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');}} disabled={isManualTaskLoading}>
+                  <Button variant="outline" className="h-10" onClick={() => { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary');}} disabled={isManualTaskLoading}>
                       Annuler
                   </Button>
               )}
@@ -485,7 +479,7 @@ export function AiTaskManagerPage() {
       <Card className="flex-grow flex flex-col shadow-md overflow-hidden">
         <CardHeader>
           <CardTitle className="text-lg md:text-xl">Vos Tâches</CardTitle>
-          <CardDescription className="text-sm">{isFetchingTasks ? "Chargement..." : `${tasks.length} tâche(s) au total.`}</CardDescription>
+          <CardDescription className="text-sm">{isFetchingTasks ? "Chargement..." : `${tasks.length} tâche(s) au total. ${tasks.filter(t => !t.completed).length} en attente.`}</CardDescription>
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto space-y-3 p-4 custom-scrollbar">
           {isFetchingTasks ? (
@@ -497,8 +491,13 @@ export function AiTaskManagerPage() {
             <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md">
                 <ListChecks className="mx-auto h-16 w-16 opacity-50 mb-4"/>
                 <p className="font-medium text-lg mb-1">Aucune tâche pour le moment.</p>
-                <p className="text-sm mb-4">Utilisez les formulaires ci-dessus pour ajouter des tâches manuellement ou demandez à l'IA de vous aider !</p>
-                <Button onClick={() => document.getElementById('manual-task-card')?.scrollIntoView({behavior: 'smooth'})}>
+                <p className="text-sm mb-4">Utilisez les formulaires ci-dessus pour ajouter des tâches ou demandez à l'IA de vous aider !</p>
+                <Button onClick={() => {
+                    const inputElement = document.querySelector('#manual-task-card input[type="text"]') as HTMLInputElement | null;
+                    inputElement?.focus();
+                    document.getElementById('manual-task-card')?.scrollIntoView({behavior: 'smooth'});
+                    }}
+                >
                     <PlusCircle className="mr-2 h-4 w-4"/> Ajouter une tâche
                 </Button>
             </div>
@@ -520,3 +519,5 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
+
+    
