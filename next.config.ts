@@ -21,16 +21,14 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     allowedDevOrigins: [
-        '*.cloudworkstations.dev',         // Joker pour tous les sous-domaines
-        'http://*.cloudworkstations.dev',  // Explicitement pour HTTP
-        'https://*.cloudworkstations.dev', // Explicitement pour HTTPS
-        // Ajoutez d'autres origines spécifiques si les logs en révèlent d'autres
-        // Par exemple, si vous voyez des erreurs spécifiques pour des ports :
-        // 'http://9000-*.cloudworkstations.dev',
-        // 'https://9000-*.cloudworkstations.dev',
-        // 'http://6000-*.cloudworkstations.dev',
-        // 'https://6000-*.cloudworkstations.dev',
-        // Pour l'instant, les jokers de sous-domaines devraient suffire.
+        '*.cloudworkstations.dev', // General wildcard
+        'http://*.cloudworkstations.dev',
+        'https://*.cloudworkstations.dev',
+        // Specific origins from logs, with both http and https
+        'https://9000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
+        'http://9000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
+        'https://6000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
+        'http://6000-firebase-studio-1747470456906.cluster-3gc7bglotjgwuxlqpiut7yyqt4.cloudworkstations.dev',
     ],
   },
 };
