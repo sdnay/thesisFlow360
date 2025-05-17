@@ -26,66 +26,53 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const getInitialSession = async () => {
-      setIsLoading(true);
-      console.log("[AuthContext] Récupération de la session initiale...");
-      const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+    setIsLoading(true);
+    console.log("[AuthContext] Récupération de la session initiale...");
+    supabase.auth.getSession().then(({ data: { session: initialSession }, error }) => {
       if (error) {
-        console.error("[AuthContext] Erreur getInitialSession:", error);
+        console.error("[AuthContext] Erreur getSession:", error);
       }
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
       setIsLoading(false);
-      console.log("[AuthContext] Session initiale:", initialSession ? 'Présente' : 'Absente');
-
-      // Initial check for redirection if on login page with session or protected page without session
-      if (!initialSession && pathname !== '/login' && !pathname.startsWith('/_next/') && pathname !== '/favicon.ico') {
-        const protectedRoutes = ['/', '/app', '/tasks', '/brain-dump', '/daily-plan', '/pomodoro', '/sources', '/add-chapter'];
-        if (protectedRoutes.some(route => pathname === route || (route.endsWith('/*') && pathname.startsWith(route.slice(0, -2))))) {
-            console.log(`[AuthContext] Initial load: Utilisateur non authentifié sur route protégée (${pathname}). Redirection vers /login.`);
-            router.push(`/login?redirectTo=${pathname}${searchParams.toString() ? '?' + searchParams.toString() : ''}`);
-        }
-      } else if (initialSession && pathname === '/login') {
-        const redirectTo = searchParams.get('redirectTo') || '/';
-        console.log(`[AuthContext] Initial load: Utilisateur authentifié sur /login. Redirection vers ${redirectTo}.`);
-        router.push(redirectTo);
-      }
-    };
-
-    getInitialSession();
+      console.log("[AuthContext] Session initiale terminée:", initialSession ? 'Présente' : 'Absente');
+      // La redirection initiale est gérée par le middleware et les layouts/pages spécifiques
+    });
 
     const { data: authListenerData } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, newSession: Session | null) => {
+      (event: AuthChangeEvent, newSession: Session | null) => {
         console.log(`[AuthContext] onAuthStateChange - Événement: ${event}, Nouvelle session:`, newSession ? 'Présente' : 'Absente');
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        setIsLoading(false);
+        setIsLoading(false); // Important de mettre à jour isLoading ici aussi
 
         if (event === 'SIGNED_OUT') {
-          console.log("[AuthContext] Utilisateur déconnecté, redirection vers /login");
+          console.log("[AuthContext] Utilisateur déconnecté, redirection vers /login depuis onAuthStateChange");
           router.push('/login');
         } else if (event === 'SIGNED_IN') {
-          if (pathname === '/login' || pathname === '/auth/login') { // Check both just in case
-            const redirectTo = searchParams.get('redirectTo') || '/';
-            console.log(`[AuthContext] Utilisateur connecté sur la page de login, redirection vers: ${redirectTo}`);
+          // Si l'utilisateur vient de se connecter, la page /login devrait gérer la redirection
+          // via son propre useEffect basé sur la présence de la session.
+          // Si l'utilisateur était sur /login lors de SIGNED_IN (par ex. via un autre onglet),
+          // la page /login elle-même redirigera.
+          const currentPath = pathname + searchParams.toString();
+          const redirectTo = searchParams.get('redirectTo');
+          if (pathname === '/login' && redirectTo) {
+            console.log(`[AuthContext] SIGNED_IN sur /login, redirection vers redirectTo: ${redirectTo}`);
             router.push(redirectTo);
-          } else {
-            // User signed in, but was not on the login page.
-            // Usually, no redirect is needed here unless it's the very first sign-in of a session.
-            // Or if they were on a public page and signed in via a modal.
-            // For now, we assume the middleware or page logic handles other cases.
+          } else if (pathname === '/login') {
+            console.log(`[AuthContext] SIGNED_IN sur /login, redirection vers /`);
+            router.push('/');
           }
         }
       }
     );
 
-    // Correctly access the subscription object for unsubscribe
     const subscription = authListenerData?.subscription;
 
     return () => {
       subscription?.unsubscribe();
     };
-  }, [router, pathname, searchParams]);
+  }, [router, pathname, searchParams]); // searchParams ajouté ici pour la logique SIGNED_IN
 
   const signOut = async () => {
     console.log("[AuthContext] Tentative de déconnexion...");
@@ -93,20 +80,22 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
     if (error) {
         console.error("[AuthContext] Erreur de déconnexion:", error);
     }
-    // onAuthStateChange gérera la mise à jour de l'état et la redirection
+    // onAuthStateChange gérera la mise à jour de l'état et la redirection vers /login
   };
 
   const signInWithPassword = useCallback(
     async (credentials: Pick<SignInWithPasswordCredentials, 'email' | 'password'>) => {
-      setIsLoading(true);
+      setIsLoading(true); // Peut être utile si la connexion prend du temps
       console.log("[AuthContext] Tentative de signInWithPassword...");
       const { data, error } = await supabase.auth.signInWithPassword(credentials);
       // onAuthStateChange devrait mettre à jour user et session.
-      setIsLoading(false);
+      // setIsLoading(false) sera géré par onAuthStateChange
       if (error) {
         console.error("[AuthContext] Erreur signInWithPassword:", error);
+        setIsLoading(false); // S'assurer de le remettre à false en cas d'erreur ici aussi
       } else {
         console.log("[AuthContext] signInWithPassword réussi, session:", data.session ? 'Présente' : 'Absente');
+        // isLoading sera mis à false par onAuthStateChange
       }
       return { error, session: data.session };
     },
