@@ -2,9 +2,9 @@
 "use client";
 
 import type { FC, PropsWithChildren } from 'react';
-import { createContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User, SignInWithPasswordCredentials } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
@@ -12,6 +12,7 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  signInWithPassword: (credentials: SignInWithPasswordCredentials) => Promise<{ error: Error | null; session: Session | null }>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
 
   useEffect(() => {
     const getInitialSession = async () => {
+      setIsLoading(true);
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
@@ -39,12 +41,10 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
         setIsLoading(false);
 
         if (event === 'SIGNED_OUT') {
-          router.push('/auth/login');
-        } else if (event === 'SIGNED_IN' && window.location.pathname === '/auth/login') {
-          // Rediriger après connexion si l'utilisateur est sur la page de login
-          // Vous pouvez stocker l'URL de redirection souhaitée avant d'aller à la page de login
-          // et la récupérer ici, ou simplement rediriger vers le tableau de bord.
-           router.push('/');
+          router.push('/login');
+        } else if (event === 'SIGNED_IN' && (window.location.pathname === '/login' || window.location.pathname === '/auth/login')) {
+          const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/';
+          router.push(redirectTo);
         }
       }
     );
@@ -56,15 +56,27 @@ export const AuthProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    // onAuthStateChange gérera la redirection
+    // onAuthStateChange gérera la redirection vers /login
   };
+
+  const signInWithPassword = useCallback(
+    async (credentials: SignInWithPasswordCredentials) => {
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword(credentials);
+      // onAuthStateChange mettra à jour user et session, et gérera la redirection
+      setIsLoading(false);
+      return { error, session: data.session };
+    },
+    []
+  );
 
   const value = useMemo(() => ({
     user,
     session,
     isLoading,
     signOut,
-  }), [user, session, isLoading]);
+    signInWithPassword,
+  }), [user, session, isLoading, signOut, signInWithPassword]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

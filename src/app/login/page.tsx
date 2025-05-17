@@ -12,29 +12,32 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, LogIn } from 'lucide-react';
 
 export default function LoginPage() {
-  console.log("[LoginPage] Component RENDERED"); // Log de débogage
+  console.log("[LoginPage] Component RENDERED");
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { signInWithPassword, session } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false); // Renommé pour clarté
+  const { signInWithPassword, session, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (session) {
+    if (!isAuthLoading && session) {
       const redirectTo = searchParams.get('redirectTo') || '/';
+      console.log(`[LoginPage] Session active détectée. Redirection vers: ${redirectTo}`);
       router.replace(redirectTo);
     }
-  }, [session, router, searchParams]);
+  }, [session, isAuthLoading, router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
     console.log(`[LoginPage] Tentative de connexion avec l'email: ${email}`);
 
-    const { error, session: newSession } = await signInWithPassword(email, password);
+    // Note: signInWithPassword dans AuthContext gère déjà la mise à jour de la session
+    // et onAuthStateChange dans AuthContext gère la redirection.
+    const { error, session: newSession } = await signInWithPassword({ email, password });
 
     if (error) {
       console.error("[LoginPage] Erreur de connexion Supabase:", error);
@@ -44,34 +47,33 @@ export default function LoginPage() {
         variant: "destructive",
       });
     } else if (newSession) {
-      console.log("[LoginPage] Connexion réussie, session:", newSession);
+      console.log("[LoginPage] Connexion réussie, session (depuis la réponse signIn):", newSession);
       toast({
         title: "Connexion réussie",
         description: "Vous allez être redirigé.",
       });
-      // La redirection est gérée par le useEffect ci-dessus
-      // ou par le middleware si la session est détectée.
-      // Forcer une redirection ici peut être redondant mais sûr :
-      const redirectTo = searchParams.get('redirectTo') || '/';
-      router.replace(redirectTo);
+      // La redirection principale est gérée par onAuthStateChange dans AuthContext,
+      // déclenchée par la mise à jour de la session par Supabase.
+      // On peut forcer ici si on veut, mais c'est souvent redondant.
+      // const redirectTo = searchParams.get('redirectTo') || '/';
+      // router.replace(redirectTo);
     } else {
-      // Cas improbable où il n'y a ni session ni erreur
       console.error("[LoginPage] Problème inattendu: pas de session ni d'erreur après la tentative de connexion.");
       toast({
         title: "Erreur inattendue",
-        description: "Un problème est survenu. Veuillez réessayer.",
+        description: "Un problème est survenu lors de la connexion. Veuillez réessayer.",
         variant: "destructive",
       });
     }
-    setIsLoading(false);
+    setIsSubmitting(false);
   };
 
-  if (session) {
-    // Affiche un état de chargement pendant la redirection si la session est déjà active
+  if (isAuthLoading || (!isAuthLoading && session)) {
+    // Affiche un état de chargement si AuthContext charge ou si la session est déjà active et qu'une redirection est en cours
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4">
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-muted/40">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Redirection en cours...</p>
+        <p className="mt-4 text-muted-foreground">Chargement...</p>
       </div>
     );
   }
@@ -94,7 +96,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
                 autoComplete="email"
               />
             </div>
@@ -107,17 +109,17 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isSubmitting}
                 autoComplete="current-password"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <LogIn className="mr-2 h-4 w-4" />
               )}
-              {isLoading ? 'Connexion en cours...' : 'Se Connecter'}
+              {isSubmitting ? 'Connexion en cours...' : 'Se Connecter'}
             </Button>
           </form>
         </CardContent>
