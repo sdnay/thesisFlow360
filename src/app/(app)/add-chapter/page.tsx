@@ -109,12 +109,21 @@ export default function ManageThesisPlanPage() {
   const fetchChapters = useCallback(async () => {
     setIsFetchingChapters(true);
     try {
-      const { data, error } = await supabase.from('chapters').select('*').order('created_at', { ascending: true }); // Or order by name
+      const { data, error } = await supabase.from('chapters').select('*').order('name', { ascending: true }); // Changed order to 'name'
       if (error) throw error;
       setChapters(data || []);
     } catch (e: any) {
-      toast({ title: "Erreur", description: "Impossible de charger les chapitres.", variant: "destructive" });
-      console.error("Erreur fetchChapters:", e);
+      let detailedMessage = "Une erreur inconnue est survenue lors du chargement des chapitres.";
+      if (e && typeof e === 'object') {
+        if ('message' in e && typeof e.message === 'string') detailedMessage = e.message;
+        
+        const supabaseErrorDetails = e.details ? `Détails: ${e.details}` : '';
+        const supabaseErrorCode = e.code ? `Code: ${e.code}` : '';
+        console.error(`Erreur fetchChapters: ${detailedMessage}`, supabaseErrorDetails, supabaseErrorCode, "Objet d'erreur complet:", e);
+      } else {
+        console.error("Erreur fetchChapters non-objet:", e);
+      }
+      toast({ title: "Erreur de chargement", description: "Impossible de charger la liste des chapitres. Vérifiez la console pour plus de détails.", variant: "destructive" });
     } finally {
       setIsFetchingChapters(false);
     }
@@ -160,9 +169,8 @@ export default function ManageThesisPlanPage() {
       setIsModalOpen(false);
       setCurrentChapter(null);
       await fetchChapters();
-    } catch (e: any)
-{
-      toast({ title: "Erreur d'enregistrement", description: e.message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Erreur d'enregistrement", description: (e as Error).message || "Impossible d'enregistrer le chapitre.", variant: "destructive" });
       console.error("Erreur handleSaveChapter:", e);
     } finally {
       setIsFormLoading(false);
@@ -177,7 +185,7 @@ export default function ManageThesisPlanPage() {
       toast({ title: "Chapitre supprimé" });
       await fetchChapters();
     } catch (e: any) {
-      toast({ title: "Erreur de suppression", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteChapter:", e);
     } finally {
       setIsLoadingChapterActions(false);
@@ -199,7 +207,7 @@ export default function ManageThesisPlanPage() {
       toast({ title: "Commentaire ajouté" });
       await fetchChapters(); 
     } catch (e: any) {
-      toast({ title: "Erreur d'ajout de commentaire", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur d'ajout de commentaire", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleAddCommentToChapter:", e);
     } finally {
       setIsLoadingChapterActions(false);
