@@ -17,7 +17,7 @@ import {
   Target,
   Timer,
   Library,
-  FolderPlus, // Ajout de l'icône
+  ListTree, // Nouvelle icône
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,7 +29,7 @@ const navItems = [
   { href: '/#daily-plan', label: 'Plan du Jour', icon: Target, tooltip: 'Objectifs Journaliers' },
   { href: '/#pomodoro', label: 'Pomodoro', icon: Timer, tooltip: 'Sessions de Travail Profond' },
   { href: '/#sources', label: 'Bibliothèque', icon: Library, tooltip: 'Gérer les Sources' },
-  { href: '/add-chapter', label: 'Ajouter Chapitre', icon: FolderPlus, tooltip: 'Ajouter un nouveau chapitre' }, // Nouvelle page
+  { href: '/add-chapter', label: 'Plan de Thèse', icon: ListTree, tooltip: 'Gérer la structure et les chapitres' }, // Libellé et icône mis à jour
 ];
 
 export function SidebarNav() {
@@ -49,7 +49,7 @@ export function SidebarNav() {
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
-  }, []); // Pas de dépendance à pathname pour éviter les re-render inutiles si seul le hash change
+  }, []); 
 
 
   return (
@@ -58,14 +58,11 @@ export function SidebarNav() {
         {navItems.map((item) => {
           let isActive = false;
           if (item.href.startsWith('/#')) {
-            // C'est un lien d'ancrage pour la page d'accueil
             isActive = pathname === '/' && item.href === currentHash;
-             // Gérer le cas où le hash est vide ou juste '#' et que l'item est dashboard
-            if (!currentHash || currentHash === '#') {
-              isActive = pathname === '/' && item.href === '/#dashboard';
+            if ((!currentHash || currentHash === '#') && item.href === '/#dashboard') {
+              isActive = pathname === '/'; // Activer Tableau de Bord si pas de hash ou juste # sur la page d'accueil
             }
           } else {
-            // C'est un lien vers une page distincte
             isActive = pathname === item.href;
           }
           
