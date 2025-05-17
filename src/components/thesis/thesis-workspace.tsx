@@ -26,12 +26,22 @@ export function ThesisWorkspace() {
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
-      if (hash && workspaceTabs.some(tab => tab.value === hash)) {
-        setActiveTab(hash);
-      } else if (!hash && workspaceTabs.some(tab => tab.value === "dashboard")) {
-        // Default to dashboard if no hash or invalid hash
+      const hashValue = window.location.hash.replace("#", "");
+      const targetTab = workspaceTabs.find(tab => tab.value === hashValue);
+
+      if (targetTab) {
+        setActiveTab(targetTab.value);
+      } else {
+        // Default to "dashboard" if hash is empty, "#", or an invalid tab value
+        // Also ensures that if the URL is just `/`, dashboard is selected.
         setActiveTab("dashboard");
+        if (window.location.hash && window.location.hash !== "#" && window.location.hash !== "#dashboard") {
+          // If there was an invalid hash, redirect to dashboard visually
+          // window.location.hash = "dashboard"; // Avoids loop if already on dashboard
+        } else if (!window.location.hash || window.location.hash === "#") {
+           // If at root or just '#', explicitly set hash to dashboard for consistency
+           // if (activeTab !== "dashboard") window.location.hash = "dashboard"; // Avoids loop
+        }
       }
     };
 
@@ -41,11 +51,11 @@ export function ThesisWorkspace() {
     return () => {
       window.removeEventListener('hashchange', handleHashChange, false);
     };
-  }, []);
+  }, []); // Empty dependency array is correct here as workspaceTabs is stable.
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    window.location.hash = value; // Update hash on tab change
+    window.location.hash = value; // Update hash on tab click
   };
 
   return (
