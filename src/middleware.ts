@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl) {
     console.error("[Middleware] ERREUR CRITIQUE: NEXT_PUBLIC_SUPABASE_URL n'est pas défini.");
+    // Pour la page de login, on la laisse s'afficher même avec cette erreur serveur pour le debug.
     if (pathname === '/login') {
         console.warn("[Middleware] Tentative d'accès à /login malgré l'absence de SUPABASE_URL.");
         return response;
@@ -89,7 +90,10 @@ export async function middleware(request: NextRequest) {
     if (sessionError) {
       console.error(`[Middleware] Erreur lors de la récupération de la session: ${sessionError.message}`);
       // En cas d'erreur de session, laissez passer vers /login pour éviter une boucle, sinon erreur 500
-      if (pathname === '/login') return response;
+      if (pathname === '/login') {
+        console.warn("[Middleware] Erreur de session Supabase, mais autorisation de passage vers /login.");
+        return response;
+      }
       return new NextResponse("Erreur interne lors de la récupération de la session.", { status: 500 });
     }
     
@@ -105,19 +109,20 @@ export async function middleware(request: NextRequest) {
       }
       if (isAppRoute) {
         const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('redirectTo', pathname);
+        loginUrl.searchParams.set('redirectTo', pathname); // Garder l'URL de redirection
         console.log(`[Middleware] Utilisateur non authentifié essayant d'accéder à une route protégée (${pathname}). Redirection vers ${loginUrl.toString()}`);
         return NextResponse.redirect(loginUrl);
       }
       console.log(`[Middleware] Utilisateur non authentifié sur une route non gérée spécifiquement (${pathname}). Autorisation par défaut.`);
-      return response; // Pour les autres routes (ex: assets)
+      return response; // Pour les autres routes (ex: assets publics non matchés par le matcher négatif)
     }
 
     // Si l'utilisateur EST connecté
     if (session) {
       if (pathname === '/login') {
-        console.log(`[Middleware] Utilisateur authentifié essayant d'accéder à /login. Redirection vers /.`);
-        return NextResponse.redirect(new URL('/', request.url));
+        const rootUrl = new URL('/', request.url);
+        console.log(`[Middleware] Utilisateur authentifié essayant d'accéder à /login. Redirection vers ${rootUrl.toString()}.`);
+        return NextResponse.redirect(rootUrl);
       }
     }
 
@@ -125,9 +130,9 @@ export async function middleware(request: NextRequest) {
     return response;
 
   } catch (e: any) {
-    console.error('[Middleware] Erreur inattendue dans le bloc try/catch principal:', e.message, e.stack);
+    console.error('[Middleware] ERREUR INATTENDUE dans le bloc try/catch principal:', e.message, e.stack);
     if (pathname === '/login') {
-      console.warn("[Middleware] Erreur interne, mais autorisation de passage vers /login pour éviter boucle de redirection.");
+      console.warn("[Middleware] Erreur interne non gérée, mais autorisation de passage vers /login pour éviter boucle de redirection.");
       // Retourner une nouvelle réponse `NextResponse.next()` pour s'assurer qu'elle n'est pas "corrompue"
       return NextResponse.next({
         request: {
