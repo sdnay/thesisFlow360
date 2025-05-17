@@ -8,7 +8,7 @@ const geistSans = GeistSans; // Directly use the imported object
 const geistMono = GeistMono; // Directly use the imported object
 
 export const metadata: Metadata = {
-  title: 'FluxThèse 360',
+  title: 'ThesisFlow360',
   description: 'Optimisez votre processus de rédaction de thèse.',
 };
 

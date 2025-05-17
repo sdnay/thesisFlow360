@@ -7,7 +7,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
       viewBox="0 0 200 50"
       width="120"
       height="30"
-      aria-label="Logo FluxThèse 360"
+      aria-label="Logo ThesisFlow360"
       {...props}
     >
       <style>
@@ -38,7 +38,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
         `}
       </style>
       <text x="0" y="35" className="logo-text">
-        FluxThèse
+        ThesisFlow
         <tspan className="logo-highlight">360</tspan>
       </text>
     </svg>
