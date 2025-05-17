@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -7,7 +8,7 @@ import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
@@ -260,30 +261,60 @@ const Sidebar = React.forwardRef<
 Sidebar.displayName = "Sidebar"
 
 const SidebarTrigger = React.forwardRef<
-  React.ElementRef<typeof Button>,
+  HTMLButtonElement,
   React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+>(({
+  className,
+  onClick,
+  children,
+  asChild,
+  variant = "ghost", // Default variant for the trigger
+  size = "icon",    // Default size for the trigger
+  ...props
+}, ref) => {
+  const { toggleSidebar } = useSidebar();
 
+  const clickHandler = (event: React.MouseEvent<HTMLElement>) => {
+    if (onClick) {
+      (onClick as React.MouseEventHandler<HTMLElement>)(event);
+    }
+    toggleSidebar();
+  };
+
+  if (asChild) {
+    // If asChild is true, use Slot. Pass all relevant props including computed className.
+    // The 'children' are provided by the consumer of SidebarTrigger.
+    return (
+      <Slot
+        ref={ref}
+        className={cn(buttonVariants({ variant, size, className: cn("h-7 w-7", className) }))}
+        onClick={clickHandler}
+        data-sidebar="trigger"
+        {...props}
+      >
+        {children}
+      </Slot>
+    );
+  }
+
+  // If asChild is false, render a standard Button with internal content.
   return (
     <Button
       ref={ref}
-      data-sidebar="trigger"
-      variant="ghost"
-      size="icon"
+      variant={variant}
+      size={size}
       className={cn("h-7 w-7", className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
+      onClick={clickHandler}
+      data-sidebar="trigger"
       {...props}
     >
       <PanelLeft />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
-  )
-})
-SidebarTrigger.displayName = "SidebarTrigger"
+  );
+});
+SidebarTrigger.displayName = "SidebarTrigger";
+
 
 const SidebarRail = React.forwardRef<
   HTMLButtonElement,
@@ -761,3 +792,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
