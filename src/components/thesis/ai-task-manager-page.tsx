@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ChevronDownIcon as ChevronUpDownIcon, CheckIcon } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, CheckIcon, ChevronDownIcon as ChevronUpDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,9 +35,9 @@ const taskTypeBorderColors: Record<TaskType, string> = {
   secondary: "border-l-gray-400",
 };
 
-const TaskTypeSelector: FC<{ 
-  selectedType: TaskType; 
-  onSelectType: (type: TaskType) => void; 
+const TaskTypeSelector: FC<{
+  selectedType: TaskType;
+  onSelectType: (type: TaskType) => void;
   disabled?: boolean;
   buttonClassName?: string;
 }> = ({ selectedType, onSelectType, disabled, buttonClassName }) => {
@@ -46,11 +46,11 @@ const TaskTypeSelector: FC<{
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button 
-          variant="outline" 
-          role="combobox" 
-          aria-expanded={open} 
-          className={cn("w-[150px] justify-between text-sm font-normal", buttonClassName)} 
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-[150px] justify-between text-sm font-normal", buttonClassName)}
           disabled={disabled}
         >
           {taskTypeLabels[selectedType]}
@@ -102,8 +102,8 @@ interface TaskItemCardProps {
 const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetType, onEdit, isCurrentItemLoading }) => {
   return (
     <Card className={cn(
-      "relative overflow-hidden border-l-4 shadow-sm transition-all duration-150 hover:shadow-md", 
-      taskTypeBorderColors[task.type], 
+      "relative overflow-hidden border-l-4 shadow-sm transition-all duration-150 hover:shadow-md",
+      taskTypeBorderColors[task.type],
       task.completed && "opacity-70 bg-muted/30"
     )}>
       <CardContent className="p-4 flex items-start gap-4">
@@ -121,7 +121,7 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
           aria-label={task.completed ? "Marquer comme non terminée" : "Marquer comme terminée"}
         />
         <div className="flex-grow space-y-1.5 min-w-0">
-          <p 
+          <p
             className={cn(
               "text-base font-medium leading-snug break-words",
               task.completed && "line-through text-muted-foreground"
@@ -134,28 +134,28 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onDelete, onSetTy
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0 ml-auto pl-2">
-          <TaskTypeSelector 
-            selectedType={task.type} 
-            onSelectType={(type) => onSetType(task.id, type)} 
+          <TaskTypeSelector
+            selectedType={task.type}
+            onSelectType={(type) => onSetType(task.id, type)}
             disabled={isCurrentItemLoading}
             buttonClassName="h-8"
           />
           <div className="flex gap-1.5">
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => onEdit(task)} 
-              className="h-8 w-8 hover:bg-accent/50 disabled:opacity-50" 
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onEdit(task)}
+              className="h-8 w-8 hover:bg-accent/50 disabled:opacity-50"
               disabled={isCurrentItemLoading}
               title="Modifier la tâche"
             >
               <Edit2 className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => onDelete(task.id)} 
-              className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" 
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onDelete(task.id)}
+              className="h-8 w-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
               disabled={isCurrentItemLoading}
               title="Supprimer la tâche"
             >
@@ -178,7 +178,7 @@ export function AiTaskManagerPage() {
   const [isFetchingTasks, setIsFetchingTasks] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
-  
+
   const [manualTaskText, setManualTaskText] = useState('');
   const [manualTaskType, setManualTaskType] = useState<TaskType>('secondary');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -193,12 +193,15 @@ export function AiTaskManagerPage() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (supabaseError) throw supabaseError;
+      if (supabaseError) {
+        throw supabaseError;
+      }
       setTasks(data || []);
     } catch (e: any) {
       console.error("Erreur lors de la récupération des tâches:", e);
-      setError("Échec de la récupération des tâches.");
-      toast({ title: "Erreur", description: "Impossible de charger les tâches.", variant: "destructive" });
+      const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
+      setError(`Échec de la récupération des tâches: ${errorMessage}`);
+      toast({ title: "Erreur", description: `Impossible de charger les tâches: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsFetchingTasks(false);
     }
@@ -206,9 +209,11 @@ export function AiTaskManagerPage() {
 
   useEffect(() => {
     fetchTasks();
-     const channel = supabase
-      .channel('db-tasks-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchTasks)
+    const channel = supabase
+      .channel('db-tasks-page-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+          fetchTasks();
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -216,7 +221,9 @@ export function AiTaskManagerPage() {
   }, [fetchTasks]);
 
   const handleAiModifyTasks = async () => {
-    if (instructions.trim() === '') return;
+    if (instructions.trim() === '') {
+        return;
+    }
     setIsAiLoading(true);
     setError(null);
     setAiReasoning(null);
@@ -227,14 +234,17 @@ export function AiTaskManagerPage() {
         taskList: currentTaskStrings,
       };
       const result: ModifyTaskListOutput = await modifyTaskList(input);
-      
-      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '0'); // Placeholder ID, adjust if needed
-      if (deleteError) throw deleteError;
+
+      // Delete all existing tasks. A more robust way might be to use specific IDs if needed.
+      const { error: deleteError } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Dummy UUID to target all if no task has this ID
+      if (deleteError) {
+        throw deleteError;
+      }
 
       const newTasksToInsert: Array<Omit<Task, 'id' | 'created_at'>> = result.modifiedTaskList.map((taskText) => {
         const completedMatch = taskText.match(/(?:Completed|Terminé): (true|false|vrai|faux)/i);
-        const typeMatch = taskText.match(/(?:Type|Type): (urgent|important|reading|chatgpt|secondary)/i);
-        
+        const typeMatch = taskText.match(/(?:Type): (urgent|important|reading|chatgpt|secondary)/i);
+
         return {
           text: taskText.replace(/\s*\((?:ID: [\w-]+, )?(?:Completed|Terminé): (?:true|false|vrai|faux), Type: \w+\)/gi, '').trim(),
           completed: completedMatch ? (completedMatch[1].toLowerCase() === 'true' || completedMatch[1].toLowerCase() === 'vrai') : false,
@@ -244,9 +254,11 @@ export function AiTaskManagerPage() {
 
       if (newTasksToInsert.length > 0) {
         const { error: insertError } = await supabase.from('tasks').insert(newTasksToInsert);
-        if (insertError) throw insertError;
+        if (insertError) {
+            throw insertError;
+        }
       }
-      
+
       setAiReasoning(result.reasoning);
       setInstructions('');
       toast({ title: "Succès", description: "Liste de tâches modifiée par l'IA." });
@@ -261,7 +273,9 @@ export function AiTaskManagerPage() {
   };
 
   const handleAddOrUpdateManualTask = async () => {
-    if (manualTaskText.trim() === '') return;
+    if (manualTaskText.trim() === '') {
+        return;
+    }
     setIsManualTaskLoading(true);
     setError(null);
 
@@ -271,7 +285,9 @@ export function AiTaskManagerPage() {
           .from('tasks')
           .update({ text: manualTaskText, type: manualTaskType })
           .eq('id', editingTask.id);
-        if (updateError) throw updateError;
+        if (updateError) {
+            throw updateError;
+        }
         setEditingTask(null);
         toast({ title: "Tâche mise à jour", description: `"${manualTaskText}" a été modifiée.` });
       } else {
@@ -281,7 +297,9 @@ export function AiTaskManagerPage() {
           type: manualTaskType,
         };
         const { error: insertError } = await supabase.from('tasks').insert(newTaskPayload);
-        if (insertError) throw insertError;
+        if (insertError) {
+            throw insertError;
+        }
         toast({ title: "Tâche ajoutée", description: `"${manualTaskText}" a été ajoutée.` });
       }
       setManualTaskText('');
@@ -290,7 +308,7 @@ export function AiTaskManagerPage() {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       console.error("Erreur ajout/modif manuelle:", errorMessage, e);
       setError(`Échec de l'enregistrement: ${errorMessage}`);
-      toast({ title: "Erreur", description: "Impossible d'enregistrer la tâche.", variant: "destructive" });
+      toast({ title: "Erreur", description: `Impossible d'enregistrer la tâche: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsManualTaskLoading(false);
     }
@@ -304,12 +322,14 @@ export function AiTaskManagerPage() {
         .from('tasks')
         .update({ completed })
         .eq('id', id);
-      if (updateError) throw updateError;
+      if (updateError) {
+        throw updateError;
+      }
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        console.error("Erreur toggle tâche:", errorMessage, e);
        setError(`Échec du changement de statut: ${errorMessage}`);
-       toast({ title: "Erreur", description: "Impossible de changer le statut.", variant: "destructive" });
+       toast({ title: "Erreur", description: `Impossible de changer le statut: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -320,8 +340,10 @@ export function AiTaskManagerPage() {
     setError(null);
     try {
       const { error: deleteError } = await supabase.from('tasks').delete().eq('id', id);
-      if (deleteError) throw deleteError;
-      
+      if (deleteError) {
+        throw deleteError;
+      }
+
       if (editingTask && editingTask.id === id) {
           setEditingTask(null);
           setManualTaskText('');
@@ -332,7 +354,7 @@ export function AiTaskManagerPage() {
       const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
       console.error("Erreur suppression tâche:", errorMessage, e);
       setError(`Échec de la suppression: ${errorMessage}`);
-      toast({ title: "Erreur", description: "Impossible de supprimer la tâche.", variant: "destructive" });
+      toast({ title: "Erreur", description: `Impossible de supprimer la tâche: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
     }
@@ -346,23 +368,27 @@ export function AiTaskManagerPage() {
         .from('tasks')
         .update({ type })
         .eq('id', id);
-      if (updateError) throw updateError;
+      if (updateError) {
+        throw updateError;
+      }
     } catch (e: any) {
        const errorMessage = (e instanceof Error ? e.message : String(e)) || "Une erreur inconnue est survenue.";
        console.error("Erreur type tâche:", errorMessage, e);
        setError(`Échec du changement de type: ${errorMessage}`);
-       toast({ title: "Erreur", description: "Impossible de changer le type.", variant: "destructive" });
+       toast({ title: "Erreur", description: `Impossible de changer le type: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsTaskItemLoading(null);
     }
   };
-  
+
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
     setManualTaskText(task.text);
     setManualTaskType(task.type);
     const formCard = document.getElementById('manual-task-card');
-    if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   return (
@@ -371,7 +397,7 @@ export function AiTaskManagerPage() {
         <ListTodo className="h-7 w-7 text-primary" />
         <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Gestionnaire de Tâches IA</h1>
       </div>
-      
+
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
@@ -439,11 +465,11 @@ export function AiTaskManagerPage() {
           </div>
         </CardContent>
       </Card>
-      
+
       {error && (
         <Card className="border-destructive bg-destructive/10">
             <CardContent className="p-3 text-sm text-destructive flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" /> 
+                <AlertTriangle className="h-5 w-5" />
                 <p>{error}</p>
             </CardContent>
         </Card>
@@ -468,10 +494,10 @@ export function AiTaskManagerPage() {
             </div>
           ) : (
             tasks.map((task) => (
-              <TaskItemCard 
-                key={task.id} 
-                task={task} 
-                onToggle={handleToggleTask} 
+              <TaskItemCard
+                key={task.id}
+                task={task}
+                onToggle={handleToggleTask}
                 onDelete={handleDeleteTask}
                 onSetType={handleSetTaskType}
                 onEdit={handleEditTask}
@@ -484,5 +510,3 @@ export function AiTaskManagerPage() {
     </div>
   );
 }
-
-    
