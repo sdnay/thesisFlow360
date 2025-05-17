@@ -9,11 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import type { PomodoroSession } from '@/types';
 import { Play, Pause, RotateCcw, ListChecks, Trash2, Loader2, Timer, Save } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label'; // Added import
 
 const DEFAULT_SESSION_DURATION = 25; 
 const MAX_SESSION_DURATION = 120; 
