@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry, ChatSession, ChatMessage, ThesisAgentOutput } from '@/types';
-import { processUserRequest, type ThesisAgentInput } from '@/ai/flows/thesis-agent-flow';
+import { processUserRequest } from '@/ai/flows/thesis-agent-flow'; // ThesisAgentInput type will be inferred
 import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, MessageSquare, Plus, Trash2, ChevronsUpDown } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -18,6 +18,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useAuth } from '@/hooks/useAuth';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+
+// Interface pour les messages affichés dans l'UI du chat
+interface DisplayMessage {
+  id: string; // Peut être l'ID de la base de données ou un ID temporaire client
+  role: 'user' | 'agent';
+  content: string;
+  timestamp: Date;
+  actions_taken?: ThesisAgentOutput['actionsTaken'];
+  isLoading?: boolean;
+}
 
 interface PromptLogItemDisplayProps {
   entry: PromptLogEntry;
@@ -51,50 +61,26 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
       <CardContent className="text-xs space-y-1.5 pb-2 px-3">
         <div className="p-2 border rounded-md bg-background relative">
           <p className="whitespace-pre-wrap text-foreground/90">{entry.original_prompt}</p>
-          <TooltipProvider delayDuration={100}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-0.5 right-0.5 h-6 w-6"
-                  onClick={() => handleCopy(entry.original_prompt, 'original')}
-                >
-                  {copiedOriginal ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left"><p>Copier Original</p></TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="absolute top-0.5 right-0.5 h-6 w-6" onClick={() => handleCopy(entry.original_prompt, 'original')}>
+              {copiedOriginal ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+          </TooltipTrigger> <TooltipContent side="left"><p>Copier Original</p></TooltipContent> </Tooltip> </TooltipProvider>
         </div>
-        {entry.refined_prompt && (
-          <>
-            <h4 className="text-xs font-semibold text-accent pt-1">Prompt Affiné</h4>
-            <div className="p-2 border rounded-md bg-accent/10 border-accent/30 relative">
-              <p className="whitespace-pre-wrap text-accent/90">{entry.refined_prompt}</p>
-              <TooltipProvider delayDuration={100}>
-               <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-0.5 right-0.5 h-6 w-6"
-                    onClick={() => handleCopy(entry.refined_prompt!, 'refined')}
-                    >
-                    {copiedRefined ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left"><p>Copier Affiné</p></TooltipContent>
-               </Tooltip>
-              </TooltipProvider>
-            </div>
-          </>
+        {entry.refined_prompt && ( <>
+          <h4 className="text-xs font-semibold text-accent pt-1">Prompt Affiné</h4>
+          <div className="p-2 border rounded-md bg-accent/10 border-accent/30 relative">
+            <p className="whitespace-pre-wrap text-accent/90">{entry.refined_prompt}</p>
+            <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="absolute top-0.5 right-0.5 h-6 w-6" onClick={() => handleCopy(entry.refined_prompt!, 'refined')}>
+                {copiedRefined ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger> <TooltipContent side="left"><p>Copier Affiné</p></TooltipContent> </Tooltip> </TooltipProvider>
+          </div> </>
         )}
-        {entry.reasoning && (
-          <>
-            <h4 className="text-xs font-semibold text-muted-foreground pt-1">Raisonnement</h4>
-            <p className="p-2 border rounded-md bg-muted/40 italic whitespace-pre-wrap text-muted-foreground/90">{entry.reasoning}</p>
-          </>
+        {entry.reasoning && ( <>
+          <h4 className="text-xs font-semibold text-muted-foreground pt-1">Raisonnement</h4>
+          <p className="p-2 border rounded-md bg-muted/40 italic whitespace-pre-wrap text-muted-foreground/90">{entry.reasoning}</p> </>
         )}
         {entry.tags && entry.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
@@ -110,15 +96,6 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
     </Card>
   );
 };
-
-interface DisplayMessage {
-  id: string;
-  role: 'user' | 'agent';
-  content: string;
-  timestamp: Date;
-  actions_taken?: ThesisAgentOutput['actionsTaken'];
-  isLoading?: boolean;
-}
 
 export function ChatGPTPromptLogPanel() {
   const { user } = useAuth();
@@ -173,18 +150,27 @@ export function ChatGPTPromptLogPanel() {
     try {
       const { data, error: sessionError } = await supabase
         .from('chat_sessions')
-        .select('*')
+        .select('id, title, updated_at') // Sélectionner seulement les champs nécessaires pour la liste
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
       if (sessionError) throw sessionError;
-      setChatSessions(data || []);
-      if (data && data.length > 0 && !currentSessionId) {
-        setCurrentSessionId(data[0].id);
-        setCurrentSessionTitle(data[0].title);
-      } else if ((!data || data.length === 0) && !currentSessionId) {
-        setCurrentSessionTitle("Nouvelle Discussion");
-        setConversation([]);
+      
+      const fetchedSessions = data || [];
+      setChatSessions(fetchedSessions);
+
+      if (fetchedSessions.length > 0 && !currentSessionId) {
+        // Si aucune session n'est sélectionnée et qu'il y a des sessions, sélectionner la plus récente
+        setCurrentSessionId(fetchedSessions[0].id);
+        setCurrentSessionTitle(fetchedSessions[0].title);
+      } else if (fetchedSessions.length === 0 && currentSessionId !== null) {
+        // Si la session active n'existe plus (ex: après suppression et la liste est vide)
+        handleNewChat(); // Réinitialiser à une nouvelle discussion
+      } else if (currentSessionId) {
+        // S'assurer que le titre de la session active est à jour
+        const activeSession = fetchedSessions.find(s => s.id === currentSessionId);
+        setCurrentSessionTitle(activeSession?.title || "Nouvelle Discussion");
       }
+
     } catch (e: any) {
       console.error("Erreur chargement sessions de chat:", e);
       toast({ title: "Erreur Sessions", description: "Impossible de charger les sessions de chat.", variant: "destructive" });
@@ -220,9 +206,18 @@ export function ChatGPTPromptLogPanel() {
   }, [user, toast]);
 
   useEffect(() => {
-    fetchPromptLogs();
-    fetchChatSessions();
-  }, [fetchPromptLogs, fetchChatSessions, user]);
+    if(user) {
+        fetchPromptLogs();
+        fetchChatSessions();
+    } else {
+        // Réinitialiser si l'utilisateur se déconnecte
+        setPromptLogs([]);
+        setChatSessions([]);
+        setCurrentSessionId(null);
+        setCurrentSessionTitle("Nouvelle Discussion");
+        setConversation([]);
+    }
+  }, [user, fetchPromptLogs, fetchChatSessions]);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -230,35 +225,39 @@ export function ChatGPTPromptLogPanel() {
       const selectedSession = chatSessions.find(s => s.id === currentSessionId);
       setCurrentSessionTitle(selectedSession?.title || "Discussion");
     } else {
-      setConversation([]);
+      setConversation([]); // Vide la conversation pour une "Nouvelle Discussion"
       setCurrentSessionTitle("Nouvelle Discussion");
     }
-  }, [currentSessionId, loadMessagesForSession, chatSessions]);
-
+  }, [currentSessionId, loadMessagesForSession, chatSessions]); // Ajout de chatSessions ici
 
   useEffect(() => {
     if (!user) return;
+    // Channel pour les prompt_log_entries (inchangé)
     const promptLogChannel = supabase
       .channel(`db-promptlogs-panel-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries', filter: `user_id=eq.${user.id}` }, fetchPromptLogs)
       .subscribe();
     
+    // Channel pour les chat_messages
+    // Note: Il est plus efficace de s'abonner globalement aux messages de l'utilisateur
+    // et de filtrer côté client ou de re-fetch que de changer de channel dynamiquement.
+    // Ou, si le volume est faible, re-fetch sur tout changement de chat_messages de l'utilisateur.
     const chatMessagesSubscription = supabase
-      .channel(`db-chatmessages-panel-user-${user.id}-session-${currentSessionId || 'all'}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}${currentSessionId ? `&session_id=eq.${currentSessionId}` : ''}` }, (payload) => {
-        if (currentSessionId && (payload.new?.session_id === currentSessionId || (payload.old as any)?.session_id === currentSessionId)) {
+      .channel(`db-chatmessages-panel-user-${user.id}-all-sessions`) // Un seul channel pour tous les messages de l'utilisateur
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}` }, (payload) => {
+        // Si le changement concerne la session active, recharger les messages de cette session
+        const changedSessionId = payload.new?.session_id || (payload.old as any)?.session_id;
+        if (changedSessionId === currentSessionId) {
           loadMessagesForSession(currentSessionId);
         }
       })
       .subscribe();
 
+    // Channel pour les chat_sessions (pour mettre à jour la liste des sessions)
     const chatSessionsSubscription = supabase
       .channel(`db-chatsessions-panel-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions', filter: `user_id=eq.${user.id}` }, (payload) => {
-         fetchChatSessions();
-         if (payload.eventType === 'DELETE' && (payload.old as any)?.id === currentSessionId) {
-           setCurrentSessionId(null); 
-         }
+         fetchChatSessions(); // Rafraîchit la liste des sessions
       })
       .subscribe();
 
@@ -273,15 +272,16 @@ export function ChatGPTPromptLogPanel() {
     if (!user) return null;
     setIsCreatingSession(true);
     try {
-      const title = firstUserMessageContent.substring(0, 30) + (firstUserMessageContent.length > 30 ? "..." : "") || `Discussion du ${format(new Date(), 'dd/MM HH:mm', { locale: fr })}`;
+      const title = firstUserMessageContent.substring(0, 35) + (firstUserMessageContent.length > 35 ? "..." : "") || `Discussion ${format(new Date(), 'dd/MM HH:mm', { locale: fr })}`;
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({ user_id: user.id, title })
-        .select()
+        .select('id, title, updated_at') // Sélectionner les champs nécessaires
         .single();
       if (error) throw error;
       if (data) {
         toast({ title: "Nouvelle session créée", description: data.title });
+        // fetchChatSessions(); // Déclenché par l'abonnement, ou appeler manuellement pour forcer la mise à jour immédiate de la liste
         setChatSessions(prev => [data, ...prev].sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
         return data.id;
       }
@@ -295,6 +295,46 @@ export function ChatGPTPromptLogPanel() {
     }
   };
 
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    // setConversation([]); // Déjà géré par le useEffect sur currentSessionId
+    // setCurrentSessionTitle("Nouvelle Discussion"); // Déjà géré par le useEffect sur currentSessionId
+  };
+
+  const handleSelectSession = (sessionId: string | null) => {
+    if (sessionId === 'new_chat_trigger') { // Valeur spéciale pour le bouton "Nouvelle Discussion"
+        handleNewChat();
+    } else {
+        setCurrentSessionId(sessionId);
+    }
+  };
+  
+  const handleDeleteSession = async (sessionIdToDelete: string) => {
+    if (!user || isDeletingSession || !sessionIdToDelete) return;
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette session de discussion et tous ses messages ? Cette action est irréversible.")) return;
+    
+    setIsDeletingSession(true);
+    try {
+      const { error } = await supabase.from('chat_sessions').delete().eq('id', sessionIdToDelete).eq('user_id', user.id);
+      if (error) throw error;
+      toast({ title: "Session supprimée" });
+      
+      // Si la session supprimée était la session active, réinitialiser
+      if (currentSessionId === sessionIdToDelete) {
+        handleNewChat();
+      }
+      // fetchChatSessions(); // L'abonnement devrait mettre à jour la liste. Forcer si besoin.
+      setChatSessions(prev => prev.filter(s => s.id !== sessionIdToDelete));
+
+
+    } catch (e: any) {
+      toast({ title: "Erreur", description: "Impossible de supprimer la session.", variant: "destructive" });
+      console.error("Erreur handleDeleteSession:", e);
+    } finally {
+      setIsDeletingSession(false);
+    }
+  };
+  
   const handleSendToAgent = async () => {
     if (currentUserRequest.trim() === '' || !user) return;
 
@@ -314,42 +354,33 @@ export function ChatGPTPromptLogPanel() {
     
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
-      const newSessionId = await createNewChatSession(requestTextForAgent);
-      if (newSessionId) {
-        activeSessionId = newSessionId;
-        setCurrentSessionId(newSessionId);
+      const newlyCreatedSessionId = await createNewChatSession(requestTextForAgent);
+      if (newlyCreatedSessionId) {
+        activeSessionId = newlyCreatedSessionId;
+        setCurrentSessionId(newlyCreatedSessionId); // Mettre à jour l'état de la session active
       } else {
+        // Échec de la création de session, retirer le message utilisateur temporaire
         setConversation(prev => prev.filter(m => m.id !== tempUserMessageId));
         setIsLoadingAgent(false);
         return;
       }
     }
-
+    
+    // Sauvegarder le message utilisateur dans la BD
     const { error: userMsgDbError } = await supabase.from('chat_messages').insert({
-      session_id: activeSessionId,
+      session_id: activeSessionId, // Assurez-vous que activeSessionId est bien défini
       user_id: user.id,
       role: 'user',
       content: requestTextForAgent,
     });
+
     if (userMsgDbError) {
       toast({ title: "Erreur", description: "Impossible d'enregistrer votre message.", variant: "destructive" });
-      setConversation(prev => prev.filter(m => m.id !== tempUserMessageId));
+      setConversation(prev => prev.filter(m => m.id !== tempUserMessageId)); // Rollback UI
       setIsLoadingAgent(false);
       return;
     }
     
-    const agentChatHistory = conversation
-      .filter(m => m.id !== tempUserMessageId && !m.isLoading)
-      .map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        content: msg.content,
-        actions_taken: msg.actions_taken
-      }));
-    // Ensure the current user message is part of the history if it wasn't filtered out
-    if(!agentChatHistory.find(m => m.content === requestTextForAgent && m.role === 'user')) {
-      agentChatHistory.push({ role: 'user', content: requestTextForAgent, actions_taken: undefined });
-    }
-
     const loadingAgentMessage: DisplayMessage = {
       id: `agent-loading-${Date.now()}`,
       role: 'agent',
@@ -359,53 +390,63 @@ export function ChatGPTPromptLogPanel() {
     };
     setConversation(prev => [...prev, loadingAgentMessage]);
 
+    // Préparer l'historique pour l'agent IA
+    // `conversation` contient déjà le nouveau message utilisateur (temporaire)
+    // et le message de chargement de l'agent. Nous filtrons ceux-ci
+    // et ajoutons le message utilisateur actuel (celui qui vient d'être envoyé).
+    const historyForAgent = conversation
+        .filter(m => m.id !== tempUserMessageId && !m.isLoading) // Exclure le message utilisateur actuel (il sera `userRequest`) et les indicateurs de chargement
+        .map(msg => ({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.content }],
+        })) as Array<{role: 'user' | 'model'; parts: {text: string}[]}>;
+
+
     try {
-      // Format chatHistory for the agent
-      const formattedAgentChatHistory = agentChatHistory.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model', // 'agent' from UI becomes 'model' for Genkit
-        parts: [{ text: msg.content }], // Correctly format parts
-      })) as Array<{role: 'user' | 'model'; parts: {text: string}[]}> | undefined;
-
-
-      const agentInput: ThesisAgentInput = { 
+      const agentInput = { 
         userRequest: requestTextForAgent,
-        chatHistory: formattedAgentChatHistory && formattedAgentChatHistory.length > 0 ? formattedAgentChatHistory : null,
+        // L'historique passé ne doit pas inclure le userRequest actuel,
+        // car userRequest est déjà le dernier message utilisateur.
+        chatHistory: historyForAgent.length > 0 ? historyForAgent : null,
       };
       const result: ThesisAgentOutput = await processUserRequest(agentInput);
       
       const agentResponseMessage: DisplayMessage = {
-        id: `agent-${Date.now()}`,
+        id: `agent-${Date.now()}`, // Pourrait être l'ID de la BD si retourné
         role: 'agent',
         content: result.responseMessage,
         timestamp: new Date(),
         actions_taken: result.actionsTaken,
       };
-      setConversation(prev => [...prev.filter(m => !m.isLoading && m.id !== tempUserMessageId), userMessage, agentResponseMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()));
+      
+      // Remplacer le message de chargement par la vraie réponse
+      setConversation(prev => [...prev.filter(m => m.id !== loadingAgentMessage.id), agentResponseMessage]);
 
+      // Sauvegarder la réponse de l'agent dans la BD
       await supabase.from('chat_messages').insert({
         session_id: activeSessionId,
-        user_id: user.id,
+        user_id: user.id, // L'agent répond en tant que tel, mais on lie au user_id pour RLS
         role: 'agent',
         content: result.responseMessage,
         actions_taken: result.actionsTaken || null,
       });
 
+       // Mettre à jour 'updated_at' de la session (déjà géré par le trigger SQL)
+       // Mais on peut forcer un re-fetch de la liste des sessions pour le tri
+       const updatedSession = chatSessions.find(s => s.id === activeSessionId);
+       if (updatedSession) {
+         setChatSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, updated_at: new Date().toISOString()} : s).sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+       }
+
+
     } catch (e: any) {
       const errorMessage = `Erreur de l'agent: ${e.message || "Une erreur inconnue est survenue."}`;
       setError(errorMessage);
       const agentErrorMessage: DisplayMessage = {id: `agent-error-${Date.now()}`, role: 'agent', content: errorMessage, timestamp: new Date() };
-      setConversation(prev => [...prev.filter(m => !m.isLoading && m.id !== tempUserMessageId), userMessage, agentErrorMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()));
+      setConversation(prev => [...prev.filter(m => m.id !== loadingAgentMessage.id), agentErrorMessage]);
       toast({ title: "Erreur de l'Agent", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
       setIsLoadingAgent(false);
-       // Ensure the original user message is definitely in the conversation
-       setConversation(prev => {
-        if (!prev.find(m => m.id === tempUserMessageId)) {
-          const finalConvo = [...prev, userMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime());
-          return finalConvo.filter(m => m.id !== loadingAgentMessage.id || !m.isLoading);
-        }
-        return prev.filter(m => m.id !== loadingAgentMessage.id || !m.isLoading);
-      });
     }
   };
   
@@ -414,41 +455,13 @@ export function ChatGPTPromptLogPanel() {
     const textarea = document.getElementById('agent-input-textarea') as HTMLTextAreaElement;
     if (textarea) textarea.focus();
   };
-
-  const handleSelectSession = (sessionId: string | null) => {
-    if (sessionId === 'new_chat') {
-      setCurrentSessionId(null);
-    } else {
-      setCurrentSessionId(sessionId);
-    }
-  };
   
-  const handleDeleteSession = async () => {
-    if (!currentSessionId || !user || isDeletingSession) return;
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette session de discussion et tous ses messages ? Cette action est irréversible.")) return;
-    
-    setIsDeletingSession(true);
-    try {
-      // La suppression en cascade devrait gérer les messages.
-      const { error } = await supabase.from('chat_sessions').delete().eq('id', currentSessionId).eq('user_id', user.id);
-      if (error) throw error;
-      toast({ title: "Session supprimée" });
-      setCurrentSessionId(null); 
-      fetchChatSessions(); // Rafraîchit la liste et sélectionne la plus récente ou nouvelle discussion.
-    } catch (e: any) {
-      toast({ title: "Erreur", description: "Impossible de supprimer la session.", variant: "destructive" });
-      console.error("Erreur handleDeleteSession:", e);
-    } finally {
-      setIsDeletingSession(false);
-    }
-  };
-
   const sessionDropdownTitle = currentSessionId ? (chatSessions.find(s => s.id === currentSessionId)?.title || "Chargement...") : "Nouvelle Discussion";
 
   return (
     <div className="flex flex-col h-full p-1 md:p-2 bg-background">
       <Card className="flex-grow flex flex-col shadow-none border-0 md:border md:shadow-lg overflow-hidden">
-        <CardHeader className="border-b p-3 md:p-4 flex flex-row justify-between items-center">
+        <CardHeader className="border-b p-3 md:p-4 flex flex-row justify-between items-center shrink-0">
           <div className="flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary" />
             <CardTitle className="text-sm md:text-base">Assistant IA ThesisBot</CardTitle>
@@ -456,42 +469,36 @@ export function ChatGPTPromptLogPanel() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="ml-auto h-8 text-xs md:text-sm whitespace-nowrap max-w-[180px] truncate" disabled={isFetchingSessions || isCreatingSession || isDeletingSession}>
-                {isFetchingSessions ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="truncate">{sessionDropdownTitle}</span> }
+                {isFetchingSessions ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="truncate" title={sessionDropdownTitle}>{sessionDropdownTitle}</span> }
                 <ChevronsUpDown className="ml-2 h-3 w-3 opacity-50 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto custom-scrollbar">
               <DropdownMenuLabel className="text-xs">Discussions</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => handleSelectSession('new_chat')} className="text-sm cursor-pointer">
+              <DropdownMenuItem onSelect={() => handleSelectSession('new_chat_trigger')} className="text-sm cursor-pointer">
                 <Plus className="mr-2 h-4 w-4" /> Nouvelle Discussion
               </DropdownMenuItem>
               {isFetchingSessions && <DropdownMenuItem disabled className="text-sm"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Chargement...</DropdownMenuItem>}
               {!isFetchingSessions && chatSessions.length > 0 && <DropdownMenuSeparator />}
               {chatSessions.map(session => (
-                <DropdownMenuItem key={session.id} onSelect={() => handleSelectSession(session.id)} className={cn("text-sm cursor-pointer justify-between", currentSessionId === session.id && "bg-accent/80 font-semibold")}>
-                  <div className="flex items-center truncate">
+                <DropdownMenuItem key={session.id} onSelect={() => handleSelectSession(session.id)} className={cn("text-sm cursor-pointer flex justify-between items-center group/item", currentSessionId === session.id && "bg-accent font-semibold")}>
+                  <div className="flex items-center truncate max-w-[calc(100%-2rem)]">
                     <MessageSquare className="mr-2 h-4 w-4 opacity-70 shrink-0" />
                     <span className="truncate" title={session.title}>{session.title}</span>
                   </div>
-                   {currentSessionId === session.id && <Check className="h-4 w-4 text-primary" />}
+                   {currentSessionId === session.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                   <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/item:opacity-70 hover:!opacity-100 hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} disabled={isDeletingSession && currentSessionId === session.id} title="Supprimer la session">
+                       <Trash2 className="h-3.5 w-3.5"/>
+                   </Button>
                 </DropdownMenuItem>
               ))}
                {!isFetchingSessions && chatSessions.length === 0 && <DropdownMenuItem disabled className="text-xs italic text-muted-foreground">Aucune session</DropdownMenuItem>}
-               {currentSessionId && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={handleDeleteSession} disabled={isDeletingSession} className="text-destructive focus:text-destructive text-sm cursor-pointer">
-                    {isDeletingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4"/>} 
-                    Supprimer la session active
-                  </DropdownMenuItem>
-                </>
-               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </CardHeader>
         
-        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 p-3 md:p-4 overflow-hidden">
-          <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar">
+        <CardContent className="flex-grow flex flex-col gap-3 md:gap-4 p-3 md:p-4 overflow-hidden"> {/* Assurer que ce parent peut grandir et cacher l'overflow */}
+          <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar"> {/* Doit prendre l'espace et gérer son propre défilement */}
             {isFetchingMessages ? (
               <div className="flex justify-center items-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2"/>Chargement des messages...</div>
             ) : conversation.length === 0 && !isLoadingAgent && !isFetchingSessions && (
@@ -518,7 +525,7 @@ export function ChatGPTPromptLogPanel() {
                         <ul className="list-disc pl-4 mt-1 space-y-0.5">
                         {msg.actions_taken.map((action, index) => (
                           <li key={index}>
-                            <strong>{action.toolName}</strong>: {action.toolOutput?.message || JSON.stringify(action.toolOutput)}
+                            <strong>{action.toolName}</strong>: {action.toolOutput?.message || JSON.stringify(action.toolOutput, null, 2)}
                           </li>
                         ))}
                         </ul>
@@ -532,17 +539,18 @@ export function ChatGPTPromptLogPanel() {
             </div>
           </ScrollArea>
 
+          {/* Zone de saisie fixée en bas */}
           <div className="space-y-2 border-t pt-3 mt-auto shrink-0">
             <Textarea
               id="agent-input-textarea"
               value={currentUserRequest}
               onChange={(e) => setCurrentUserRequest(e.target.value)}
-              placeholder={user ? (isCreatingSession ? "Création de la session..." : "Demandez à ThesisBot...") : "Veuillez vous connecter pour utiliser l'assistant."}
+              placeholder={user ? (isCreatingSession ? "Création de la session..." : (isFetchingMessages ? "Chargement..." : "Demandez à ThesisBot...")) : "Veuillez vous connecter pour utiliser l'assistant."}
               rows={2}
               className="text-sm min-h-[60px] resize-none custom-scrollbar"
               disabled={isLoadingAgent || !user || isCreatingSession || isFetchingMessages || isFetchingSessions}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && user && !isCreatingSession && !isFetchingMessages && !isFetchingSessions) {
+                if (e.key === 'Enter' && !e.shiftKey && user && !isCreatingSession && !isFetchingMessages && !isFetchingSessions && !isLoadingAgent) {
                   e.preventDefault();
                   handleSendToAgent();
                 }
@@ -559,15 +567,14 @@ export function ChatGPTPromptLogPanel() {
             )}
           </div>
           
+          {/* Historique des Prompts - inchangé pour l'instant */}
           <details className="border-t pt-3 shrink-0">
             <summary className="text-sm font-medium flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
               <History className="h-4 w-4" /> Historique des Prompts Affinés (5 derniers)
             </summary>
             <div className="mt-2 flex-grow overflow-hidden flex flex-col">
               {isFetchingLogs ? (
-                <div className="flex-grow flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
+                <div className="flex-grow flex items-center justify-center py-4"> <Loader2 className="h-6 w-6 animate-spin text-primary" /> </div>
               ) : promptLogs.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground text-sm border rounded-md p-4 bg-muted/30">
                   <History className="mx-auto h-10 w-10 opacity-50 mb-2"/>
@@ -591,3 +598,4 @@ export function ChatGPTPromptLogPanel() {
   );
 }
 
+    
