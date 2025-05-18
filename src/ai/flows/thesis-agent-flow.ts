@@ -242,11 +242,11 @@ const addSourceToolForAI = ai.defineTool(
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
 );
 const addTaskToolForAI = ai.defineTool(
-  { name: 'addTaskTool', description: 'Ajoute une tâche. Si l''utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: { text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }). Le user_id sera automatiquement lié.', inputSchema: AddTaskInputSchema, outputSchema: AddTaskOutputSchema },
+  { name: 'addTaskTool', description: 'Ajoute une tâche. Si l\'utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: { text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }). Le user_id sera automatiquement lié.', inputSchema: AddTaskInputSchema, outputSchema: AddTaskOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
 );
 const refinePromptToolForAI = ai.defineTool(
-  { name: 'refinePromptTool', description: 'Améliore un prompt fourni par l''utilisateur. (Input: { promptToRefine: string }). Cette action enregistre également le prompt original et affiné.', inputSchema: RefinePromptToolInputSchema, outputSchema: RefinePromptToolOutputSchema },
+  { name: 'refinePromptTool', description: 'Améliore un prompt fourni par l\'utilisateur. (Input: { promptToRefine: string }). Cette action enregistre également le prompt original et affiné.', inputSchema: RefinePromptToolInputSchema, outputSchema: RefinePromptToolOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }
 );
 const createThesisPlanToolForAI = ai.defineTool(
@@ -310,7 +310,7 @@ L'application permet de gérer :
 
 **Instructions Générales pour Interagir :**
 
-1.  **Analyse la Requête** : Comprends l'intention principale de l'utilisateur. Cherche des mots-clés relatifs aux fonctionnalités de ThesisFlow360.
+1.  **Analyse la Requête** : Comprends l'intention principale de l'utilisateur. Cherche des mots-clés relatifs aux fonctionnalités de ThesisFlow360 (chapitre, tâche, idée, source, plan, etc.).
 2.  **Sélection de l'Outil** : Choisis l'outil le plus approprié. Si la requête est vague, demande des clarifications. N'invente pas d'actions ou d'outils.
 3.  **Extraction des Paramètres** : Extrais les informations nécessaires de la requête pour les passer en input à l'outil. Sois attentif aux détails (nom du chapitre, description de la tâche, type de source, etc.). Pour \`addTaskTool\` et les demandes de Pomodoro, formate le texte de la tâche comme "Démarrer Pomodoro pour : [activité]".
 4.  **Exécution de l'Outil et Réponse** : Le système exécutera l'outil pour toi (en gérant le \`user_id\`). Tu recevras le résultat.
@@ -399,7 +399,7 @@ const thesisAgentFlow = ai.defineFlow(
       // Deuxième appel au LLM avec les réponses des outils pour obtenir une réponse finale
       console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale.");
       llmResponse = await thesisAgentMainPrompt({
-        userRequest, // Peut-être pas nécessaire, l'historique suffit
+        // userRequest, // Peut-être pas nécessaire, l'historique suffit
         history: [
           ai.userMessage(userRequest),
           llmResponse.candidates[0].message, // Premier message du LLM (qui incluait les toolRequests)
