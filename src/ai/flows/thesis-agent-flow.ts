@@ -254,25 +254,24 @@ const createThesisPlanToolForAI = ai.defineTool(
 
 
 // --- Schéma d'Entrée/Sortie pour l'Agent Principal ---
-const ThesisAgentInputSchema = z.object({ // Non exporté
+// L'IA ne voit que userRequest. userNameForAgent est utilisé pour personnaliser le message.
+const ThesisAgentPromptInputSchema = z.object({
   userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
+  userNameForAgent: z.string().optional().describe("Nom/Identifiant de l'utilisateur pour personnaliser la salutation.")
 });
-export type ThesisAgentInput = z.infer<typeof ThesisAgentInputSchema>;
 
-const ThesisAgentOutputSchema = z.object({ // Non exporté
-  responseMessage: z.string().describe("La réponse de l'agent IA à l'utilisateur, résumant les actions entreprises ou fournissant des informations."),
-  actionsTaken: z.array(z.object({
-    toolName: z.string(),
-    toolInput: z.any(),
-    toolOutput: z.any(),
-  })).optional().describe("Détails des outils utilisés et leurs sorties, le cas échéant."),
+// ThesisAgentInput et ThesisAgentOutput restent les types pour la fonction processUserRequest
+export type ThesisAgentInput = z.infer<typeof ThesisAgentInputSchema>; // Ce sera l'input pour processUserRequest
+export type ThesisAgentOutput = z.object({
+  responseMessage: z.string(),
+  actionsTaken: z.array(z.object({ toolName: z.string(), toolInput: z.any(), toolOutput: z.any() })).optional(),
 });
-export type ThesisAgentOutput = z.infer<typeof ThesisAgentOutputSchema>;
+
 
 // --- Prompt Principal de l'Agent ---
 const thesisAgentMainPrompt = ai.definePrompt({
   name: 'thesisAgentMainPrompt',
-  input: { schema: ThesisAgentInputSchema }, // L'IA ne voit que la requête utilisateur
+  input: { schema: ThesisAgentPromptInputSchema }, 
   output: { schema: ThesisAgentOutputSchema },
   tools: [
     addChapterToolForAI,
@@ -284,6 +283,9 @@ const thesisAgentMainPrompt = ai.definePrompt({
     createThesisPlanToolForAI
   ],
   prompt: `Tu es ThesisBot, un assistant IA expert intégré à l'application ThesisFlow360. Ton rôle est d'aider les étudiants à organiser et à progresser dans la rédaction de leur thèse ou mémoire. Tu dois comprendre leurs requêtes en langage naturel (français) et utiliser les outils mis à ta disposition pour effectuer des actions concrètes dans l'application ou fournir des informations pertinentes. Toutes les actions de création de données (chapitres, tâches, etc.) doivent être associées à l'utilisateur qui fait la requête ; tu n'as pas besoin de demander son ID, il sera géré automatiquement par le système lors de l'exécution de l'outil.
+
+**Informations sur l'Utilisateur Actuel :**
+{{#if userNameForAgent}}Nom/Identifiant : {{{userNameForAgent}}} (Utilise cette information pour personnaliser tes salutations si disponible. Par exemple : "Bonjour {{{userNameForAgent}}}, ..."){{/if}}
 
 **Contexte de l'Application ThesisFlow360 :**
 
@@ -308,20 +310,28 @@ L'application permet de gérer :
 
 **Instructions Générales pour Interagir :**
 
+0.  **Personnalisation** : Si le nom de l'utilisateur ({{{userNameForAgent}}}) est fourni, commence ta première réponse par une salutation personnalisée (ex: "Bonjour {{{userNameForAgent}}}, en quoi puis-je vous aider aujourd'hui ?"). Pour les réponses suivantes dans une conversation, une personnalisation n'est pas nécessaire à chaque fois.
 1.  **Analyse la Requête** : Comprends l'intention principale de l'utilisateur. Cherche des mots-clés relatifs aux fonctionnalités de ThesisFlow360 (chapitre, tâche, idée, source, plan, etc.).
-2.  **Sélection de l'Outil** : Choisis l'outil le plus approprié. Si la requête est vague, demande des clarifications. N'invente pas d'actions ou d'outils.
-3.  **Extraction des Paramètres** : Extrais les informations nécessaires de la requête pour les passer en input à l'outil. Sois attentif aux détails (nom du chapitre, description de la tâche, type de source, etc.). Pour \`addTaskTool\` et les demandes de Pomodoro, formate le texte de la tâche comme "Démarrer Pomodoro pour : [activité]".
-4.  **Exécution de l'Outil et Réponse** : Le système exécutera l'outil pour toi (en gérant le \`user_id\`). Tu recevras le résultat.
-    * Formule une \`responseMessage\` claire et concise confirmant l'action et incluant les informations clés du résultat de l'outil (ex: "J'ai ajouté le chapitre nommé 'Revue de Littérature'." ou "Voici le plan de thèse que j'ai généré : \n\n[Plan de l'outil ici]").
-    * Si l'outil a échoué (indiqué dans son résultat), explique l'échec à l'utilisateur.
-    * Si aucun outil n'est approprié ou si la requête est trop ambiguë même après clarification, réponds poliment en expliquant tes limites.
+2.  **Sélection de l'Outil** : Choisis l'outil le plus approprié pour répondre à la requête.
+    * Si la requête est vague (ex: "aide-moi avec mon intro"), demande des clarifications avant de choisir un outil (ex: "Que souhaites-tu faire avec ton introduction ? Créer un chapitre, ajouter une tâche, ou noter une idée ?").
+    * Si l'utilisateur veut créer quelque chose, utilise l'outil "add" correspondant.
+    * Si l'utilisateur veut de l'aide pour structurer son travail, comme un plan de thèse, utilise \`createThesisPlanTool\`.
+    * Si l'utilisateur demande d'améliorer un prompt pour une autre IA, utilise \`refinePromptTool\`.
+3.  **Extraction des Paramètres** : Extrais les informations nécessaires de la requête pour les passer en input à l'outil. Sois attentif aux détails (nom du chapitre, description de la tâche, type de source, etc.). N'inclus PAS de user_id, il sera géré par le système.
+    * Pour \`addTaskTool\`, si l'utilisateur dit "chrono pour relire mon chapitre 2", le \`text\` de la tâche sera "Démarrer Pomodoro pour : relire le chapitre 2".
+    * Pour \`addBrainDumpEntryTool\`, si le statut n'est pas spécifié, utilise "captured" par défaut.
+    * Pour \`addSourceTool\`, si le type n'est pas clair, demande une clarification ou utilise "other" et suggère à l'utilisateur de le préciser plus tard.
+4.  **Exécution de l'Outil et Réponse** :
+    * Si l'outil est exécuté avec succès, formule une \`responseMessage\` claire et concise confirmant l'action et incluant les informations clés retournées par l'outil (ex: "J'ai ajouté le chapitre nommé 'Revue de Littérature'." ou "Voici le plan de thèse que j'ai généré : \n\n[Plan de l'outil ici]").
+    * Si l'outil échoue, explique l'échec à l'utilisateur en te basant sur le message d'erreur de l'outil.
+    * Si aucun outil n'est approprié ou si la requête est trop ambiguë, réponds poliment en demandant plus de précisions ou en expliquant tes limites actuelles.
 5.  **Format de Sortie JSON** : Ta réponse FINALE DOIT être un objet JSON valide avec \`responseMessage\` (string) et optionnellement \`actionsTaken\` (array d'objets détaillant les appels aux outils).
 
 **Exemples d'Interactions Attendues (le \`user_id\` est géré en arrière-plan) :**
 * Utilisateur: "Ajoute un chapitre sur la discussion des résultats."
-    * ThesisBot (réponse JSON attendue de ta part après que le système ait appelé l'outil pour toi) : \`{ "responseMessage": "Le chapitre 'Discussion des résultats' a été ajouté avec succès.", "actionsTaken": [{ "toolName": "addChapterTool", "input": {"name": "Discussion des résultats"}, "toolOutput": {"chapterId": "uuid-ici", "message": "Chapitre 'Discussion des résultats' ajouté avec succès.", "success": true} }] }\`
+    * ThesisBot (réponse JSON) : \`{ "responseMessage": "Le chapitre 'Discussion des résultats' a été ajouté avec succès.", "actionsTaken": [{ "toolName": "addChapterTool", "input": {"name": "Discussion des résultats"}, "toolOutput": {"chapterId": "uuid-ici", "message": "Chapitre 'Discussion des résultats' ajouté avec succès.", "success": true} }] }\`
 * Utilisateur: "Crée-moi un plan de thèse sur l'éthique de l'IA générative."
-    * ThesisBot (réponse JSON attendue) : \`{ "responseMessage": "Voici un plan de thèse pour 'éthique de l'IA générative' :\\n\\n1. Introduction\\n   [... reste du plan généré par l'outil ...]", "actionsTaken": [{ "toolName": "createThesisPlanTool", "input": {"topicOrInstructions": "éthique de l'IA générative"}, "toolOutput": {"plan": "1. Introduction...", "message": "Plan de thèse généré...", "success": true} }] }\`
+    * ThesisBot (réponse JSON) : \`{ "responseMessage": "Voici un plan de thèse pour 'éthique de l'IA générative' :\\n\\n1. Introduction\\n   [... reste du plan généré par l'outil ...]", "actionsTaken": [{ "toolName": "createThesisPlanTool", "input": {"topicOrInstructions": "éthique de l'IA générative"}, "toolOutput": {"plan": "1. Introduction...", "message": "Plan de thèse généré...", "success": true} }] }\`
 
 Requête actuelle de l'utilisateur :
 {{{userRequest}}}
@@ -333,17 +343,19 @@ Requête actuelle de l'utilisateur :
 const thesisAgentFlow = ai.defineFlow(
   {
     name: 'thesisAgentFlow',
-    inputSchema: z.object({ // Le flux prendra le userId en plus de la requête
+    inputSchema: z.object({ 
       userRequest: z.string(),
       userId: z.string(),
+      userNameForAgent: z.string().optional(), // Ajouté pour la personnalisation
     }),
     outputSchema: ThesisAgentOutputSchema,
   },
   async (flowInput) => {
-    const { userRequest, userId } = flowInput;
-    console.log(`[ThesisAgentFlow] Début du flux pour userId: ${userId}, requête: "${userRequest}"`);
+    const { userRequest, userId, userNameForAgent } = flowInput;
+    console.log(`[ThesisAgentFlow] Début du flux pour userId: ${userId}, nom: ${userNameForAgent}, requête: "${userRequest}"`);
 
-    let llmResponse = await thesisAgentMainPrompt({ userRequest }); // Premier appel à l'IA
+    // Premier appel à l'IA pour obtenir la réponse ou la demande d'outil
+    let llmResponse = await thesisAgentMainPrompt({ userRequest, userNameForAgent });
     let finalResponseMessage = "";
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
 
@@ -352,6 +364,7 @@ const thesisAgentFlow = ai.defineFlow(
         let toolOutput: any;
         console.log(`[ThesisAgentFlow] Appel de l'outil demandé par l'IA: ${toolRequest.toolName} avec input:`, toolRequest.input);
 
+        // Appel manuel des fonctions logiques avec injection de userId
         switch (toolRequest.toolName) {
           case 'addChapterTool':
             toolOutput = await addChapterToolLogic(toolRequest.input as z.infer<typeof AddChapterInputSchema>, userId);
@@ -390,18 +403,24 @@ const thesisAgentFlow = ai.defineFlow(
       const toolResponses = await Promise.all(toolResponsesPromises);
 
       console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale.");
+      // Deuxième appel à l'IA avec l'historique et les résultats des outils
       llmResponse = await thesisAgentMainPrompt({
+        userRequest, // On peut omettre userRequest ici si l'historique suffit, ou le garder
+        userNameForAgent,
         history: [
-          ai.userMessage(userRequest),
-          llmResponse.candidates[0].message,
-          ...toolResponses
+          ai.userMessage(userRequest), // Message original de l'utilisateur
+          llmResponse.candidates[0].message, // Premier message de l'IA (qui incluait les toolRequests)
+          ...toolResponses // Réponses des outils
         ],
       });
     }
 
+    // Construction de la réponse finale
     if (llmResponse.output?.responseMessage) {
         finalResponseMessage = llmResponse.output.responseMessage;
     } else if (actionsTakenDetails.length > 0) {
+        // Si le LLM ne donne pas de responseMessage après les outils,
+        // on essaie de formuler une réponse basée sur la première action réussie.
         const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
         if (firstSuccessfulAction?.toolOutput?.plan && firstSuccessfulAction.toolName === 'createThesisPlanTool') {
              finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
@@ -410,7 +429,7 @@ const thesisAgentFlow = ai.defineFlow(
         } else {
             const firstAction = actionsTakenDetails[0];
             if (firstAction.toolOutput?.message) {
-                finalResponseMessage = firstAction.toolOutput.message;
+                finalResponseMessage = firstAction.toolOutput.message; // Fallback sur le message du premier outil
             } else {
                 finalResponseMessage = "J'ai effectué les actions demandées.";
             }
@@ -422,6 +441,7 @@ const thesisAgentFlow = ai.defineFlow(
     console.log("[ThesisAgentFlow] Réponse finale construite:", finalResponseMessage);
     return {
       responseMessage: finalResponseMessage,
+      // S'assurer que actionsTaken reflète ce qui a été réellement exécuté
       actionsTaken: actionsTakenDetails.length > 0 ? actionsTakenDetails : (llmResponse.output?.actionsTaken || undefined),
     };
   }
@@ -442,16 +462,21 @@ export async function processUserRequest(input: ThesisAgentInput): Promise<Thesi
   );
   const { data: { session } } = await supabaseServer.auth.getSession();
   const userId = session?.user?.id;
+  let userNameForAgent: string | undefined;
 
+  if (session?.user) {
+    userNameForAgent = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || session.user.email;
+  }
+  
   if (!userId) {
     console.warn("[processUserRequest] Tentative d'action sans utilisateur authentifié.");
     return { responseMessage: "Erreur d'authentification : Utilisateur non identifié. Veuillez vous connecter." };
   }
 
-  console.log(`[processUserRequest] Requête de l'utilisateur: "${input.userRequest}" pour userId: ${userId}`);
+  console.log(`[processUserRequest] Requête de l'utilisateur: "${input.userRequest}" pour userId: ${userId}, nom pour agent: ${userNameForAgent}`);
 
   try {
-    const result = await thesisAgentFlow({ userRequest: input.userRequest, userId });
+    const result = await thesisAgentFlow({ userRequest: input.userRequest, userId, userNameForAgent });
     console.log("[processUserRequest] Réponse du flux de l'agent:", JSON.stringify(result, null, 2));
     return result;
   } catch (error: any) {

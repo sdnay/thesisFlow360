@@ -8,13 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { PromptLogEntry } from '@/types';
 import { processUserRequest, type ThesisAgentInput, type ThesisAgentOutput } from '@/ai/flows/thesis-agent-flow';
-import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, Edit } from 'lucide-react'; 
+import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, Edit, Info } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/hooks/useAuth';
 
 interface PromptLogItemDisplayProps {
   entry: PromptLogEntry;
@@ -41,7 +42,7 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
         <div className="flex justify-between items-center">
             <CardTitle className="text-xs font-semibold text-primary">Prompt Original</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr })}
+            {entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true, locale: fr }) : 'Date inconnue'}
             </CardDescription>
         </div>
       </CardHeader>
@@ -118,6 +119,7 @@ interface AgentMessage {
 }
 
 export function ChatGPTPromptLogPanel() {
+  const { user } = useAuth();
   const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>([]);
   const [currentUserRequest, setCurrentUserRequest] = useState('');
   const [conversation, setConversation] = useState<AgentMessage[]>([]);
@@ -128,12 +130,18 @@ export function ChatGPTPromptLogPanel() {
   const { toast } = useToast();
 
   const fetchPromptLogs = useCallback(async () => {
+    if (!user) {
+      setPromptLogs([]);
+      setIsFetchingLogs(false);
+      return;
+    }
     setIsFetchingLogs(true);
     setError(null);
     try {
       const { data, error: supabaseError } = await supabase
         .from('prompt_log_entries')
         .select('*')
+        .eq('user_id', user.id)
         .order('timestamp', { ascending: false })
         .limit(5); 
 
@@ -146,21 +154,25 @@ export function ChatGPTPromptLogPanel() {
     } finally {
       setIsFetchingLogs(false);
     }
-  }, [toast]);
+  }, [toast, user]);
 
   useEffect(() => {
     fetchPromptLogs();
-     const channel = supabase
-      .channel('db-promptlogs-panel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries' }, fetchPromptLogs)
+  }, [fetchPromptLogs]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`db-promptlogs-panel-user-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries', filter: `user_id=eq.${user.id}` }, fetchPromptLogs)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchPromptLogs]);
+  }, [user, fetchPromptLogs]);
 
   const handleSendToAgent = async () => {
-    if (currentUserRequest.trim() === '') return;
+    if (currentUserRequest.trim() === '' || !user) return;
     
     const userMessage: AgentMessage = {
       id: `user-${Date.now()}`,
@@ -168,7 +180,18 @@ export function ChatGPTPromptLogPanel() {
       text: currentUserRequest,
       timestamp: new Date(),
     };
-    setConversation(prev => [...prev, userMessage, { id: `agent-loading-${Date.now()}`, type: 'agent', text: 'L\'assistant réfléchit...', timestamp: new Date(), isLoading: true }]);
+    // Ajoute le message de l'utilisateur et un message de chargement de l'agent
+    setConversation(prev => [
+      ...prev, 
+      userMessage, 
+      { 
+        id: `agent-loading-${Date.now()}`, 
+        type: 'agent', 
+        text: 'L\'assistant réfléchit...', 
+        timestamp: new Date(), 
+        isLoading: true 
+      }
+    ]);
     
     const requestTextForAgent = currentUserRequest;
     setCurrentUserRequest(''); 
@@ -177,6 +200,7 @@ export function ChatGPTPromptLogPanel() {
     
     try {
       const agentInput: ThesisAgentInput = { userRequest: requestTextForAgent };
+      // La fonction processUserRequest est une Server Action, elle gère l'authentification côté serveur.
       const result: ThesisAgentOutput = await processUserRequest(agentInput);
       
       const agentResponseMessage: AgentMessage = {
@@ -186,6 +210,7 @@ export function ChatGPTPromptLogPanel() {
         timestamp: new Date(),
         actions: result.actionsTaken,
       };
+       // Remplace le message de chargement par la réponse réelle de l'agent
       setConversation(prev => [...prev.filter(m => !m.isLoading), agentResponseMessage]);
 
     } catch (e: any) {
@@ -198,6 +223,7 @@ export function ChatGPTPromptLogPanel() {
         text: errorMessage,
         timestamp: new Date(),
       };
+       // Remplace le message de chargement par le message d'erreur
       setConversation(prev => [...prev.filter(m => !m.isLoading), agentErrorMessage]);
       toast({ title: "Erreur de l'Agent", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
@@ -224,7 +250,8 @@ export function ChatGPTPromptLogPanel() {
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 overflow-hidden p-3 md:p-4">
+        {/* Suppression de overflow-hidden ici */}
+        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 p-3 md:p-4">
           <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar">
             <div className="space-y-3 py-2 px-1">
               {conversation.length === 0 && !isLoadingAgent && (
@@ -246,7 +273,7 @@ export function ChatGPTPromptLogPanel() {
                     )}
                     {msg.actions && msg.actions.length > 0 && (
                       <details className="mt-1.5 text-xs opacity-80 pt-1 border-t border-border/50">
-                        <summary className="cursor-pointer font-medium">Détails des actions ({msg.actions.length})</summary>
+                        <summary className="cursor-pointer font-medium hover:text-primary transition-colors">Détails des actions ({msg.actions.length})</summary>
                         <ul className="list-disc pl-4 mt-1 space-y-0.5">
                         {msg.actions.map((action, index) => (
                           <li key={index}>
@@ -256,7 +283,7 @@ export function ChatGPTPromptLogPanel() {
                         </ul>
                       </details>
                     )}
-                    {!msg.isLoading && <p className="text-xs opacity-60 mt-1.5 text-right">{formatDistanceToNow(msg.timestamp, { addSuffix: true, locale: fr })}</p>}
+                    {!msg.isLoading && <p className="text-xs opacity-60 mt-1.5 text-right">{msg.timestamp ? formatDistanceToNow(msg.timestamp, { addSuffix: true, locale: fr }) : ''}</p>}
                   </div>
                 </div>
               ))}
@@ -268,19 +295,19 @@ export function ChatGPTPromptLogPanel() {
               id="agent-input-textarea"
               value={currentUserRequest}
               onChange={(e) => setCurrentUserRequest(e.target.value)}
-              placeholder="Demandez à l'IA..."
+              placeholder={user ? "Demandez à l'IA..." : "Veuillez vous connecter pour utiliser l'assistant."}
               rows={2}
               className="text-sm min-h-[60px] resize-none"
-              disabled={isLoadingAgent}
+              disabled={isLoadingAgent || !user}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && user) {
                   e.preventDefault();
                   handleSendToAgent();
                 }
               }}
             />
             <div className="flex gap-2">
-              <Button onClick={handleSendToAgent} disabled={isLoadingAgent || !currentUserRequest.trim()} className="flex-1">
+              <Button onClick={handleSendToAgent} disabled={isLoadingAgent || !currentUserRequest.trim() || !user} className="flex-1">
                 {isLoadingAgent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                 {isLoadingAgent ? 'Envoi...' : 'Envoyer'}
               </Button>
@@ -321,3 +348,4 @@ export function ChatGPTPromptLogPanel() {
     </div>
   );
 }
+
