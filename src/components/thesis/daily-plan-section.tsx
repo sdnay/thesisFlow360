@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState, type FC, useEffect, useCallback } from 'react';
+import { useState, type FC, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { DailyObjective, Chapter, Tag } from '@/types';
-import { PlusCircle, Trash2, Edit3, Loader2, Target as TargetIcon, Save, CalendarDays, ChevronLeft, ChevronRight, AlertTriangle, Info, History, CheckCircle2, Link as LinkIconLucide, Tags as TagsIcon, XIcon } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, Loader2, Target as TargetIcon, Save, CalendarDays, ChevronLeft, ChevronRight, AlertTriangle, Info, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
+import { Badge } from '@/components/ui/badge';
 
 // Import des composants extraits
 import SimpleObjectiveTagManager from './daily-plan-components/SimpleObjectiveTagManager';
@@ -48,13 +49,19 @@ export function DailyPlanSection() {
 
   const formatDateForSupabase = (date: Date): string => format(date, 'yyyy-MM-dd');
 
+  // Memoized date checks for consistency within a render
+  const isSelectedDateToday = useMemo(() => isToday(selectedDate), [selectedDate]);
+  const isSelectedDatePast = useMemo(() => isPast(selectedDate), [selectedDate]);
+
+
   const fetchPageData = useCallback(async (dateToFetch: Date) => {
     if (!user) {
-      setIsFetching(false); // Arrêter le chargement si pas d'utilisateur
+      setIsFetching(false);
       setObjectives([]);
       setOverdueObjectives([]);
       setChapters([]);
       setAvailableTags([]);
+      setError(null);
       return;
     }
     setIsFetching(true); setError(null);
@@ -65,7 +72,7 @@ export function DailyPlanSection() {
       const tagsQuery = supabase.from('tags').select('*').eq('user_id', user.id).order('name');
 
       let overdueQueryBuilder = null;
-      if (isToday(dateToFetch)) {
+      if (isToday(dateToFetch)) { // Use isToday directly here, not the memoized one if dateToFetch can be different from selectedDate
         const sevenDaysAgo = formatDateForSupabase(subDays(new Date(), 7));
         const yesterday = formatDateForSupabase(subDays(new Date(), 1));
         overdueQueryBuilder = supabase.from('daily_objectives').select('*, chapters(id, name), daily_objective_tags(tags(*))').eq('user_id', user.id).eq('completed', false).gte('objective_date', sevenDaysAgo).lte('objective_date', yesterday).order('objective_date', { ascending: true });
@@ -75,7 +82,7 @@ export function DailyPlanSection() {
         objectivesQuery,
         chaptersQuery,
         tagsQuery,
-        overdueQueryBuilder // Sera null si pas aujourd'hui
+        overdueQueryBuilder 
       ]);
 
       if (objRes.error) throw new Error(`Objectifs: ${objRes.error.message}`);
@@ -98,13 +105,12 @@ export function DailyPlanSection() {
        console.error("Erreur fetchPageData (DailyPlanSection):", e);
     }
     finally { setIsFetching(false); }
-  }, [toast, user]);
+  }, [toast, user]); // Removed isSelectedDateToday from deps as fetchPageData can be called with a different date
 
   useEffect(() => { 
     if (user) {
       fetchPageData(selectedDate); 
     } else {
-      // Réinitialiser les états si l'utilisateur se déconnecte
       setIsFetching(false);
       setObjectives([]);
       setOverdueObjectives([]);
@@ -118,7 +124,7 @@ export function DailyPlanSection() {
     if (!user) return;
     const channel = supabase.channel(`db-daily-plan-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objectives', filter: `user_id=eq.${user.id}` }, (payload) => { console.log("Daily objectives change", payload); fetchPageData(selectedDate); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objective_tags' /* Pourrait être plus spécifique avec RLS complexe */ }, (payload) => { console.log("Daily objective tags change", payload); fetchPageData(selectedDate); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objective_tags' }, (payload) => { console.log("Daily objective tags change", payload); fetchPageData(selectedDate); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, (payload) => { console.log("Tags change", payload); fetchPageData(selectedDate); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, (payload) => { console.log("Chapters change for daily plan", payload); fetchPageData(selectedDate); })
       .subscribe((status, err) => {
@@ -129,8 +135,6 @@ export function DailyPlanSection() {
 
   const saveObjectiveTags = async (objectiveId: string, tagsToSave: Tag[]) => {
     if(!user) return;
-    // RLS sur daily_objective_tags doit assurer que seul le propriétaire peut supprimer/insérer pour ses objectifs.
-    // Alternativement, on pourrait joindre sur daily_objectives pour s'assurer du user_id.
     await supabase.from('daily_objective_tags').delete().eq('daily_objective_id', objectiveId);
     if (tagsToSave.length > 0) {
       const newLinks = tagsToSave.map(tag => ({ daily_objective_id: objectiveId, tag_id: tag.id }));
@@ -143,7 +147,7 @@ export function DailyPlanSection() {
     if (!user || newObjectiveText.trim() === '') { toast({title:"Validation", description:"Texte de l'objectif requis."}); return; }
     setIsFormLoading(true);
     try {
-      const objectivePayload = {
+      const objectivePayload:any = { // Type any to avoid TS error on user_id for update
         user_id: user.id,
         text: newObjectiveText.trim(),
         objective_date: formatDateForSupabase(selectedDate),
@@ -154,7 +158,9 @@ export function DailyPlanSection() {
       let savedObjectiveData: DailyObjective | null = null;
 
       if (editingObjective) {
-        const { data, error } = await supabase.from('daily_objectives').update(objectivePayload).eq('id', editingObjective.id).eq('user_id', user.id).select('*, chapters(id,name), daily_objective_tags(tags(*))').single();
+        // Don't send user_id or objective_date on update if they are not meant to be changed
+        const { user_id, objective_date, ...updatePayload } = objectivePayload; 
+        const { data, error } = await supabase.from('daily_objectives').update(updatePayload).eq('id', editingObjective.id).eq('user_id', user.id).select('*, chapters(id,name), daily_objective_tags(tags(*))').single();
         if (error) throw error;
         savedObjectiveData = data ? { ...data, user_id: user.id, tags: data.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: data.chapters as {id:string, name:string}|null } : null;
       } else {
@@ -165,25 +171,20 @@ export function DailyPlanSection() {
 
       if (savedObjectiveData) {
         await saveObjectiveTags(savedObjectiveData.id, selectedTags);
-        // Re-fetch l'objectif avec ses tags mis à jour pour l'état local
         const { data: fetchedObjectiveWithTags, error: fetchErr } = await supabase.from('daily_objectives').select('*, chapters(id,name), daily_objective_tags(tags(*))').eq('id', savedObjectiveData.id).eq('user_id', user.id).single();
         if (fetchErr || !fetchedObjectiveWithTags) throw fetchErr || new Error("Récupération de l'objectif avec tags échouée après sauvegarde.");
-
         const processedFinalObjective = {...fetchedObjectiveWithTags, user_id: user.id, tags: fetchedObjectiveWithTags.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: fetchedObjectiveWithTags.chapters as {id:string, name:string}|null };
 
         if (formatDateForSupabase(selectedDate) === processedFinalObjective.objective_date) {
             if (editingObjective) {
-              setObjectives(prev => prev.map(obj => obj.id === processedFinalObjective.id ? processedFinalObjective : obj));
+              setObjectives(prev => prev.map(obj => obj.id === processedFinalObjective.id ? processedFinalObjective : obj).sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
             } else {
-              setObjectives(prev => [...prev, processedFinalObjective]);
+              setObjectives(prev => [...prev, processedFinalObjective].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
             }
         }
-         // Si l'objectif modifié/ajouté était un objectif en retard, mettre à jour la liste des retards.
-        if (overdueObjectives.find(o => o.id === processedFinalObjective.id) || (isPast(parseISO(processedFinalObjective.objective_date)) && !processedFinalObjective.completed)) {
-            fetchOverdueObjectives(); // Simple re-fetch pour les retards
+        if (overdueObjectives.find(o => o.id === processedFinalObjective.id) || (isPast(parseISO(processedFinalObjective.objective_date)) && !isToday(parseISO(processedFinalObjective.objective_date)) && !processedFinalObjective.completed)) {
+            fetchOverdueObjectives();
         }
-
-
         toast({ title: editingObjective ? "Objectif mis à jour" : "Objectif ajouté" });
       }
       setNewObjectiveText(''); setEditingObjective(null); setSelectedChapterId(undefined); setSelectedTags([]); setIsModalOpen(false);
@@ -192,7 +193,7 @@ export function DailyPlanSection() {
   };
   
   const fetchOverdueObjectives = useCallback(async () => {
-    if (!user || !isToday(selectedDate)) { // Charger les retards seulement si on regarde la date d'aujourd'hui
+    if (!user || !isToday(selectedDate)) { 
       setOverdueObjectives([]);
       return;
     }
@@ -226,19 +227,19 @@ export function DailyPlanSection() {
       if (updatedObjFromDb) {
           const processedUpdatedObj: DailyObjective = { ...updatedObjFromDb, user_id: user.id, tags: updatedObjFromDb.daily_objective_tags?.map((dot: any) => dot.tags) || [], chapters: updatedObjFromDb.chapters as { id: string, name: string } | null };
           
-          if (objectiveDate === formatDateForSupabase(selectedDate)) { // L'objectif est pour la date actuellement affichée
-            setObjectives(prev => prev.map(obj => obj.id === id ? processedUpdatedObj : obj));
+          if (objectiveDate === formatDateForSupabase(selectedDate)) {
+            setObjectives(prev => prev.map(obj => obj.id === id ? processedUpdatedObj : obj).sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
           }
-          // Si l'objectif complété était dans la liste des retards
-          if (isPast(parseISO(objectiveDate)) && !isToday(parseISO(objectiveDate)) && completed) {
-             setOverdueObjectives(prevOverdue => prevOverdue.filter(obj => obj.id !== id));
-          } else if (isPast(parseISO(objectiveDate)) && !isToday(parseISO(objectiveDate)) && !completed) {
-             // Si on le "dé-complète", il doit réapparaître dans les retards si la date est passée
-             setOverdueObjectives(prevOverdue => {
-                const existing = prevOverdue.find(o => o.id === id);
-                if(existing) return prevOverdue.map(o => o.id === id ? processedUpdatedObj : o);
-                return [...prevOverdue, processedUpdatedObj].sort((a,b) => new Date(a.objective_date).getTime() - new Date(b.objective_date).getTime());
-             });
+          if (isPast(parseISO(objectiveDate)) && !isToday(parseISO(objectiveDate))) {
+             if(completed) {
+                setOverdueObjectives(prevOverdue => prevOverdue.filter(obj => obj.id !== id));
+             } else {
+                 setOverdueObjectives(prevOverdue => {
+                    const existing = prevOverdue.find(o => o.id === id);
+                    if(existing) return prevOverdue.map(o => o.id === id ? processedUpdatedObj : o).sort((a,b) => new Date(a.objective_date).getTime() - new Date(b.objective_date).getTime());
+                    return [...prevOverdue, processedUpdatedObj].sort((a,b) => new Date(a.objective_date).getTime() - new Date(b.objective_date).getTime());
+                 });
+             }
           }
       }
     } catch (e: any) { toast({title:"Erreur", description: (e as Error).message, variant:"destructive"}); console.error("Erreur handleToggleObjective:", e); }
@@ -289,6 +290,10 @@ export function DailyPlanSection() {
         </div>
     );
   }
+  
+  const showAddButtonInHeader = !isSelectedDatePast;
+  const showAddButtonInEmptyState = !isSelectedDatePast;
+
 
   return (
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
@@ -296,14 +301,16 @@ export function DailyPlanSection() {
         <div className="flex items-center gap-3">
           <TargetIcon className="h-7 w-7 text-primary" />
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-            Plan du Jour {isToday(selectedDate) ? "" : `(${format(selectedDate, "d MMM yyyy", { locale: fr })})`}
+            Plan du Jour {isSelectedDateToday ? "" : `(${format(selectedDate, "d MMM yyyy", { locale: fr })})`}
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => navigateDate(-1)} aria-label="Jour précédent"><ChevronLeft className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={() => navigateDate(-1)} aria-label="Jour précédent" disabled={isFetching}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[180px] justify-start text-left font-normal text-sm h-9">
+              <Button variant="outline" className="w-[180px] justify-start text-left font-normal text-sm h-9" disabled={isFetching}>
                 <CalendarDays className="mr-2 h-4 w-4" />
                 {format(selectedDate, "PPP", { locale: fr })}
               </Button>
@@ -312,9 +319,11 @@ export function DailyPlanSection() {
               <Calendar mode="single" selected={selectedDate} onSelect={(date) => date && setSelectedDate(startOfDay(date))} initialFocus locale={fr} />
             </PopoverContent>
           </Popover>
-          <Button variant="outline" size="icon" onClick={() => navigateDate(1)} disabled={isToday(selectedDate)} aria-label="Jour suivant"><ChevronRight className="h-4 w-4" /></Button>
-          {!isPast(selectedDate) && 
-            <Button onClick={openNewModal} disabled={isFetching || isFormLoading} size="sm" className="h-9">
+          <Button variant="outline" size="icon" onClick={() => navigateDate(1)} disabled={isSelectedDateToday || isFetching} aria-label="Jour suivant">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {showAddButtonInHeader && 
+            <Button onClick={openNewModal} disabled={isFetching || isFormLoading || !user} size="sm" className="h-9">
               <PlusCircle className="mr-2 h-4 w-4" /> Objectif
             </Button>}
         </div>
@@ -333,7 +342,7 @@ export function DailyPlanSection() {
         </CardContent>
       </Card>
 
-      {isToday(selectedDate) && overdueObjectives.length > 0 && (
+      {isSelectedDateToday && overdueObjectives.length > 0 && (
         <Accordion type="single" collapsible className="w-full" defaultValue="overdue">
           <AccordionItem value="overdue" className="border rounded-lg shadow-sm bg-amber-50/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700">
             <AccordionTrigger className="text-sm md:text-base font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 py-3 px-4 hover:no-underline">
@@ -362,18 +371,18 @@ export function DailyPlanSection() {
             <Button onClick={() => fetchPageData(selectedDate)} variant="destructive" className="mt-4">Réessayer</Button>
           </div>
         ) : objectives.length === 0 ? ( 
-          <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md">
+          <div className="flex-grow flex flex-col items-center justify-center text-center p-6 text-muted-foreground border-dashed border rounded-md min-h-[200px]">
             <TargetIcon className="mx-auto h-16 w-16 opacity-30 mb-4"/>
-            <p className="font-medium text-lg mb-1">Aucun objectif pour {isToday(selectedDate) ? "aujourd'hui" : `le ${format(selectedDate, "d MMM", {locale: fr})}`}.</p>
+            <p className="font-medium text-lg mb-1">Aucun objectif pour {isSelectedDateToday ? "aujourd'hui" : `le ${format(selectedDate, "d MMM", {locale: fr})}`}.</p>
             <p className="text-sm mb-4">Définissez vos priorités pour cette journée.</p>
-            {!isPast(selectedDate) && 
-              <Button onClick={openNewModal} size="lg" className="mt-2">
-                <PlusCircle className="mr-2 h-5 w-5" /> Définir un objectif
+            {showAddButtonInEmptyState && 
+              <Button onClick={openNewModal} size="lg" className="mt-2" disabled={!user || isFormLoading || isFetching}>
+                <PlusCircle className="mr-2 h-5 w-5" /> Définir {objectives.length === 0 && isSelectedDateToday ? 'le premier' : 'un'} objectif
               </Button>
             }
           </div>
         ) : (
-          objectives.map((obj) => <DailyObjectiveItem key={obj.id} objective={obj} onToggle={handleToggleObjective} onDelete={handleDeleteObjective} onEdit={openEditModal} isLoading={isItemLoading === obj.id} isPastObjective={isPast(selectedDate) && !isToday(selectedDate)} />)
+          objectives.map((obj) => <DailyObjectiveItem key={obj.id} objective={obj} onToggle={handleToggleObjective} onDelete={handleDeleteObjective} onEdit={openEditModal} isLoading={isItemLoading === obj.id} isPastObjective={isSelectedDatePast && !isSelectedDateToday} />)
         )}
       </div>
 
@@ -405,7 +414,7 @@ export function DailyPlanSection() {
                       disabled={isFormLoading}
                     />
                  </div>
-                 {objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isToday(selectedDate) && ( 
+                 {objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isSelectedDateToday && ( 
                    <p className="text-xs text-orange-600 flex items-center gap-1.5 pt-1">
                      <Info className="h-3.5 w-3.5 shrink-0"/>Vous avez déjà 5 objectifs actifs pour aujourd'hui.
                    </p> 
@@ -413,7 +422,14 @@ export function DailyPlanSection() {
             </div>
             <DialogFooter className="mt-2">
                 <DialogClose asChild><Button variant="outline" disabled={isFormLoading}>Annuler</Button></DialogClose>
-                <Button onClick={handleAddOrUpdateObjective} disabled={isFormLoading || !newObjectiveText.trim() || (objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isToday(selectedDate))}>
+                <Button 
+                  onClick={handleAddOrUpdateObjective} 
+                  disabled={
+                    isFormLoading || 
+                    !newObjectiveText.trim() || 
+                    (objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isSelectedDateToday)
+                  }
+                >
                   {isFormLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : (editingObjective ? <Save className="h-4 w-4 mr-2" /> : <PlusCircle className="h-4 w-4 mr-2" />)} 
                   {editingObjective ? 'Enregistrer' : 'Ajouter'}
                 </Button>
