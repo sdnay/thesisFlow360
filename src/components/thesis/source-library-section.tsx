@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, type FC, useEffect, useCallback } from 'react';
+import { useState, type FC, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,104 +10,51 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import type { Source } from '@/types';
-import { PlusCircle, Edit3, Trash2, Link as LinkIconLucide, FileText, Mic, BookOpen, Loader2, Library, Save, FileArchive } from 'lucide-react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { PlusCircle, Loader2, Library, Save, Filter as FilterIcon, Search as SearchIcon, ArrowUpDown, FileArchive } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { SourceTypeIcon, sourceTypeText } from './source-library-components/SourceTypeIcon'; // Import from new location
+import SourceItemCard from './source-library-components/SourceItemCard'; // Import from new location
 
-const SourceTypeIcon: FC<{ type: Source['type'], className?: string }> = ({ type, className }) => {
-  const iconProps = { className: cn("h-4 w-4", className) };
-  switch (type) {
-    case 'pdf': return <FileText {...iconProps} />;
-    case 'website': return <LinkIconLucide {...iconProps} />;
-    case 'interview': return <Mic {...iconProps} />;
-    case 'field_notes': return <BookOpen {...iconProps} />;
-    default: return <FileArchive {...iconProps} />;
-  }
-};
+const sourceTypes: Source['type'][] = ["pdf", "website", "interview", "field_notes", "other"];
+type SortOrder = "created_at_desc" | "created_at_asc" | "title_asc" | "title_desc";
 
-const sourceTypeText = (type: Source['type']): string => {
-    switch (type) {
-        case 'pdf': return 'Document PDF';
-        case 'website': return 'Site Web / Lien';
-        case 'interview': return 'Entretien';
-        case 'field_notes': return 'Notes de Terrain';
-        case 'other': return 'Autre';
-        default: return type;
-    }
-}
-
-
-const SourceItemCard: FC<{ source: Source, onEdit: (source: Source) => void, onDelete: (id: string) => Promise<void>, isLoading: boolean }> = ({ source, onEdit, onDelete, isLoading }) => {
-  const isExternalLink = source.source_link_or_path && (source.source_link_or_path.startsWith('http://') || source.source_link_or_path.startsWith('https://'));
-  return (
-    <Card className="shadow-md hover:shadow-xl transition-shadow duration-200 flex flex-col">
-      <CardHeader className="pb-2 pt-4">
-        <div className="flex justify-between items-start gap-2">
-          <div className="flex items-center gap-2 flex-grow min-w-0">
-            <SourceTypeIcon type={source.type} className="text-primary shrink-0 h-5 w-5" />
-            <CardTitle className="text-base md:text-lg leading-tight truncate" title={source.title}>{source.title}</CardTitle>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <Button variant="outline" size="icon" onClick={() => onEdit(source)} aria-label="Modifier la source" disabled={isLoading} className="h-8 w-8">
-              <Edit3 className="h-4 w-4" />
-            </Button>
-            <Button variant="destructiveOutline" size="icon" onClick={() => onDelete(source.id)} aria-label="Supprimer la source" disabled={isLoading} className="h-8 w-8">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <CardDescription className="text-xs pt-1 pl-7"> {/* Pl-7 to align with title if icon is present */}
-          Type : {sourceTypeText(source.type)} | Ajouté le : {format(new Date(source.created_at), "d MMM yyyy", { locale: fr })}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="text-xs md:text-sm flex-grow space-y-2 py-3">
-        {source.source_link_or_path && (
-          <div className="flex items-center gap-1.5">
-            <LinkIconLucide className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            {isExternalLink ? (
-                <Link href={source.source_link_or_path} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate" title={source.source_link_or_path}>
-                    {source.source_link_or_path}
-                </Link>
-            ) : (
-                <span className="truncate text-muted-foreground" title={source.source_link_or_path}>{source.source_link_or_path}</span>
-            )}
-          </div>
-        )}
-        {source.notes && (
-            <div className="pt-1">
-                <h4 className="text-xs font-semibold text-muted-foreground mb-0.5">Notes :</h4>
-                <p className="text-muted-foreground whitespace-pre-wrap text-xs max-h-24 overflow-y-auto custom-scrollbar pr-1">{source.notes}</p>
-            </div>
-        )}
-         {!source.source_link_or_path && !source.notes && (
-            <p className="text-muted-foreground italic text-xs">Aucun lien ou note supplémentaire.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
+const sortOptions: { value: SortOrder; label: string }[] = [
+  { value: "created_at_desc", label: "Date d'ajout (plus récent)" },
+  { value: "created_at_asc", label: "Date d'ajout (plus ancien)" },
+  { value: "title_asc", label: "Titre (A-Z)" },
+  { value: "title_desc", label: "Titre (Z-A)" },
+];
 
 export function SourceLibrarySection() {
+  const { user } = useAuth();
   const [sources, setSources] = useState<Source[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentSource, setCurrentSource] = useState<Partial<Source> & { id?: string } | null>(null);
-  const sourceTypes: Source['type'][] = ["pdf", "website", "interview", "field_notes", "other"];
+  
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [isCardActionLoading, setIsCardActionLoading] = useState<string|null>(null);
   const [isFetching, setIsFetching] = useState(true);
   const { toast } = useToast();
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<Source['type'] | 'all'>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('created_at_desc');
+
   const fetchSources = useCallback(async () => {
+    if (!user) {
+      setSources([]);
+      setIsFetching(false);
+      return;
+    }
     setIsFetching(true);
     try {
       const { data, error } = await supabase
         .from('sources')
         .select('*')
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id) // Filter by user
+        .order('created_at', { ascending: false }); // Default sort by Supabase
       if (error) throw error;
       setSources(data || []);
     } catch (e: any) {
@@ -116,21 +63,30 @@ export function SourceLibrarySection() {
     } finally {
       setIsFetching(false);
     }
-  }, [toast]);
+  }, [toast, user]);
 
   useEffect(() => {
     fetchSources();
-     const channel = supabase
-      .channel('db-sources-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sources' }, fetchSources)
+  }, [fetchSources]); // fetchSources is stable due to useCallback with `user` dependency
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`db-sources-page-user-${user.id}`) // User specific channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sources', filter: `user_id=eq.${user.id}` }, 
+        (payload) => {
+          console.log('SourceLibrary Realtime event:', payload);
+          fetchSources();
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSources]);
+  }, [user, fetchSources]);
 
   const openModalForNew = () => {
-    setCurrentSource({ title: '', type: 'website', source_link_or_path: '', notes: '' });
+    setCurrentSource({ title: '', type: 'website', source_link_or_path: '', notes: '', user_id: user?.id });
     setIsModalOpen(true);
   };
 
@@ -140,13 +96,14 @@ export function SourceLibrarySection() {
   };
 
   const handleSaveSource = async () => {
-    if (!currentSource || !currentSource.title?.trim() || !currentSource.type) {
+    if (!user || !currentSource || !currentSource.title?.trim() || !currentSource.type) {
         toast({title: "Erreur de validation", description: "Le titre et le type de la source sont requis.", variant: "destructive"});
         return;
     }
     setIsFormLoading(true);
     try {
       const payload = {
+        user_id: user.id, // Ensure user_id is set
         title: currentSource.title.trim(),
         type: currentSource.type,
         source_link_or_path: currentSource.source_link_or_path?.trim() || null,
@@ -154,17 +111,18 @@ export function SourceLibrarySection() {
       };
 
       if (currentSource.id) { 
-        const { error } = await supabase.from('sources').update(payload).eq('id', currentSource.id);
+        const { data: updatedSource, error } = await supabase.from('sources').update(payload).eq('id', currentSource.id).eq('user_id', user.id).select().single();
         if (error) throw error;
+        setSources(prev => prev.map(s => s.id === updatedSource?.id ? updatedSource : s));
         toast({ title: "Source modifiée" });
       } else { 
-        const { error } = await supabase.from('sources').insert([payload]);
+        const { data: newSource, error } = await supabase.from('sources').insert(payload).select().single();
         if (error) throw error;
+        setSources(prev => [newSource, ...prev].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())); // Add to start
         toast({ title: "Source ajoutée" });
       }
       setIsModalOpen(false);
       setCurrentSource(null);
-      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleSaveSource:", e);
@@ -174,12 +132,13 @@ export function SourceLibrarySection() {
   };
   
   const handleDeleteSource = async (sourceId: string) => {
+    if (!user) return;
     setIsCardActionLoading(sourceId);
     try {
-      const { error } = await supabase.from('sources').delete().eq('id', sourceId);
+      const { error } = await supabase.from('sources').delete().eq('id', sourceId).eq('user_id', user.id);
       if (error) throw error;
+      setSources(prev => prev.filter(s => s.id !== sourceId));
       toast({ title: "Source supprimée" });
-      // Data will be refetched by Supabase listener
     } catch (e: any) {
       toast({ title: "Erreur de suppression", description: (e as Error).message, variant: "destructive" });
       console.error("Erreur handleDeleteSource:", e);
@@ -188,6 +147,39 @@ export function SourceLibrarySection() {
     }
   };
 
+  const filteredAndSortedSources = useMemo(() => {
+    let result = [...sources];
+
+    if (filterType !== 'all') {
+      result = result.filter(source => source.type === filterType);
+    }
+
+    if (searchQuery.trim() !== '') {
+      const lowerSearchQuery = searchQuery.toLowerCase();
+      result = result.filter(source =>
+        source.title.toLowerCase().includes(lowerSearchQuery) ||
+        (source.notes && source.notes.toLowerCase().includes(lowerSearchQuery))
+      );
+    }
+
+    switch (sortOrder) {
+      case 'created_at_asc':
+        result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'title_asc':
+        result.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title_desc':
+        result.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      case 'created_at_desc': // Default
+      default:
+        result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+    }
+    return result;
+  }, [sources, searchQuery, filterType, sortOrder]);
+
   return (
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -195,28 +187,86 @@ export function SourceLibrarySection() {
             <Library className="h-7 w-7 text-primary" />
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight">Bibliothèque de Sources</h1>
         </div>
-        <Button onClick={openModalForNew} disabled={isFetching || isFormLoading}>
+        <Button onClick={openModalForNew} disabled={isFetching || isFormLoading || !user}>
           <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Source
         </Button>
       </div>
 
-      {isFetching ? (
+      {/* Toolbar for Search and Filters */}
+      <Card className="p-3 md:p-4 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 items-end">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <Label htmlFor="sourceSearch" className="text-xs font-medium">Rechercher</Label>
+            <div className="relative mt-1">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="sourceSearch"
+                type="search"
+                placeholder="Rechercher par titre ou notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 text-sm h-9"
+                disabled={!user}
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="sourceFilterType" className="text-xs font-medium">Filtrer par Type</Label>
+            <Select value={filterType} onValueChange={(value) => setFilterType(value as Source['type'] | 'all')} disabled={!user}>
+              <SelectTrigger id="sourceFilterType" className="text-sm h-9 mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les types</SelectItem>
+                {sourceTypes.map(type => (
+                  <SelectItem key={type} value={type}>{sourceTypeText(type)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="sourceSortOrder" className="text-xs font-medium">Trier par</Label>
+            <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as SortOrder)} disabled={!user}>
+              <SelectTrigger id="sourceSortOrder" className="text-sm h-9 mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {sortOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </Card>
+
+      {!user && !isFetching && (
+         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
+            <Library className="mx-auto h-16 w-16 text-muted-foreground/30 mb-4" />
+            <CardTitle className="text-lg md:text-xl">Connectez-vous pour accéder à votre bibliothèque</CardTitle>
+            <p className="text-muted-foreground my-2 max-w-md mx-auto text-sm">
+                Vos sources bibliographiques seront stockées et organisées ici une fois connecté.
+            </p>
+         </Card>
+      )}
+
+      {user && isFetching ? (
         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6">
             <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Chargement de la bibliothèque...</p>
         </Card>
-      ) : sources.length === 0 ? (
-        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed">
-            <Library className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4"/>
-            <CardTitle className="text-xl">Votre bibliothèque est vide.</CardTitle>
-            <p className="text-muted-foreground my-2 max-w-md mx-auto">Commencez à construire votre base de connaissances en ajoutant des articles, des livres, des sites web et d'autres références utiles.</p>
-            <Button onClick={openModalForNew} disabled={isFormLoading} size="lg" className="mt-2">
-                <PlusCircle className="mr-2 h-5 w-5" /> Ajouter la première source
-            </Button>
+      ) : user && filteredAndSortedSources.length === 0 ? (
+        <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
+            <FileArchive className="mx-auto h-16 w-16 text-muted-foreground/30 mb-4"/>
+            <CardTitle className="text-xl">{sources.length === 0 ? "Votre bibliothèque est vide." : "Aucune source ne correspond."}</CardTitle>
+            <p className="text-muted-foreground my-2 max-w-md mx-auto text-sm">
+              {sources.length === 0 ? "Commencez à construire votre base de connaissances en ajoutant des références." : "Essayez d'ajuster vos filtres ou votre recherche."}
+            </p>
+            {sources.length === 0 && 
+              <Button onClick={openModalForNew} disabled={isFormLoading} size="lg" className="mt-2">
+                  <PlusCircle className="mr-2 h-5 w-5" /> Ajouter la première source
+              </Button>
+            }
         </Card>
-      ) : (
+      ) : user && (
         <div className="flex-grow grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 items-start overflow-y-auto custom-scrollbar pr-1 pb-4">
-          {sources.map((source) => (
+          {filteredAndSortedSources.map((source) => (
             <SourceItemCard 
               key={source.id} 
               source={source} 
@@ -235,50 +285,52 @@ export function SourceLibrarySection() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="sourceTitle" className="block text-sm font-medium mb-1.5">Titre de la source</Label>
+              <Label htmlFor="sourceTitleModal" className="block text-sm font-medium mb-1.5">Titre de la source</Label>
               <Input
-                id="sourceTitle"
+                id="sourceTitleModal"
                 value={currentSource?.title || ''}
-                onChange={(e) => setCurrentSource(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => setCurrentSource(prev => prev ? ({ ...prev, title: e.target.value }) : null)}
                 placeholder="ex : Article de revue, Nom du livre..."
                 disabled={isFormLoading}
                 className="text-sm"
               />
             </div>
             <div>
-              <Label htmlFor="sourceType" className="block text-sm font-medium mb-1.5">Type de source</Label>
+              <Label htmlFor="sourceTypeModal" className="block text-sm font-medium mb-1.5">Type de source</Label>
               <Select
                 value={currentSource?.type || 'website'}
-                onValueChange={(value) => setCurrentSource(prev => ({ ...prev, type: value as Source['type'] }))}
+                onValueChange={(value) => setCurrentSource(prev => prev ? ({ ...prev, type: value as Source['type'] }) : null)}
                 disabled={isFormLoading}
               >
-                <SelectTrigger id="sourceType" aria-label="Type de source" className="text-sm">
+                <SelectTrigger id="sourceTypeModal" aria-label="Type de source" className="text-sm">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
                   {sourceTypes.map(type => (
-                    <SelectItem key={type} value={type} className="text-sm">{sourceTypeText(type)}</SelectItem>
+                    <SelectItem key={type} value={type} className="text-sm flex items-center gap-2">
+                      <SourceTypeIcon type={type} className="inline-block mr-2" /> {sourceTypeText(type)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
              <div>
-              <Label htmlFor="sourceLinkOrPath" className="block text-sm font-medium mb-1.5">Lien ou Chemin du Fichier (Optionnel)</Label>
+              <Label htmlFor="sourceLinkOrPathModal" className="block text-sm font-medium mb-1.5">Lien ou Chemin du Fichier (Optionnel)</Label>
               <Input
-                id="sourceLinkOrPath"
+                id="sourceLinkOrPathModal"
                 value={currentSource?.source_link_or_path || ''}
-                onChange={(e) => setCurrentSource(prev => ({ ...prev, source_link_or_path: e.target.value }))}
+                onChange={(e) => setCurrentSource(prev => prev ? ({ ...prev, source_link_or_path: e.target.value }) : null)}
                 placeholder="ex : https://exemple.com ou /docs/document.pdf"
                 disabled={isFormLoading}
                 className="text-sm"
               />
             </div>
             <div>
-              <Label htmlFor="sourceNotes" className="block text-sm font-medium mb-1.5">Notes (Optionnel)</Label>
+              <Label htmlFor="sourceNotesModal" className="block text-sm font-medium mb-1.5">Notes (Optionnel)</Label>
               <Textarea
-                id="sourceNotes"
+                id="sourceNotesModal"
                 value={currentSource?.notes || ''}
-                onChange={(e) => setCurrentSource(prev => ({ ...prev, notes: e.target.value }))}
+                onChange={(e) => setCurrentSource(prev => prev ? ({ ...prev, notes: e.target.value }) : null)}
                 placeholder="Points clés, citations, idées principales..."
                 rows={4}
                 disabled={isFormLoading}
@@ -292,7 +344,7 @@ export function SourceLibrarySection() {
             </DialogClose>
             <Button onClick={handleSaveSource} disabled={isFormLoading || !currentSource?.title?.trim()}>
               {isFormLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4"/>}
-              {currentSource?.id ? 'Enregistrer les Modifications' : 'Ajouter la Source'}
+              {currentSource?.id ? 'Enregistrer' : 'Ajouter la Source'}
             </Button>
           </DialogFooter>
         </DialogContent>
