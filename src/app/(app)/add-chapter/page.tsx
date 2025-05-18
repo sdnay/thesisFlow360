@@ -1,8 +1,8 @@
 
 "use client";
 
-import ManageThesisPlan from '@/components/thesis/ManageThesisPlan'; // Modifié ici
+import ManageThesisPlan from '@/components/thesis/ManageThesisPlan';
 
-export default function AddChapterRoutePage() {
+export default function ManageThesisPlanPage() { // Renamed from AddChapterRoutePage
   return <ManageThesisPlan />;
 }
