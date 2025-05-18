@@ -182,12 +182,12 @@ async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInput
       const historyPrompts = (logEntries || [])
         .map(p => p.refined_prompt || p.original_prompt)
         .filter(p => p && p.trim() !== '');
-      
+
       const refineFlowInput: RefinePromptInput = {
         prompt: input.promptToRefine,
         promptHistory: historyPrompts,
       };
-      
+
       const result: RefinePromptOutput = await refinePrompt(refineFlowInput);
 
       const newLogEntryPayload = {
@@ -198,7 +198,7 @@ async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInput
         user_id: userId,
       };
       const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
-      if (insertError) throw insertError; 
+      if (insertError) throw insertError;
 
       return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné et consigné avec succès.", success: true };
     } catch (e: any) {
@@ -253,18 +253,20 @@ const createThesisPlanToolForAI = ai.defineTool(
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }
 );
 
-
 // --- Schéma d'Entrée/Sortie pour l'Agent Principal ---
-// L'IA ne voit que userRequest. userNameForAgent est utilisé pour personnaliser le message.
+
+// Schéma Zod pour l'input du prompt de l'agent (ce que le flux thesisAgentFlow prépare pour thesisAgentMainPrompt)
 const ThesisAgentPromptInputSchema = z.object({
   userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
   userNameForAgent: z.string().optional().describe("Nom/Identifiant de l'utilisateur pour personnaliser la salutation.")
 });
 
 // Type pour l'input de la fonction processUserRequest (ce qui vient du client)
-export type ThesisAgentInput = z.object({
-  userRequest: z.string(),
+const ProcessUserRequestInputSchema = z.object({
+  userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
 });
+export type ThesisAgentInput = z.infer<typeof ProcessUserRequestInputSchema>;
+
 
 // Schéma Zod pour la sortie du prompt et du flux
 const ThesisAgentOutputSchema = z.object({
@@ -284,7 +286,7 @@ export type ThesisAgentOutput = z.infer<typeof ThesisAgentOutputSchema>;
 // --- Prompt Principal de l'Agent ---
 const thesisAgentMainPrompt = ai.definePrompt({
   name: 'thesisAgentMainPrompt',
-  input: { schema: ThesisAgentPromptInputSchema }, 
+  input: { schema: ThesisAgentPromptInputSchema },
   output: { schema: ThesisAgentOutputSchema },
   tools: [
     addChapterToolForAI,
@@ -356,7 +358,7 @@ Requête actuelle de l'utilisateur :
 const thesisAgentFlow = ai.defineFlow(
   {
     name: 'thesisAgentFlow',
-    inputSchema: z.object({ 
+    inputSchema: z.object({
       userRequest: z.string(),
       userId: z.string(),
       userNameForAgent: z.string().optional(),
@@ -393,18 +395,16 @@ const thesisAgentFlow = ai.defineFlow(
             toolOutput = await addSourceToolLogic(toolRequest.input as z.infer<typeof AddSourceInputSchema>, userId);
             break;
           case 'refinePromptTool':
-            // refinePromptToolLogic a besoin de userId pour le logging, donc on le passe.
             toolOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId);
             break;
           case 'createThesisPlanTool':
-            // createThesisPlanToolLogic n'a pas besoin de userId pour sa logique principale.
             toolOutput = await createThesisPlanToolLogic(toolRequest.input as z.infer<typeof CreateThesisPlanToolInputSchema>);
             break;
           default:
             console.warn(`[ThesisAgentFlow] Outil inconnu demandé: ${toolRequest.toolName}`);
             toolOutput = { message: `Outil ${toolRequest.toolName} non reconnu ou non géré manuellement.`, success: false };
         }
-        
+
         actionsTakenDetails.push({
           toolName: toolRequest.toolName,
           toolInput: toolRequest.input,
@@ -421,8 +421,8 @@ const thesisAgentFlow = ai.defineFlow(
         userNameForAgent,
         history: [
           ai.userMessage(userRequest),
-          llmResponse.candidates[0].message, 
-          ...toolResponses 
+          llmResponse.candidates[0].message,
+          ...toolResponses
         ],
       });
     }
@@ -446,7 +446,7 @@ const thesisAgentFlow = ai.defineFlow(
     } else {
         finalResponseMessage = llmResponse.text || "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
     }
-    
+
     console.log("[ThesisAgentFlow] Réponse finale construite:", finalResponseMessage);
     return {
       responseMessage: finalResponseMessage,
@@ -456,14 +456,14 @@ const thesisAgentFlow = ai.defineFlow(
 );
 
 // --- Fonction Principale Exportée (Server Action) ---
-export async function processUserRequest(input: z.infer<typeof ThesisAgentInput>): Promise<ThesisAgentOutput> {
+export async function processUserRequest(input: ThesisAgentInput): Promise<ThesisAgentOutput> {
   // La directive 'use server' est au début du fichier
 
   const cookieStore = cookies();
   const supabaseServer = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { 
+    { cookies: {
         get: (name) => cookieStore.get(name)?.value,
         set: (name, value, options) => cookieStore.set({ name, value, ...options }),
         remove: (name, options) => cookieStore.set({ name, value: '', ...options }),
@@ -477,7 +477,7 @@ export async function processUserRequest(input: z.infer<typeof ThesisAgentInput>
   if (session?.user) {
     userNameForAgent = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || session.user.email;
   }
-  
+
   if (!userId) {
     console.warn("[processUserRequest] Tentative d'action sans utilisateur authentifié.");
     return { responseMessage: "Erreur d'authentification : Utilisateur non identifié. Veuillez vous connecter." };
@@ -494,3 +494,5 @@ export async function processUserRequest(input: z.infer<typeof ThesisAgentInput>
     return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message || 'Erreur inconnue du serveur'}` };
   }
 }
+
+    
