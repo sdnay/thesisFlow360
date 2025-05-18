@@ -223,6 +223,7 @@ async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanT
 
 
 // --- Définitions des Outils pour Genkit (pour la découverte par l'IA) ---
+// La fonction d'implémentation ici est une coquille. L'appel réel se fera manuellement dans le flux.
 const addChapterToolForAI = ai.defineTool(
   { name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
@@ -260,12 +261,24 @@ const ThesisAgentPromptInputSchema = z.object({
   userNameForAgent: z.string().optional().describe("Nom/Identifiant de l'utilisateur pour personnaliser la salutation.")
 });
 
-// ThesisAgentInput et ThesisAgentOutput restent les types pour la fonction processUserRequest
-export type ThesisAgentInput = z.infer<typeof ThesisAgentInputSchema>; // Ce sera l'input pour processUserRequest
-export type ThesisAgentOutput = z.object({
-  responseMessage: z.string(),
-  actionsTaken: z.array(z.object({ toolName: z.string(), toolInput: z.any(), toolOutput: z.any() })).optional(),
+// Type pour l'input de la fonction processUserRequest (ce qui vient du client)
+export type ThesisAgentInput = z.object({
+  userRequest: z.string(),
 });
+
+// Schéma Zod pour la sortie du prompt et du flux
+const ThesisAgentOutputSchema = z.object({
+  responseMessage: z.string().describe("La réponse de l'agent IA à l'utilisateur, résumant les actions entreprises ou fournissant des informations."),
+  actionsTaken: z.array(
+    z.object({
+      toolName: z.string(),
+      toolInput: z.any(), // Pourrait être plus spécifique si nécessaire
+      toolOutput: z.any(),
+    })
+  ).optional().describe("Détails des outils utilisés et leurs sorties, le cas échéant."),
+});
+// Type pour la sortie de processUserRequest et thesisAgentFlow
+export type ThesisAgentOutput = z.infer<typeof ThesisAgentOutputSchema>;
 
 
 // --- Prompt Principal de l'Agent ---
@@ -346,7 +359,7 @@ const thesisAgentFlow = ai.defineFlow(
     inputSchema: z.object({ 
       userRequest: z.string(),
       userId: z.string(),
-      userNameForAgent: z.string().optional(), // Ajouté pour la personnalisation
+      userNameForAgent: z.string().optional(),
     }),
     outputSchema: ThesisAgentOutputSchema,
   },
@@ -354,7 +367,6 @@ const thesisAgentFlow = ai.defineFlow(
     const { userRequest, userId, userNameForAgent } = flowInput;
     console.log(`[ThesisAgentFlow] Début du flux pour userId: ${userId}, nom: ${userNameForAgent}, requête: "${userRequest}"`);
 
-    // Premier appel à l'IA pour obtenir la réponse ou la demande d'outil
     let llmResponse = await thesisAgentMainPrompt({ userRequest, userNameForAgent });
     let finalResponseMessage = "";
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
@@ -364,7 +376,6 @@ const thesisAgentFlow = ai.defineFlow(
         let toolOutput: any;
         console.log(`[ThesisAgentFlow] Appel de l'outil demandé par l'IA: ${toolRequest.toolName} avec input:`, toolRequest.input);
 
-        // Appel manuel des fonctions logiques avec injection de userId
         switch (toolRequest.toolName) {
           case 'addChapterTool':
             toolOutput = await addChapterToolLogic(toolRequest.input as z.infer<typeof AddChapterInputSchema>, userId);
@@ -382,9 +393,11 @@ const thesisAgentFlow = ai.defineFlow(
             toolOutput = await addSourceToolLogic(toolRequest.input as z.infer<typeof AddSourceInputSchema>, userId);
             break;
           case 'refinePromptTool':
+            // refinePromptToolLogic a besoin de userId pour le logging, donc on le passe.
             toolOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId);
             break;
           case 'createThesisPlanTool':
+            // createThesisPlanToolLogic n'a pas besoin de userId pour sa logique principale.
             toolOutput = await createThesisPlanToolLogic(toolRequest.input as z.infer<typeof CreateThesisPlanToolInputSchema>);
             break;
           default:
@@ -403,24 +416,20 @@ const thesisAgentFlow = ai.defineFlow(
       const toolResponses = await Promise.all(toolResponsesPromises);
 
       console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale.");
-      // Deuxième appel à l'IA avec l'historique et les résultats des outils
       llmResponse = await thesisAgentMainPrompt({
-        userRequest, // On peut omettre userRequest ici si l'historique suffit, ou le garder
+        userRequest,
         userNameForAgent,
         history: [
-          ai.userMessage(userRequest), // Message original de l'utilisateur
-          llmResponse.candidates[0].message, // Premier message de l'IA (qui incluait les toolRequests)
-          ...toolResponses // Réponses des outils
+          ai.userMessage(userRequest),
+          llmResponse.candidates[0].message, 
+          ...toolResponses 
         ],
       });
     }
 
-    // Construction de la réponse finale
     if (llmResponse.output?.responseMessage) {
         finalResponseMessage = llmResponse.output.responseMessage;
     } else if (actionsTakenDetails.length > 0) {
-        // Si le LLM ne donne pas de responseMessage après les outils,
-        // on essaie de formuler une réponse basée sur la première action réussie.
         const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
         if (firstSuccessfulAction?.toolOutput?.plan && firstSuccessfulAction.toolName === 'createThesisPlanTool') {
              finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
@@ -429,7 +438,7 @@ const thesisAgentFlow = ai.defineFlow(
         } else {
             const firstAction = actionsTakenDetails[0];
             if (firstAction.toolOutput?.message) {
-                finalResponseMessage = firstAction.toolOutput.message; // Fallback sur le message du premier outil
+                finalResponseMessage = firstAction.toolOutput.message;
             } else {
                 finalResponseMessage = "J'ai effectué les actions demandées.";
             }
@@ -441,14 +450,15 @@ const thesisAgentFlow = ai.defineFlow(
     console.log("[ThesisAgentFlow] Réponse finale construite:", finalResponseMessage);
     return {
       responseMessage: finalResponseMessage,
-      // S'assurer que actionsTaken reflète ce qui a été réellement exécuté
       actionsTaken: actionsTakenDetails.length > 0 ? actionsTakenDetails : (llmResponse.output?.actionsTaken || undefined),
     };
   }
 );
 
 // --- Fonction Principale Exportée (Server Action) ---
-export async function processUserRequest(input: ThesisAgentInput): Promise<ThesisAgentOutput> {
+export async function processUserRequest(input: z.infer<typeof ThesisAgentInput>): Promise<ThesisAgentOutput> {
+  // La directive 'use server' est au début du fichier
+
   const cookieStore = cookies();
   const supabaseServer = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -484,5 +494,3 @@ export async function processUserRequest(input: ThesisAgentInput): Promise<Thesi
     return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message || 'Erreur inconnue du serveur'}` };
   }
 }
-
-    
