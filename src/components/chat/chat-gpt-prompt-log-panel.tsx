@@ -296,7 +296,9 @@ export function ChatGPTPromptLogPanel() {
   };
 
   const handleNewChat = () => {
+    console.log("handleNewChat called");
     setCurrentSessionId(null);
+    console.log("currentSessionId set to:", null);
     // setConversation([]); // Déjà géré par le useEffect sur currentSessionId
     // setCurrentSessionTitle("Nouvelle Discussion"); // Déjà géré par le useEffect sur currentSessionId
   };
@@ -487,7 +489,7 @@ export function ChatGPTPromptLogPanel() {
                     <span className="truncate" title={session.title}>{session.title}</span>
                   </div>
                    {currentSessionId === session.id && <Check className="h-4 w-4 text-primary shrink-0" />}
-                   <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover/item:opacity-70 hover:!opacity-100 hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} disabled={isDeletingSession && currentSessionId === session.id} title="Supprimer la session">
+                   <Button variant="ghost" size="icon" className="h-6 w-6 opacity-100 group-hover/item:opacity-70 hover:!opacity-100 hover:text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }} disabled={isDeletingSession && currentSessionId === session.id} title="Supprimer la session">\
                        <Trash2 className="h-3.5 w-3.5"/>
                    </Button>
                 </DropdownMenuItem>
