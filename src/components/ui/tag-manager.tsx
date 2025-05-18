@@ -1,188 +1,176 @@
-import { Badge } from "@/components/ui/badge";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Tag } from '@/types';
+
+"use client";
+
+import type { FC } from 'react';
 import { useState, useEffect, useMemo } from 'react';
-import { XIcon, PlusCircle } from 'lucide-react'; // Icônes
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
-import { Button } from "@/components/ui/button";
+import type { Tag } from '@/types'; // Assurez-vous que ce chemin est correct
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Command, CommandList, CommandEmpty, CommandItem, CommandInput, CommandGroup } from '@/components/ui/command';
+import { Button } from '@/components/ui/button';
+import { XIcon, PlusCircle, Tags } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface TagManagerProps {
-  entityId: string; // ID de l'entité (Task, Chapter, etc.)
-  entityType: 'task' | 'chapter' | 'daily_objective' | 'source' | 'brain_dump'; // Type d'entité
-  initialTags: Tag[]; // Tags déjà associés à l'entité
-  onTagsChange: (tags: Tag[]) => void; // Callback pour remonter les changements de tags
+  // Tous les tags existants dans le système pour cet utilisateur (pour la suggestion/sélection)
+  availableTags: Tag[];
+  // Les tags actuellement sélectionnés pour l'entité en cours d'édition
+  selectedTags: Tag[];
+  // Callback quand un tag est ajouté (soit un objet Tag existant, soit un string pour un nouveau tag)
+  onTagAdd: (tagOrNewName: Tag | string) => void;
+  // Callback quand un tag est retiré (par son ID)
+  onTagRemove: (tagId: string) => void;
+  // Pour désactiver le composant
+  disabled?: boolean;
+  // Pour afficher un état de chargement (par exemple, si les availableTags sont en cours de fetch)
+  isLoading?: boolean;
+  // Permettre la création de nouveaux tags à la volée
+  allowTagCreation?: boolean;
+  // Label pour le bouton de déclenchement du popover
+  triggerLabel?: string;
+  // Classe pour le bouton de déclenchement
+  triggerClassName?: string;
 }
 
-const TagManager: React.FC<TagManagerProps> = ({ entityId, entityType, initialTags, onTagsChange }) => {
-  const [selectedTags, setSelectedTags] = useState<Tag[]>(initialTags);
+const TagManager: FC<TagManagerProps> = ({
+  availableTags,
+  selectedTags,
+  onTagAdd,
+  onTagRemove,
+  disabled = false,
+  isLoading = false,
+  allowTagCreation = true,
+  triggerLabel = "Gérer les Tags",
+  triggerClassName,
+}) => {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const queryClient = useQueryClient();
 
-  // Charger tous les tags existants
-  const { data: availableTags, isLoading: isLoadingTags } = useQuery({
-    queryKey: ['tags'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('tags').select('*');
-      if (error) throw error;
-      return data as Tag[];
-    },
-  });
+  // Tags qui sont disponibles pour la sélection (pas déjà sélectionnés ET filtrés par l'input)
+  const filteredAndUnselectedTags = useMemo(() => {
+    if (isLoading) return [];
+    return (availableTags || [])
+      .filter(
+        (tag) =>
+          !selectedTags.find((selectedTag) => selectedTag.id === tag.id) &&
+          tag.name.toLowerCase().includes(inputValue.toLowerCase())
+      )
+      .slice(0, 10); // Limiter le nombre de suggestions
+  }, [availableTags, selectedTags, inputValue, isLoading]);
 
-  // Mutation pour créer un nouveau tag
-  const createTagMutation = useMutation({
-    mutationFn: async (tagName: string) => {
-      const { data, error } = await supabase.from('tags').insert({ name: tagName }).select().single();
-      if (error) throw error;
-      return data as Tag;
-    },
-    onSuccess: (newTag) => {
-      // Invalider la query des tags pour rafraîchir la liste disponible
-      queryClient.invalidateQueries({ queryKey: ['tags'] });
-      return newTag; // Renvoyer le nouveau tag pour l'ajouter directement aux selectedTags
-    },
-  });
+  // Vérifie si le texte tapé correspond exactement à un tag existant (disponible ou déjà sélectionné)
+  const exactMatchInAvailableOrSelected = useMemo(() => {
+    if (!inputValue.trim()) return null;
+    const searchLower = inputValue.toLowerCase();
+    return (availableTags || []).find(tag => tag.name.toLowerCase() === searchLower);
+  }, [availableTags, inputValue]);
 
-  // Mapping entre entityType et le nom de la table de jonction
-  const junctionTableMap = {
-    task: 'task_tags',
-    chapter: 'chapter_tags',
-    daily_objective: 'daily_objective_tags',
-    source: 'source_tags',
-    brain_dump: 'brain_dump_tags',
+  const showCreateOption = useMemo(() => {
+    return allowTagCreation && inputValue.trim() !== '' && !exactMatchInAvailableOrSelected;
+  }, [allowTagCreation, inputValue, exactMatchInAvailableOrSelected]);
+
+  const handleSelectOrSubmitTag = (tagOrNewName: Tag | string) => {
+    onTagAdd(tagOrNewName);
+    setInputValue(''); // Réinitialiser l'input
+    setOpen(false); // Fermer le popover
   };
-   const entityIdColumnMap = {
-    task: 'task_id',
-    chapter: 'chapter_id',
-    daily_objective: 'daily_objective_id',
-    source: 'source_id',
-    brain_dump: 'brain_dump_entry_id',
-   };
-
-  // Mutation pour lier/délier un tag à l'entité
-  const updateEntityTagsMutation = useMutation({
-      mutationFn: async ({ tagId, action }: { tagId: string; action: 'add' | 'remove' }) => {
-        const junctionTable = junctionTableMap[entityType];
-        const entityIdColumn = entityIdColumnMap[entityType];
-
-        if (action === 'add') {
-          const { error } = await supabase.from(junctionTable).insert({
-            [entityIdColumn]: entityId,
-            tag_id: tagId,
-          });
-          if (error) throw error;
-        } else { // action === 'remove'
-           const { error } = await supabase.from(junctionTable)
-            .delete()
-            .eq(entityIdColumn, entityId)
-            .eq('tag_id', tagId);
-          if (error) throw error;
-        }
-      },
-       // Note: Pour une mise à jour instantanée parfaite, on mettrait à jour le cache de react-query
-       // ou l'état global ici de manière optimiste avant l'appel API, puis rollback en cas d'erreur.
-       // L'exemple ci-dessous gère l'état local selectedTags et déclenche onTagsChange.
-  });
-
-
-  const handleTagSelect = async (tagName: string) => {
-    setInputValue(''); // Reset input
-
-    const existingTag = availableTags?.find(tag => tag.name === tagName);
-    let tagToAdd = existingTag;
-
-    if (!existingTag) {
-      // Tag doesn't exist, create it
-      try {
-        tagToAdd = await createTagMutation.mutateAsync(tagName);
-         // createTagMutation onSuccess will invalidate 'tags' query
-      } catch (error) {
-        console.error('Failed to create tag:', error);
-        // Afficher une notification d'erreur à l'utilisateur
-        return; // Stop the process if tag creation fails
-      }
-    }
-
-    if (tagToAdd && !selectedTags.find(tag => tag.id === tagToAdd.id)) {
-       const newSelectedTags = [...selectedTags, tagToAdd];
-       setSelectedTags(newSelectedTags);
-       onTagsChange(newSelectedTags); // Notifier le parent
-       // Trigger database update
-       updateEntityTagsMutation.mutate({ tagId: tagToAdd.id, action: 'add' });
-    }
-
-    setOpen(false); // Close the popover
-  };
-
-  const handleTagRemove = (tagId: string) => {
-    const newSelectedTags = selectedTags.filter(tag => tag.id !== tagId);
-    setSelectedTags(newSelectedTags);
-    onTagsChange(newSelectedTags); // Notifier le parent
-     // Trigger database update
-    updateEntityTagsMutation.mutate({ tagId, action: 'remove' });
-  };
-
-  const filteredAvailableTags = useMemo(() => {
-     return availableTags?.filter(tag =>
-       tag.name.toLowerCase().includes(inputValue.toLowerCase()) &&
-       !selectedTags.find(selectedTag => selectedTag.id === tag.id) // Exclure les tags déjà sélectionnés
-     );
-  }, [availableTags, inputValue, selectedTags]);
-
 
   return (
-    <div className="w-full">
-      <div className="mb-2 flex flex-wrap gap-2">
-        {selectedTags.map(tag => (
-          <Badge key={tag.id} variant="secondary" className="flex items-center">
-            {tag.name}
-            <XIcon
-              className="ml-1 h-3 w-3 cursor-pointer"
-              onClick={() => handleTagRemove(tag.id)}
-            />
-          </Badge>
-        ))}
-      </div>
+    <div className="w-full space-y-2">
+      {selectedTags.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {selectedTags.map((tag) => (
+            <Badge
+              key={tag.id}
+              variant="secondary"
+              className="text-xs items-center gap-1 pl-2 pr-1 py-0.5"
+              style={tag.color ? { backgroundColor: tag.color, color: 'hsl(var(--secondary-foreground))' } : {}}
+            >
+              {tag.name}
+              <button
+                type="button"
+                className={cn(
+                  "rounded-full hover:bg-muted-foreground/20 p-0.5 focus:outline-none focus:ring-1 focus:ring-ring",
+                  disabled && "cursor-not-allowed opacity-50"
+                )}
+                onClick={() => !disabled && onTagRemove(tag.id)}
+                disabled={disabled}
+                aria-label={`Retirer le tag ${tag.name}`}
+              >
+                <XIcon className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" role="combobox" aria-expanded={open} className="w-full justify-between">
-            Ajouter un Tag
-            <PlusCircle className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <Button
+            variant="outline"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            className={cn("w-full justify-start font-normal text-muted-foreground", triggerClassName)}
+            disabled={disabled || isLoading}
+            type="button" // Important pour ne pas soumettre un formulaire parent
+          >
+            <Tags className="mr-2 h-4 w-4 shrink-0 opacity-70" />
+            {isLoading ? "Chargement des tags..." : triggerLabel}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-          <Command>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command
+            filter={(value, search) => {
+              if (value.toLowerCase().includes(search.toLowerCase())) return 1;
+              return 0;
+            }}
+          >
             <CommandInput
               placeholder="Rechercher ou créer un tag..."
               value={inputValue}
               onValueChange={setInputValue}
+              className="h-9 text-sm"
+              disabled={disabled || isLoading}
             />
             <CommandList>
-              <CommandEmpty>
-                 {isLoadingTags ? "Chargement des tags..." : "Aucun tag trouvé."}
-                 {inputValue && !isLoadingTags && (
-                    <CommandItem onSelect={() => handleTagSelect(inputValue)}>
-                        Créer "{inputValue}"
+              {isLoading && <CommandItem disabled className="text-xs text-muted-foreground">Chargement...</CommandItem>}
+              {!isLoading && (
+                <CommandEmpty>
+                  {showCreateOption ? (
+                    <CommandItem
+                      value={`__create__${inputValue}`} // Valeur unique pour l'option de création
+                      onSelect={() => handleSelectOrSubmitTag(inputValue.trim())}
+                      className="text-xs cursor-pointer"
+                    >
+                      <PlusCircle className="mr-2 h-3.5 w-3.5" />
+                      Créer "{inputValue.trim()}"
                     </CommandItem>
-                 )}
-              </CommandEmpty>
-              <CommandGroup heading="Tags existants">
-                {filteredAvailableTags?.map(tag => (
-                  <CommandItem key={tag.id} value={tag.name} onSelect={() => handleTagSelect(tag.name)}>
-                    {tag.name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+                  ) : (
+                    inputValue.trim() && exactMatchInAvailableOrSelected ? "Tag déjà existant ou sélectionné." : "Aucun tag trouvé."
+                  )}
+                </CommandEmpty>
+              )}
+              {!isLoading && filteredAndUnselectedTags.length > 0 && (
+                <CommandGroup heading="Tags existants">
+                  {filteredAndUnselectedTags.map((tag) => (
+                    <CommandItem
+                      key={tag.id}
+                      value={tag.name} // Important pour le filtrage de Command
+                      onSelect={() => handleSelectOrSubmitTag(tag)}
+                      className="text-xs cursor-pointer"
+                    >
+                      {tag.color && <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />}
+                      {tag.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
             </CommandList>
-          </PopoverContent>
-        </Popover>
-         {/* Afficher les états de loading/error des mutations si nécessaire */}
-          {(createTagMutation.isPending || updateEntityTagsMutation.isPending) && <p>Mise à jour des tags...</p>}
-          {createTagMutation.isError && <p className="text-red-500">Erreur lors de la création du tag.</p>}
-           {updateEntityTagsMutation.isError && <p className="text-red-500">Erreur lors de la mise à jour des tags.</p>}
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };
