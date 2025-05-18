@@ -5,15 +5,16 @@ import type { FC } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Task, TaskType, Chapter, Tag } from '@/types';
-import { Trash2, Edit2, Timer, EllipsisVertical, Link as LinkIconLucide } from 'lucide-react';
+import type { Task, TaskType } from '@/types';
+import { Trash2, Edit2, Timer, EllipsisVertical, Link as LinkIconLucide, ListTree } from 'lucide-react'; // Ajout de ListTree
+import Link from 'next/link'; // Ajout de Link
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandList, CommandItem } from '@/components/ui/command';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import TaskTypeSelector from './TaskTypeSelector'; // Adjusted import path
+import TaskTypeSelector from './TaskTypeSelector';
 
 const taskTypeLabels: Record<TaskType, string> = { urgent: "Urgent", important: "Important", reading: "Lecture", chatgpt: "ChatGPT", secondary: "Secondaire" };
 const taskTypeClasses: Record<TaskType, { border: string; badgeBg: string; badgeText: string; checkbox: string }> = {
@@ -54,13 +55,13 @@ const TaskItemCard: FC<TaskItemCardProps> = ({ task, onToggle, onSetType, onEdit
               {task.text}
             </p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              <Badge variant="outline" className={cn("font-normal py-0.5 px-1.5 h-auto", typeStyle.badgeBg, typeStyle.badgeText, typeStyle.border.replace('-l-', '-'))}>{taskTypeLabels[task.type]}</Badge>
+              <Badge variant="outline" className={cn("font-normal py-0.5 px-1.5 h-auto", typeStyle.badgeBg, typeStyle.badgeText, typeStyle.border.replace('-l-','-'))}>{taskTypeLabels[task.type]}</Badge>
               <span className="text-muted-foreground">Créé : {task.created_at ? format(new Date(task.created_at), "d MMM yy, HH:mm", { locale: fr }) : 'N/A'}</span>
               {task.chapters && (
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <LinkIconLucide className="h-3 w-3" />
-                  Chapitre: {task.chapters.name}
-                </span>
+                <Link href={`/thesis-plan/${task.chapters.id}`} className="text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 transition-colors">
+                  <ListTree className="h-3.5 w-3.5" />
+                  {task.chapters.name}
+                </Link>
               )}
             </div>
             {task.tags && task.tags.length > 0 && (

@@ -1,14 +1,14 @@
 
 "use client";
 
-import { useState, type FC, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { Task, TaskType, Chapter, Tag } from '@/types';
 import { modifyTaskList, type ModifyTaskListInput, type ModifyTaskListOutput } from '@/ai/flows/modify-task-list';
-import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter as FilterIcon, ArrowUpDown, Tags as TagsIcon, Link as LinkIconLucide, Timer, EllipsisVertical, XIcon, ChevronsUpDownIcon as ChevronUpDownIconLucide, Info } from 'lucide-react';
+import { Bot, Trash2, PlusCircle, AlertTriangle, Edit2, Save, Loader2, ListTodo, ListChecks, Filter as FilterIcon, ArrowUpDown, Tags as TagsIcon, ChevronsUpDownIcon as ChevronUpDownIconLucide, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -16,10 +16,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-
-// Import des composants extraits du dossier task-manager-components
+import TagManager from '@/components/ui/tag-manager';
 import TaskTypeSelector from './task-manager-components/TaskTypeSelector';
-import SimpleTaskTagManager from './task-manager-components/SimpleTaskTagManager';
 import TaskItemCard from './task-manager-components/TaskItemCard';
 
 type FilterStatus = "all" | "pending" | "completed";
@@ -72,11 +70,9 @@ export default function AiTaskManager() {
 
   const fetchInitialData = useCallback(async () => {
     if (!user) {
-      setIsFetchingInitialData(false);
-      return;
+      setIsFetchingInitialData(false); return;
     }
-    setIsFetchingInitialData(true);
-    setError(null);
+    setIsFetchingInitialData(true); setError(null);
     try {
       const [tasksRes, chaptersRes, tagsRes] = await Promise.all([
         supabase.from('tasks').select('*, chapters(id, name), task_tags(tags(id, name, color))').eq('user_id', user.id),
@@ -88,42 +84,31 @@ export default function AiTaskManager() {
       if (chaptersRes.error) throw new Error(`Erreur chapitres: ${chaptersRes.error.message}`);
       if (tagsRes.error) throw new Error(`Erreur tags: ${tagsRes.error.message}`);
 
-      const processedTasks = (tasksRes.data || []).map(task => ({
-        ...task,
-        user_id: user.id,
-        tags: task.task_tags?.map((tt: any) => tt.tags) || [],
-        chapters: task.chapters as { id: string, name: string } | null,
-      }));
-      setTasks(processedTasks);
+      setTasks((tasksRes.data || []).map(task => ({ ...task, tags: task.task_tags?.map((tt: any) => tt.tags) || [], chapters: task.chapters as {id:string, name:string}|null })));
       setChapters(chaptersRes.data || []);
-      setAvailableTags((tagsRes.data || []).map(t => ({...t, user_id: user.id })));
+      setAvailableTags(tagsRes.data || []);
 
     } catch (e: any) {
-      const errorMessage = (e as Error).message || "Une erreur inconnue est survenue.";
+      const errorMessage = (e as Error).message;
       setError(`Échec de la récupération des données: ${errorMessage}`);
       toast({ title: "Erreur de Chargement", description: errorMessage, variant: "destructive" });
-      console.error("Erreur fetchInitialData (AiTaskManager):", e);
     } finally {
       setIsFetchingInitialData(false);
     }
   }, [toast, user]);
 
   useEffect(() => {
-    if (user) {
-      fetchInitialData();
-    } else {
-      setTasks([]); setChapters([]); setAvailableTags([]); setIsFetchingInitialData(false);
-    }
-  }, [user, fetchInitialData]);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`ai-task-manager-user-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchInitialData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Tasks change detected', payload); fetchInitialData();})
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_tags' }, (payload) => { console.log('Task_tags change detected', payload); fetchInitialData();}) // Peut être affiné
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Tags change detected', payload); fetchInitialData();})
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Chapters change detected', payload); fetchInitialData();})
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchInitialData]);
@@ -148,19 +133,11 @@ export default function AiTaskManager() {
 
   const saveTaskTags = async (taskId: string, tagsToSave: Tag[]) => {
     if (!user) throw new Error("Utilisateur non authentifié.");
-    const { data: currentLinks, error: fetchLinksError } = await supabase.from('task_tags').select('tag_id').eq('task_id', taskId);
-    if (fetchLinksError) throw new Error(`Erreur récupération des liens de tags existants: ${fetchLinksError.message}`);
-    const currentTagIds = currentLinks?.map(link => link.tag_id) || [];
-    const tagsToSaveIds = tagsToSave.map(tag => tag.id);
-    const linksToAdd = tagsToSave.filter(tag => !currentTagIds.includes(tag.id)).map(tag => ({ task_id: taskId, tag_id: tag.id }));
-    const linkIdsToRemove = currentTagIds.filter(tagId => !tagsToSaveIds.includes(tagId));
-    if (linksToAdd.length > 0) {
-      const { error: linkError } = await supabase.from('task_tags').insert(linksToAdd);
-      if (linkError) throw new Error(`Erreur lors de la liaison des nouveaux tags: ${linkError.message}`);
-    }
-    if (linkIdsToRemove.length > 0) {
-      const { error: unlinkError } = await supabase.from('task_tags').delete().eq('task_id', taskId).in('tag_id', linkIdsToRemove);
-      if (unlinkError) throw new Error(`Erreur lors de la suppression des anciens liens de tags: ${unlinkError.message}`);
+    await supabase.from('task_tags').delete().eq('task_id', taskId);
+    if (tagsToSave.length > 0) {
+      const newLinks = tagsToSave.map(tag => ({ task_id: taskId, tag_id: tag.id }));
+      const { error: linkError } = await supabase.from('task_tags').insert(newLinks);
+      if (linkError) throw new Error(`Erreur lors de la liaison des tags: ${linkError.message}`);
     }
   };
 
@@ -172,21 +149,30 @@ export default function AiTaskManager() {
       completed: editingTask ? editingTask.completed : false, chapter_id: manualTaskChapterId || null,
     };
     try {
-      let savedTaskData: Pick<Task, 'id' | 'created_at' | 'user_id' | 'text' | 'type' | 'completed' | 'chapter_id'> | null = null;
+      let savedTaskData: Pick<Task, 'id' | 'created_at'>;
       if (editingTask) {
-        const { data, error: updateError } = await supabase.from('tasks').update(taskPayload).eq('id', editingTask.id).eq('user_id', user.id).select('id, created_at, user_id, text, type, completed, chapter_id').single();
-        if (updateError) throw updateError;
-        savedTaskData = data;
+        const { data, error } = await supabase.from('tasks').update(taskPayload).eq('id', editingTask.id).select('id, created_at').single();
+        if (error) throw error;
+        savedTaskData = data!;
       } else {
-        const { data, error: insertError } = await supabase.from('tasks').insert(taskPayload).select('id, created_at, user_id, text, type, completed, chapter_id').single();
-        if (insertError) throw insertError;
-        savedTaskData = data;
+        const { data, error } = await supabase.from('tasks').insert(taskPayload).select('id, created_at').single();
+        if (error) throw error;
+        savedTaskData = data!;
       }
-      if (!savedTaskData) throw new Error("La tâche sauvegardée n'a pas été retournée.");
       await saveTaskTags(savedTaskData.id, manualTaskTags);
-      const { data: fetchedTask, error: fetchError } = await supabase.from('tasks').select('*, chapters(id, name), task_tags(tags(id, name, color))').eq('id', savedTaskData.id).eq('user_id', user.id).single();
-      if (fetchError || !fetchedTask) throw fetchError || new Error("Impossible de récupérer la tâche avec ses relations.");
-      const processedTask: Task = { ...fetchedTask, user_id: user.id, tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: fetchedTask.chapters as { id: string, name: string } | null };
+      
+      // Re-fetch the task with all its relations to update the local state correctly
+      const { data: fetchedTask, error: fetchError } = await supabase
+        .from('tasks')
+        .select('*, chapters(id, name), task_tags(tags(id, name, color))')
+        .eq('id', savedTaskData.id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError || !fetchedTask) throw fetchError || new Error("Impossible de récupérer la tâche mise à jour avec ses relations.");
+      
+      const processedTask: Task = { ...fetchedTask, tags: fetchedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: fetchedTask.chapters as {id:string, name:string}|null };
+
       if (editingTask) {
         setTasks(prevTasks => prevTasks.map(t => t.id === processedTask.id ? processedTask : t));
         toast({ title: "Tâche mise à jour" });
@@ -196,20 +182,18 @@ export default function AiTaskManager() {
       }
       setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]);
     } catch (e: any) {
-      const errorMessage = (e as Error).message || "Erreur inconnue lors de la sauvegarde.";
+      const errorMessage = (e as Error).message;
       setError(errorMessage); toast({ title: "Erreur d'enregistrement", description: errorMessage, variant: "destructive" });
-    } finally {
-      setIsManualTaskLoading(false);
-    }
+    } finally { setIsManualTaskLoading(false); }
   };
 
   const handleToggleTask = async (id: string, completed: boolean) => {
     if (!user) return; setIsTaskItemLoading(id); setError(null);
     try {
-      const { data: updatedTask, error } = await supabase.from('tasks').update({ completed }).eq('id', id).eq('user_id', user.id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
+      const { data: updatedTask, error } = await supabase.from('tasks').update({ completed }).eq('id', id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
       if (error) throw error;
       if (updatedTask) {
-        const processedTask: Task = { ...updatedTask, user_id: user.id, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as { id: string, name: string } | null };
+        const processedTask: Task = { ...updatedTask, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as {id:string, name:string}|null };
         setTasks(prevTasks => prevTasks.map(t => t.id === id ? processedTask : t));
       }
     } catch (e: any) { const errorMessage = (e as Error).message; setError(errorMessage); toast({ title: "Erreur MàJ Statut", description: errorMessage, variant: "destructive" });
@@ -219,8 +203,8 @@ export default function AiTaskManager() {
   const handleDeleteTask = async (id: string) => {
     if (!user) return; setIsTaskItemLoading(id); setError(null);
     try {
-      await supabase.from('task_tags').delete().eq('task_id', id);
-      const { error } = await supabase.from('tasks').delete().eq('id', id).eq('user_id', user.id);
+      await supabase.from('task_tags').delete().eq('task_id', id); // Supprimer les liaisons de tags d'abord
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
       if (error) throw error;
       setTasks(prevTasks => prevTasks.filter(t => t.id !== id));
       if (editingTask && editingTask.id === id) { setEditingTask(null); setManualTaskText(''); setManualTaskType('secondary'); setManualTaskChapterId(undefined); setManualTaskTags([]); }
@@ -232,10 +216,10 @@ export default function AiTaskManager() {
   const handleSetTaskType = async (id: string, type: TaskType) => {
     if (!user) return; setIsTaskItemLoading(id); setError(null);
     try {
-      const { data: updatedTask, error } = await supabase.from('tasks').update({ type }).eq('id', id).eq('user_id', user.id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
+      const { data: updatedTask, error } = await supabase.from('tasks').update({ type }).eq('id', id).select('*, chapters(id,name), task_tags(tags(id,name,color))').single();
       if (error) throw error;
       if (updatedTask) {
-        const processedTask: Task = { ...updatedTask, user_id: user.id, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as { id: string, name: string } | null };
+        const processedTask: Task = { ...updatedTask, tags: updatedTask.task_tags?.map((tt: any) => tt.tags) || [], chapters: updatedTask.chapters as {id:string, name:string}|null };
         setTasks(prevTasks => prevTasks.map(t => t.id === id ? processedTask : t));
       }
     } catch (e: any) { const errorMessage = (e as Error).message; setError(errorMessage); toast({ title: "Erreur MàJ Type", description: errorMessage, variant: "destructive" });
@@ -250,14 +234,21 @@ export default function AiTaskManager() {
 
   const handleStartPomodoroForTask = (task: Task) => { router.push(`/pomodoro?taskId=${task.id}&taskText=${encodeURIComponent(task.text)}`); };
 
-  const handleAddTagToManualTask = async (tagNameOrTag: string | Tag) => {
+  const handleAddTagToManualTask = async (tagOrNewName: Tag | string) => {
     if (!user) return;
-    let finalTag: Tag | undefined = typeof tagNameOrTag === 'string' ? availableTags.find(t => t.name.toLowerCase() === tagNameOrTag.toLowerCase() && t.user_id === user.id) : tagNameOrTag;
-    if (typeof tagNameOrTag === 'string' && !finalTag) {
-      const { data: newTagFromDb, error: tagError } = await supabase.from('tags').insert({ name: tagNameOrTag, user_id: user.id }).select().single();
-      if (tagError || !newTagFromDb) { toast({ title: "Erreur création Tag", description: tagError?.message, variant: "destructive" }); return; }
-      finalTag = { ...newTagFromDb, user_id: user.id };
-      setAvailableTags(prev => [...prev, finalTag!].sort((a,b) => a.name.localeCompare(b.name)));
+    let finalTag: Tag | undefined;
+    if (typeof tagOrNewName === 'string') {
+      const existingTag = availableTags.find(t => t.name.toLowerCase() === tagOrNewName.toLowerCase() && t.user_id === user.id);
+      if (existingTag) {
+        finalTag = existingTag;
+      } else {
+        const { data: newTagFromDb, error: tagError } = await supabase.from('tags').insert({ name: tagOrNewName, user_id: user.id }).select().single();
+        if (tagError || !newTagFromDb) { toast({ title: "Erreur création Tag", description: tagError?.message, variant: "destructive" }); return; }
+        finalTag = newTagFromDb;
+        setAvailableTags(prev => [...prev, finalTag!].sort((a,b) => a.name.localeCompare(b.name)));
+      }
+    } else {
+      finalTag = tagOrNewName;
     }
     if (finalTag && !manualTaskTags.find(mt => mt.id === finalTag!.id)) { setManualTaskTags(prev => [...prev, finalTag!]); }
   };
@@ -291,7 +282,7 @@ export default function AiTaskManager() {
         <div className="lg:w-[380px] lg:max-w-sm xl:w-[420px] shrink-0 space-y-6 lg:overflow-y-auto custom-scrollbar lg:pr-2 pb-4 lg:pb-0">
           <Card className="shadow-md">
             <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 text-primary" /> Gérer avec l'IA</CardTitle><CardDescription className="text-sm">L'IA peut réorganiser, ajouter ou modifier votre liste.</CardDescription></CardHeader>
-            <CardContent><Textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex : Ajoute 'Relire chapitre X' comme urgent..." rows={3} className="mb-3 text-sm" disabled={isAiLoading || isFetchingInitialData} /></CardContent>
+            <CardContent><Textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Ex : Ajoute 'Relire chapitre X' comme urgent..." rows={3} className="mb-3 text-sm" disabled={isAiLoading || isFetchingInitialData || !user} /></CardContent>
             <CardFooter><Button onClick={handleAiModifyTasks} disabled={isAiLoading || !instructions.trim() || isFetchingInitialData || !user} className="w-full">{isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />} {isAiLoading ? 'Traitement IA...' : 'Soumettre à l\'IA'}</Button></CardFooter>
             {aiReasoning && (<CardFooter className="pt-3 text-xs text-muted-foreground italic border-t flex items-start gap-1.5"><Info className="h-4 w-4 mt-0.5 shrink-0"/> <span>Raisonnement IA : {aiReasoning}</span></CardFooter>)}
           </Card>
@@ -315,12 +306,14 @@ export default function AiTaskManager() {
               </div>
               <div>
                 <Label className="mb-1.5 block text-sm">Tags (Optionnel)</Label>
-                <SimpleTaskTagManager
-                  availableTags={availableTags.filter(t => t.user_id === user?.id)} 
+                <TagManager
+                  availableTags={availableTags}
                   selectedTags={manualTaskTags}
                   onTagAdd={handleAddTagToManualTask}
                   onTagRemove={handleRemoveTagFromManualTask}
                   disabled={isManualTaskLoading || !user}
+                  isLoading={isFetchingInitialData}
+                  triggerLabel="Gérer les tags de la tâche"
                 />
               </div>
               <div className="flex gap-2 pt-2">
@@ -391,4 +384,3 @@ export default function AiTaskManager() {
     </div>
   );
 }
-

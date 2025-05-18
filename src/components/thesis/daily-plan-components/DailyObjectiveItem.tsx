@@ -6,10 +6,11 @@ import type { DailyObjective } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Edit3, Trash2, Link as LinkIconLucide } from 'lucide-react';
+import { Edit3, Trash2, Link as LinkIconLucide, ListTree } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import Link from 'next/link';
 
 interface DailyObjectiveItemProps {
   objective: DailyObjective;
@@ -51,10 +52,16 @@ const DailyObjectiveItem: FC<DailyObjectiveItemProps> = ({ objective, onToggle, 
             )}>{objective.text}</label>
           <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
             {isPastObjective && (<span>Date: {format(parseISO(objective.objective_date), "d MMM yy", { locale: fr })}</span>)}
+            
             {objective.chapters && (
-              <span className="flex items-center gap-1">
-                <LinkIconLucide className="h-3 w-3" /> {objective.chapters.name}
-              </span>
+              <Link href={`/thesis-plan/${objective.chapters.id}`} className="flex items-center gap-1 hover:text-primary hover:underline">
+                <ListTree className="h-3 w-3" /> {objective.chapters.name}
+              </Link>
+            )}
+            {objective.daily_plans?.title && (
+                 <span className="flex items-center gap-1">
+                    Plan: {objective.daily_plans.title}
+                 </span>
             )}
           </div>
           {objective.tags && objective.tags.length > 0 && (

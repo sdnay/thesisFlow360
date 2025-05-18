@@ -3,10 +3,9 @@ import type { Database as SupabaseDatabase } from './supabase'; // Assurez-vous 
 
 export type Database = SupabaseDatabase;
 
-// NOUVELLE INTERFACE POUR LES TAGS
 export interface Tag {
   id: string;
-  user_id: string; // Ajouté pour les tags spécifiques à l'utilisateur
+  user_id: string;
   name: string;
   color?: string | null;
   created_at: string;
@@ -14,97 +13,145 @@ export interface Tag {
 
 export interface Chapter {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   name: string;
-  progress: number;
+  progress: number; // Sera calculée dynamiquement, mais peut aussi être une valeur manuelle de base
   status: string;
   supervisor_comments: string[];
   created_at: string;
-  chapter_tags?: { tags: Tag }[];
   tags?: Tag[];
-  // Pour les éléments liés (récupérés séparément ou via des jointures plus complexes)
-  tasks_count?: number;
-  daily_objectives_count?: number;
+  tasks?: Task[]; // Pour la page de détail du chapitre
+  daily_objectives?: DailyObjective[]; // Pour la page de détail du chapitre
+  // Pour la liaison avec les sources via la table de jonction
+  sources?: Source[]; // Sera peuplé après requête sur la table de jonction
+  chapter_sources?: { source_id: string, sources: Source }[]; // Typage plus précis pour la jointure Supabase
+}
+
+// Nouvelle interface pour la table de jonction chapter_sources
+export interface ChapterSource {
+  chapter_id: string;
+  source_id: string;
+  user_id: string;
+  // created_at?: string; // Si vous ajoutez une date de création à la liaison
 }
 
 export interface Task {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   text: string;
   completed: boolean;
   type: TaskType;
   created_at: string;
   chapter_id?: string | null;
-  chapters?: { id: string, name: string } | null;
-  task_tags?: { tags: Tag }[];
+  chapters?: Pick<Chapter, 'id' | 'name'> | null; // Pour afficher le nom du chapitre lié
   tags?: Tag[];
 }
 
 export type TaskType = "urgent" | "important" | "reading" | "chatgpt" | "secondary";
 
+export interface DailyPlan {
+  id: string;
+  user_id: string;
+  plan_date: string; // YYYY-MM-DD
+  title?: string | null;
+  created_at: string;
+}
+
 export interface DailyObjective {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   text: string;
   completed: boolean;
-  objective_date: string;
+  objective_date: string; // YYYY-MM-DD
   created_at: string;
   completed_at?: string | null;
   chapter_id?: string | null;
-  chapters?: { id: string, name: string } | null;
-  daily_objective_tags?: { tags: Tag }[];
+  chapters?: Pick<Chapter, 'id' | 'name'> | null; // Pour afficher le nom du chapitre lié
+  daily_plan_id?: string | null;
+  daily_plans?: Pick<DailyPlan, 'id' | 'title'> | null;
   tags?: Tag[];
 }
 
 export interface PomodoroSession {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   start_time: string;
-  duration: number;
+  duration: number; // en minutes
   notes?: string | null;
-  created_at?: string;
+  created_at: string; // Modifié pour être non optionnel
   chapter_id?: string | null;
   task_id?: string | null;
   daily_objective_id?: string | null;
-  chapters?: { id: string, name: string } | null;
-  tasks?: { id: string, text: string } | null;
-  daily_objectives?: { id: string, text: string } | null;
+  chapters?: Pick<Chapter, 'id' | 'name'> | null;
+  tasks?: Pick<Task, 'id' | 'text'> | null;
+  daily_objectives?: Pick<DailyObjective, 'id' | 'text'> | null;
 }
 
 export interface BrainDumpEntry {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   text: string;
   created_at: string;
   status: BrainDumpEntryStatus;
-  brain_dump_entry_tags?: { tags: Tag }[];
+  chapter_id?: string | null; // Ajout pour lier au chapitre
+  chapters?: Pick<Chapter, 'id' | 'name'> | null; // Pour afficher le nom du chapitre lié
   tags?: Tag[];
 }
 export type BrainDumpEntryStatus = "captured" | "idea" | "task" | "discarded";
 
 export interface Source {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   title: string;
   type: 'pdf' | 'website' | 'interview' | 'field_notes' | 'other';
   source_link_or_path?: string | null;
   notes?: string | null;
   created_at: string;
-  source_tags?: { tags: Tag }[];
   tags?: Tag[];
+  // Pour la liaison avec les chapitres via la table de jonction
+  chapters?: Chapter[]; // Sera peuplé après requête sur la table de jonction
+  chapter_sources?: { chapter_id: string, chapters: Chapter }[]; // Typage plus précis
 }
 
 export interface PromptLogEntry {
   id: string;
-  user_id: string; // Ajouté
+  user_id: string;
   original_prompt: string;
-  refined_prompt?: string;
-  reasoning?: string;
+  refined_prompt?: string | null; // Permettre null
+  reasoning?: string | null; // Permettre null
   timestamp: string;
-  tags?: string[]; // Textuels pour l'instant, pourraient devenir des relations de Tag aussi
+  tags?: string[] | null; // Permettre null
 }
 
-// Rappel : Après avoir appliqué les modifications SQL à votre base Supabase,
-// générez les types précis avec la CLI Supabase pour remplacer le contenu de src/types/supabase.ts :
-// npx supabase gen types typescript --project-id VOTRE_ID_PROJET --schema public > src/types/supabase.ts
-// Et dans supabaseClient.ts, assurez-vous d'importer { Database } depuis ce fichier généré.
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  user_id: string;
+  role: 'user' | 'agent'; // 'agent' pour ThesisBot
+  content: string;
+  actions_taken?: ThesisAgentOutput['actionsTaken']; // Assurez-vous que ThesisAgentOutput est bien défini
+  timestamp: string;
+}
+
+// Pour l'agent IA
+export interface ThesisAgentInput { // Ce qui vient du client pour processUserRequest
+  userRequest: string;
+  chatHistory?: Array<{ role: 'user' | 'agent' | 'model'; content: string; actions_taken?: any }> | null;
+}
+
+export interface ThesisAgentOutput { // Ce que processUserRequest retourne
+  responseMessage: string;
+  actionsTaken?: Array<{
+    toolName: string;
+    toolInput: any;
+    toolOutput: any;
+  }> | null;
+}
