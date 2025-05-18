@@ -225,13 +225,34 @@ async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanT
 
 // --- Définitions des Outils pour Genkit (pour la découverte par l'IA) ---
 // La fonction d'implémentation ici est une coquille. L'appel réel se fera manuellement dans le flux.
-const addChapterToolForAI = ai.defineTool({ name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); } });
-const addBrainDumpEntryToolForAI = ai.defineTool({ name: 'addBrainDumpEntryTool', description: 'Ajoute une note au vide-cerveau. (Input: { text: string, status?: "captured"|"task"|"idea" }). Le user_id sera automatiquement lié.', inputSchema: AddBrainDumpEntryInputSchema, outputSchema: AddBrainDumpEntryOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); } });
-const addDailyObjectiveToolForAI = ai.defineTool({ name: 'addDailyObjectiveTool', description: 'Ajoute un objectif au plan du jour. (Input: { text: string }). Le user_id sera automatiquement lié.', inputSchema: AddDailyObjectiveInputSchema, outputSchema: AddDailyObjectiveOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); } });
-const addSourceToolForAI = ai.defineTool({ name: 'addSourceTool', description: 'Enregistre une nouvelle source. (Input: { title: string, type: "pdf"|"website"|"interview"|"field_notes"|"other", source_link_or_path?: string, notes?: string }). Le user_id sera automatiquement lié.', inputSchema: AddSourceInputSchema, outputSchema: AddSourceOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); } });
-const addTaskToolForAI = ai.defineTool({ name: 'addTaskTool', description: 'Ajoute une tâche. Si l''utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: { text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }). Le user_id sera automatiquement lié.', inputSchema: AddTaskInputSchema, outputSchema: AddTaskOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); } });
-const refinePromptToolForAI = ai.defineTool({ name: 'refinePromptTool', description: 'Améliore un prompt fourni par l''utilisateur. (Input: { promptToRefine: string }). Cette action enregistre également le prompt original et affiné.', inputSchema: RefinePromptToolInputSchema, outputSchema: RefinePromptToolOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }});
-const createThesisPlanToolForAI = ai.defineTool({ name: 'createThesisPlanTool', description: 'Génère un plan de thèse ou de mémoire structuré. (Input: { topicOrInstructions: string }).', inputSchema: CreateThesisPlanToolInputSchema, outputSchema: CreateThesisPlanToolOutputSchema, async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); } });
+const addChapterToolForAI = ai.defineTool(
+  { name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
+);
+const addBrainDumpEntryToolForAI = ai.defineTool(
+  { name: 'addBrainDumpEntryTool', description: 'Ajoute une note au vide-cerveau. (Input: { text: string, status?: "captured"|"task"|"idea" }). Le user_id sera automatiquement lié.', inputSchema: AddBrainDumpEntryInputSchema, outputSchema: AddBrainDumpEntryOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
+);
+const addDailyObjectiveToolForAI = ai.defineTool(
+  { name: 'addDailyObjectiveTool', description: 'Ajoute un objectif au plan du jour. (Input: { text: string }). Le user_id sera automatiquement lié.', inputSchema: AddDailyObjectiveInputSchema, outputSchema: AddDailyObjectiveOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
+);
+const addSourceToolForAI = ai.defineTool(
+  { name: 'addSourceTool', description: 'Enregistre une nouvelle source. (Input: { title: string, type: "pdf"|"website"|"interview"|"field_notes"|"other", source_link_or_path?: string, notes?: string }). Le user_id sera automatiquement lié.', inputSchema: AddSourceInputSchema, outputSchema: AddSourceOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
+);
+const addTaskToolForAI = ai.defineTool(
+  { name: 'addTaskTool', description: 'Ajoute une tâche. Si l''utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: { text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }). Le user_id sera automatiquement lié.', inputSchema: AddTaskInputSchema, outputSchema: AddTaskOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
+);
+const refinePromptToolForAI = ai.defineTool(
+  { name: 'refinePromptTool', description: 'Améliore un prompt fourni par l''utilisateur. (Input: { promptToRefine: string }). Cette action enregistre également le prompt original et affiné.', inputSchema: RefinePromptToolInputSchema, outputSchema: RefinePromptToolOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }
+);
+const createThesisPlanToolForAI = ai.defineTool(
+  { name: 'createThesisPlanTool', description: 'Génère un plan de thèse ou de mémoire structuré. (Input: { topicOrInstructions: string }).', inputSchema: CreateThesisPlanToolInputSchema, outputSchema: CreateThesisPlanToolOutputSchema },
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }
+);
 
 
 // --- Schéma d'Entrée/Sortie pour l'Agent Principal ---
@@ -353,9 +374,11 @@ const thesisAgentFlow = ai.defineFlow(
             toolOutput = await addSourceToolLogic(toolRequest.input as z.infer<typeof AddSourceInputSchema>, userId);
             break;
           case 'refinePromptTool':
+            // Note: refinePromptToolLogic a besoin de userId pour logger, pas pour sa logique principale d'affinage.
             toolOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId);
             break;
           case 'createThesisPlanTool':
+            // createThesisPlanToolLogic n'a pas besoin de userId pour sa logique principale
             toolOutput = await createThesisPlanToolLogic(toolRequest.input as z.infer<typeof CreateThesisPlanToolInputSchema>);
             break;
           default:
