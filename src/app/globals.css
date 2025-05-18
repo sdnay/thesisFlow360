@@ -117,23 +117,23 @@ body {
 /* Styles de base pour custom-scrollbar */
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;  /* Largeur de la barre de défilement */
-    height: 8px; /* Hauteur pour les barres horizontales */
+    width: 6px;  /* Largeur réduite pour être plus discret */
+    height: 6px; /* Hauteur pour les barres horizontales */
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: hsl(var(--card) / 0.5); /* Couleur de la piste, semi-transparente */
+    background: hsl(var(--background) / 0.1); /* Piste plus transparente */
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.5); /* Couleur de la barre elle-même */
+    background: hsl(var(--muted-foreground) / 0.3); /* Barre plus transparente */
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.7); /* Couleur au survol */
+    background: hsl(var(--muted-foreground) / 0.5); /* Un peu plus visible au survol */
   }
   /* Pour Firefox */
   .custom-scrollbar {
-    scrollbar-width: thin; /* Options: 'auto', 'thin', 'none' */
-    scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--card) / 0.5); /* thumb track */
+    scrollbar-width: thin; 
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--background) / 0.1); /* thumb track */
   }
 }
