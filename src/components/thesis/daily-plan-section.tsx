@@ -22,7 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
 
-import SimpleObjectiveTagManager from './daily-plan-components/SimpleObjectiveTagManager';
+import SimpleObjectiveTagManager from './daily-plan-components/SimpleObjectiveTagManager'; // Will be replaced
+import TagManager from '@/components/ui/tag-manager'; // Added import
 import DailyObjectiveItem from './daily-plan-components/DailyObjectiveItem';
 import CreateDailyPlanForm from './daily-plan-components/CreateDailyPlanForm';
 
@@ -107,13 +108,13 @@ export function DailyPlanSection() {
       if (dailyPlanRes.error) throw new Error(`Plan du jour: ${dailyPlanRes.error.message}`);
       if (overdueResOrNull && overdueResOrNull.error) throw new Error(`Objectifs en retard: ${overdueResOrNull.error.message}`);
 
-      setObjectives((objRes.data || []).map(o => ({...o, user_id: user.id, tags: o.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: o.chapters as {id:string, name:string}|null, daily_plans: o.daily_plans as {id:string, title:string}|null })));
+      setObjectives((objRes.data || []).map(o => ({...o, user_id: user.id, tags: o.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: o.chapters as {id:string, name:string}|null, daily_plans: o.daily_plans as {id:string, title:string | null }|null })));
       setChapters(chapRes.data || []);
       setAvailableTags((tagsRes.data || []).map(t => ({...t, user_id: user.id})));
       setDailyPlanForSelectedDate(dailyPlanRes.data as DailyPlan | null);
 
       if (isToday(dateToFetch) && overdueResOrNull) {
-        setOverdueObjectives((overdueResOrNull.data || []).map(o => ({...o, user_id: user.id, tags: o.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: o.chapters as {id:string, name:string}|null, daily_plans: o.daily_plans as {id:string, title:string}|null })));
+        setOverdueObjectives((overdueResOrNull.data || []).map(o => ({...o, user_id: user.id, tags: o.daily_objective_tags?.map((dot:any) => dot.tags) || [], chapters: o.chapters as {id:string, name:string}|null, daily_plans: o.daily_plans as {id:string, title:string | null}|null })));
       } else {
         setOverdueObjectives([]);
       }
@@ -138,7 +139,7 @@ export function DailyPlanSection() {
     if (!user) return;
     const channel = supabase.channel(`db-daily-plan-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objectives', filter: `user_id=eq.${user.id}` }, () => fetchPageData(selectedDate))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objective_tags' }, () => fetchPageData(selectedDate)) // Peut être affiné avec un filtre sur tag_id si possible
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_objective_tags' }, () => fetchPageData(selectedDate)) 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchPageData(selectedDate))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchPageData(selectedDate))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_plans', filter: `user_id=eq.${user.id}` }, () => fetchPageData(selectedDate))
@@ -192,10 +193,10 @@ export function DailyPlanSection() {
 
       const processedFinalObjective: DailyObjective = {
           ...fetchedObjectiveWithRelations,
-          user_id: user.id, // Rassurer TypeScript
+          user_id: user.id, 
           tags: fetchedObjectiveWithRelations.daily_objective_tags?.map((dot: any) => dot.tags) || [],
           chapters: fetchedObjectiveWithRelations.chapters as {id:string, name:string} | null,
-          daily_plans: fetchedObjectiveWithRelations.daily_plans as {id:string, title:string} | null,
+          daily_plans: fetchedObjectiveWithRelations.daily_plans as {id:string, title:string | null}|null,
       };
 
       if (formatDateForSupabase(selectedDate) === processedFinalObjective.objective_date) {
@@ -205,21 +206,18 @@ export function DailyPlanSection() {
             setObjectives(prev => [...prev, processedFinalObjective].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
           }
       }
-
-      // Logique de mise à jour pour les objectifs en retard
+      
       const isOverdue = overdueObjectives.some(o => o.id === processedFinalObjective.id);
       const objectiveIsPastAndNotToday = isPast(parseISO(processedFinalObjective.objective_date)) && !isToday(parseISO(processedFinalObjective.objective_date));
 
       if(isOverdue){
-        if(processedFinalObjective.completed || processedFinalObjective.objective_date !== editingObjective?.objective_date) { // Si complété ou date changée
+        if(processedFinalObjective.completed || processedFinalObjective.objective_date !== editingObjective?.objective_date) { 
           setOverdueObjectives(prev => prev.filter(o => o.id !== processedFinalObjective.id));
-        } else { // Si toujours en retard et non complété (juste texte ou tags modifiés)
+        } else { 
           setOverdueObjectives(prev => prev.map(o => o.id === processedFinalObjective.id ? processedFinalObjective : o));
         }
       } else if (objectiveIsPastAndNotToday && !processedFinalObjective.completed) {
-        // Si un objectif édité devient un objectif en retard (ex: date changée au passé)
-        // On pourrait l'ajouter à la liste des objectifs en retard, mais un fetchPageData est plus simple.
-        fetchPageData(selectedDate); // Re-fetch pour inclure/exclure des objectifs en retard
+        fetchPageData(selectedDate); 
       }
 
 
@@ -243,7 +241,7 @@ export function DailyPlanSection() {
             user_id: user.id,
             tags: updatedObjFromDb.daily_objective_tags?.map((dot: any) => dot.tags) || [],
             chapters: updatedObjFromDb.chapters as {id:string, name:string} | null,
-            daily_plans: updatedObjFromDb.daily_plans as {id:string, title:string} | null
+            daily_plans: updatedObjFromDb.daily_plans as {id:string, title:string | null }|null
           };
 
           if (objectiveDate === formatDateForSupabase(selectedDate)) {
@@ -255,8 +253,6 @@ export function DailyPlanSection() {
              if(completed) {
                 setOverdueObjectives(prevOverdue => prevOverdue.filter(obj => obj.id !== id));
              } else {
-                 // Si on dé-complète un objectif en retard, il devrait réapparaître.
-                 // Le fetchPageData est plus simple pour gérer ce cas et d'autres cas limites.
                  fetchPageData(selectedDate);
              }
           }
@@ -309,18 +305,19 @@ export function DailyPlanSection() {
             user_id: user.id,
             plan_date: formatDateForSupabase(selectedDate),
             title: title || null,
-            id: dailyPlanForSelectedDate?.id || undefined // Pour l'upsert
+            // Si dailyPlanForSelectedDate a un id, on l'utilise pour un upsert qui met à jour
+            id: dailyPlanForSelectedDate?.id || undefined
         };
 
         const { data: savedPlan, error } = await supabase
             .from('daily_plans')
-            .upsert(planPayload, { onConflict: 'user_id, plan_date' })
+            .upsert(planPayload, { onConflict: 'user_id, plan_date' }) // Upsert basé sur la contrainte unique
             .select()
             .single();
 
         if (error) throw error;
         setDailyPlanForSelectedDate(savedPlan as DailyPlan | null);
-        toast({ title: dailyPlanForSelectedDate?.id ? "Titre du plan mis à jour" : "Plan du jour créé/mis à jour" });
+        toast({ title: dailyPlanForSelectedDate?.id && planPayload.id ? "Titre du plan mis à jour" : "Plan du jour créé/mis à jour" });
         setIsPlanModalOpen(false);
     } catch (e: any) {
         toast({ title: "Erreur", description: (e as Error).message, variant: "destructive" });
@@ -371,10 +368,11 @@ export function DailyPlanSection() {
           <Button variant="outline" size="icon" onClick={() => navigateDate(1)} disabled={isSelectedDateToday || isFetching} aria-label="Jour suivant" className="h-9 w-9">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          {showAddButtonInHeader &&
+          {showAddButtonInHeader && (
             <Button onClick={openNewModal} disabled={isFetching || isFormLoading || !user} size="sm" className="h-9">
               <PlusCircle className="mr-2 h-4 w-4" /> Objectif
-            </Button>}
+            </Button>
+          )}
            <Button onClick={openPlanModal} variant="outline" size="sm" className="h-9" disabled={isFetching || isSavingPlan || !user}>
                 <Edit className="mr-2 h-4 w-4" /> {dailyPlanForSelectedDate?.id ? "Modifier Titre Plan" : "Créer/Modifier Plan"}
             </Button>
@@ -394,7 +392,7 @@ export function DailyPlanSection() {
       <Card className="shadow-sm">
         <CardHeader className="pb-2 pt-4 flex flex-row items-center justify-between">
           <CardTitle className="text-base md:text-lg">Progression ({format(selectedDate, "d MMMM", { locale: fr })})</CardTitle>
-          <Badge variant={completionPercentage === 100 ? "default" : "secondary"} className={cn("text-sm", completionPercentage === 100 && "bg-green-600 text-white")}>
+          <Badge variant={completionPercentage === 100 ? "default" : "secondary"} className={cn("text-sm", completionPercentage === 100 && "bg-green-500 text-white dark:bg-green-600 dark:text-white")}>
             {completedCount}/{totalForSelectedDate} complétés
           </Badge>
         </CardHeader>
@@ -437,11 +435,11 @@ export function DailyPlanSection() {
             <p className="font-medium text-lg mb-1">Aucun objectif pour {isSelectedDateToday ? "aujourd'hui" : `le ${format(selectedDate, "d MMM", {locale: fr})}`}.</p>
             {(dailyPlanForSelectedDate?.title) && <p className="text-sm text-muted-foreground mb-1">Plan : "{dailyPlanForSelectedDate.title}"</p> }
             <p className="text-sm mb-4">Définissez vos priorités pour cette journée.</p>
-            {showAddButtonInEmptyState &&
+            {showAddButtonInEmptyState && (
               <Button onClick={openNewModal} size="lg" className="mt-2" disabled={!user || isFormLoading || isFetching}>
                 <PlusCircle className="mr-2 h-5 w-5" /> Définir {objectives.length === 0 && isSelectedDateToday ? 'le premier' : 'un'} objectif
               </Button>
-            }
+            )}
           </div>
         ) : (
           objectives.map((obj) => <DailyObjectiveItem key={obj.id} objective={obj} onToggle={handleToggleObjective} onDelete={handleDeleteObjective} onEdit={openEditModal} isLoading={isItemLoading === obj.id} isPastObjective={isSelectedDatePast && !isSelectedDateToday} />)
@@ -469,7 +467,6 @@ export function DailyPlanSection() {
                  <div>
                     <Label className="mb-1.5 block text-sm">Tags (Optionnel)</Label>
                     <TagManager
-                      entityType="daily_objective"
                       availableTags={availableTags.filter(t => t.user_id === user?.id)}
                       selectedTags={selectedTags}
                       onTagAdd={handleAddTagToManualObjective}
@@ -489,8 +486,9 @@ export function DailyPlanSection() {
                   onClick={handleAddOrUpdateObjective}
                   disabled={
                     isFormLoading ||
+                    !user || // Ajout de la vérification user
                     !newObjectiveText.trim() ||
-                    (objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isSelectedDateToday && !user)
+                    (objectives.filter(obj => !obj.completed && obj.objective_date === formatDateForSupabase(selectedDate)).length >= 5 && !editingObjective && isSelectedDateToday)
                   }
                 >
                   {isFormLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : (editingObjective ? <Save className="h-4 w-4 mr-2" /> : <PlusCircle className="h-4 w-4 mr-2" />)}
@@ -520,3 +518,4 @@ export function DailyPlanSection() {
     </div>
   );
 }
+
