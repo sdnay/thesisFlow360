@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { PromptLogEntry, ChatSession, ChatMessage, ThesisAgentOutput } from '@/types'; // Ajout de ChatSession, ChatMessage
+import type { PromptLogEntry, ChatSession, ChatMessage, ThesisAgentOutput } from '@/types';
 import { processUserRequest, type ThesisAgentInput } from '@/ai/flows/thesis-agent-flow';
 import { Sparkles, History, Send, Copy, Check, AlertTriangle, Loader2, Bot, MessageSquare, Plus, Trash2, ChevronsUpDown } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -111,7 +111,6 @@ const PromptLogItemDisplay: FC<PromptLogItemDisplayProps> = ({ entry, onUsePromp
   );
 };
 
-// Renommé pour plus de clarté, car ce sont les messages affichés, pas forcément des ChatMessage bruts de la DB
 interface DisplayMessage {
   id: string;
   role: 'user' | 'agent';
@@ -126,17 +125,17 @@ export function ChatGPTPromptLogPanel() {
   const [promptLogs, setPromptLogs] = useState<PromptLogEntry[]>([]);
   const [currentUserRequest, setCurrentUserRequest] = useState('');
   
-  // State pour la gestion des sessions de chat
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>("Nouvelle Discussion");
-  const [conversation, setConversation] = useState<DisplayMessage[]>([]); // Messages de la session active
+  const [conversation, setConversation] = useState<DisplayMessage[]>([]);
 
   const [isLoadingAgent, setIsLoadingAgent] = useState(false);
-  const [isFetchingLogs, setIsFetchingLogs] = useState(true); // Pour l'historique des prompts affinés
+  const [isFetchingLogs, setIsFetchingLogs] = useState(true);
   const [isFetchingSessions, setIsFetchingSessions] = useState(true);
   const [isFetchingMessages, setIsFetchingMessages] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -149,7 +148,6 @@ export function ChatGPTPromptLogPanel() {
   useEffect(scrollToBottom, [conversation]);
 
   const fetchPromptLogs = useCallback(async () => {
-    // ... (logique existante pour prompt_log_entries, qui est l'historique des prompts affinés)
      if (!user) { setPromptLogs([]); setIsFetchingLogs(false); return; }
      setIsFetchingLogs(true);
     try {
@@ -181,12 +179,11 @@ export function ChatGPTPromptLogPanel() {
       if (sessionError) throw sessionError;
       setChatSessions(data || []);
       if (data && data.length > 0 && !currentSessionId) {
-        // Sélectionner la session la plus récente par défaut au premier chargement
         setCurrentSessionId(data[0].id);
         setCurrentSessionTitle(data[0].title);
       } else if ((!data || data.length === 0) && !currentSessionId) {
         setCurrentSessionTitle("Nouvelle Discussion");
-        setConversation([]); // Assurer que la conversation est vide
+        setConversation([]);
       }
     } catch (e: any) {
       console.error("Erreur chargement sessions de chat:", e);
@@ -225,7 +222,7 @@ export function ChatGPTPromptLogPanel() {
   useEffect(() => {
     fetchPromptLogs();
     fetchChatSessions();
-  }, [fetchPromptLogs, fetchChatSessions, user]); // Dépendance user ajoutée pour re-fetch si user change
+  }, [fetchPromptLogs, fetchChatSessions, user]);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -233,36 +230,33 @@ export function ChatGPTPromptLogPanel() {
       const selectedSession = chatSessions.find(s => s.id === currentSessionId);
       setCurrentSessionTitle(selectedSession?.title || "Discussion");
     } else {
-      setConversation([]); // Si aucune session n'est sélectionnée, vider la conversation
+      setConversation([]);
       setCurrentSessionTitle("Nouvelle Discussion");
     }
   }, [currentSessionId, loadMessagesForSession, chatSessions]);
 
 
   useEffect(() => {
-    if (!user) return; // Ne pas s'abonner si l'utilisateur n'est pas connecté
+    if (!user) return;
     const promptLogChannel = supabase
       .channel(`db-promptlogs-panel-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_log_entries', filter: `user_id=eq.${user.id}` }, fetchPromptLogs)
       .subscribe();
     
-    const chatMessagesChannel = supabase
-      .channel(`db-chatmessages-panel-user-${user.id}`)
+    const chatMessagesSubscription = supabase
+      .channel(`db-chatmessages-panel-user-${user.id}-session-${currentSessionId || 'all'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `user_id=eq.${user.id}${currentSessionId ? `&session_id=eq.${currentSessionId}` : ''}` }, (payload) => {
-        if (currentSessionId && payload.new?.session_id === currentSessionId) {
+        if (currentSessionId && (payload.new?.session_id === currentSessionId || (payload.old as any)?.session_id === currentSessionId)) {
           loadMessagesForSession(currentSessionId);
-        } else if (currentSessionId && payload.eventType === 'DELETE' && (payload.old as any)?.session_id === currentSessionId) {
-           loadMessagesForSession(currentSessionId); // Recharger si un message est supprimé de la session courante
         }
       })
       .subscribe();
 
-    const chatSessionsChannel = supabase
+    const chatSessionsSubscription = supabase
       .channel(`db-chatsessions-panel-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_sessions', filter: `user_id=eq.${user.id}` }, (payload) => {
-         fetchChatSessions(); // Recharger la liste des sessions
+         fetchChatSessions();
          if (payload.eventType === 'DELETE' && (payload.old as any)?.id === currentSessionId) {
-           // Si la session active est supprimée, passer à une nouvelle discussion ou la plus récente
            setCurrentSessionId(null); 
          }
       })
@@ -270,16 +264,16 @@ export function ChatGPTPromptLogPanel() {
 
     return () => {
       supabase.removeChannel(promptLogChannel);
-      supabase.removeChannel(chatMessagesChannel);
-      supabase.removeChannel(chatSessionsChannel);
+      supabase.removeChannel(chatMessagesSubscription);
+      supabase.removeChannel(chatSessionsSubscription);
     };
   }, [user, fetchPromptLogs, loadMessagesForSession, fetchChatSessions, currentSessionId]);
 
-  const createNewChatSession = async (firstUserMessage: string): Promise<string | null> => {
+  const createNewChatSession = async (firstUserMessageContent: string): Promise<string | null> => {
     if (!user) return null;
     setIsCreatingSession(true);
     try {
-      const title = firstUserMessage.substring(0, 50) + (firstUserMessage.length > 50 ? "..." : "") || `Discussion du ${format(new Date(), 'dd/MM HH:mm')}`;
+      const title = firstUserMessageContent.substring(0, 30) + (firstUserMessageContent.length > 30 ? "..." : "") || `Discussion du ${format(new Date(), 'dd/MM HH:mm', { locale: fr })}`;
       const { data, error } = await supabase
         .from('chat_sessions')
         .insert({ user_id: user.id, title })
@@ -288,7 +282,7 @@ export function ChatGPTPromptLogPanel() {
       if (error) throw error;
       if (data) {
         toast({ title: "Nouvelle session créée", description: data.title });
-        setChatSessions(prev => [data, ...prev]); // Ajoute au début de la liste
+        setChatSessions(prev => [data, ...prev].sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
         return data.id;
       }
       return null;
@@ -308,19 +302,12 @@ export function ChatGPTPromptLogPanel() {
     const userMessage: DisplayMessage = {
       id: tempUserMessageId,
       role: 'user',
-      content: currentUserRequest,
+      content: currentUserRequest.trim(),
       timestamp: new Date(),
     };
-    const loadingAgentMessage: DisplayMessage = {
-      id: `agent-loading-${Date.now()}`,
-      role: 'agent',
-      content: 'L\'assistant réfléchit...',
-      timestamp: new Date(),
-      isLoading: true,
-    };
-    setConversation(prev => [...prev, userMessage, loadingAgentMessage]);
+    setConversation(prev => [...prev, userMessage]);
     
-    const requestTextForAgent = currentUserRequest;
+    const requestTextForAgent = currentUserRequest.trim();
     setCurrentUserRequest(''); 
     setIsLoadingAgent(true);
     setError(null);
@@ -330,46 +317,61 @@ export function ChatGPTPromptLogPanel() {
       const newSessionId = await createNewChatSession(requestTextForAgent);
       if (newSessionId) {
         activeSessionId = newSessionId;
-        setCurrentSessionId(newSessionId); // Mettre à jour l'ID de session actif
+        setCurrentSessionId(newSessionId);
       } else {
-        // Annuler l'affichage du message utilisateur si la session n'a pas pu être créée
-        setConversation(prev => prev.filter(m => m.id !== tempUserMessageId && !m.isLoading));
+        setConversation(prev => prev.filter(m => m.id !== tempUserMessageId));
         setIsLoadingAgent(false);
         return;
       }
     }
 
-    // Sauvegarder le message utilisateur
-    const { error: userMsgError } = await supabase.from('chat_messages').insert({
+    const { error: userMsgDbError } = await supabase.from('chat_messages').insert({
       session_id: activeSessionId,
       user_id: user.id,
       role: 'user',
       content: requestTextForAgent,
     });
-    if (userMsgError) {
+    if (userMsgDbError) {
       toast({ title: "Erreur", description: "Impossible d'enregistrer votre message.", variant: "destructive" });
-      // Gérer l'erreur, peut-être supprimer le message de l'UI
-      setConversation(prev => prev.filter(m => m.id !== tempUserMessageId && !m.isLoading));
+      setConversation(prev => prev.filter(m => m.id !== tempUserMessageId));
       setIsLoadingAgent(false);
       return;
     }
     
-    // Préparer l'historique pour l'agent IA
     const agentChatHistory = conversation
-      .filter(m => m.id !== tempUserMessageId && !m.isLoading) // Exclure le message en cours d'envoi et le loader
+      .filter(m => m.id !== tempUserMessageId && !m.isLoading)
       .map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model', // 'model' est le rôle attendu par Genkit pour l'IA
-        parts: [{ text: msg.content }],
+        role: msg.role === 'user' ? 'user' : 'model',
+        content: msg.content,
+        actions_taken: msg.actions_taken
       }));
-    if(userMessage.id !== tempUserMessageId) agentChatHistory.push({ role: 'user', parts: [{ text: userMessage.content}]});
+    // Ensure the current user message is part of the history if it wasn't filtered out
+    if(!agentChatHistory.find(m => m.content === requestTextForAgent && m.role === 'user')) {
+      agentChatHistory.push({ role: 'user', content: requestTextForAgent, actions_taken: undefined });
+    }
 
+    const loadingAgentMessage: DisplayMessage = {
+      id: `agent-loading-${Date.now()}`,
+      role: 'agent',
+      content: 'ThesisBot réfléchit...',
+      timestamp: new Date(),
+      isLoading: true,
+    };
+    setConversation(prev => [...prev, loadingAgentMessage]);
 
     try {
-      const agentInput: ThesisAgentInput = { userRequest: requestTextForAgent };
-      const result: ThesisAgentOutput = await processUserRequest({ 
-        ...agentInput, 
-        chatHistory: agentChatHistory.length > 0 ? agentChatHistory : null 
-      });
+      // Format chatHistory for the agent
+      const formattedAgentChatHistory = agentChatHistory.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model', // 'agent' from UI becomes 'model' for Genkit
+        parts: [{ text: msg.content }], // Correctly format parts
+      })) as Array<{role: 'user' | 'model'; parts: {text: string}[]}> | undefined;
+
+
+      const agentInput: ThesisAgentInput = { 
+        userRequest: requestTextForAgent,
+        chatHistory: formattedAgentChatHistory && formattedAgentChatHistory.length > 0 ? formattedAgentChatHistory : null,
+      };
+      const result: ThesisAgentOutput = await processUserRequest(agentInput);
       
       const agentResponseMessage: DisplayMessage = {
         id: `agent-${Date.now()}`,
@@ -378,26 +380,32 @@ export function ChatGPTPromptLogPanel() {
         timestamp: new Date(),
         actions_taken: result.actionsTaken,
       };
-      setConversation(prev => [...prev.filter(m => !m.isLoading), agentResponseMessage]);
+      setConversation(prev => [...prev.filter(m => !m.isLoading && m.id !== tempUserMessageId), userMessage, agentResponseMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()));
 
-      // Sauvegarder la réponse de l'agent
       await supabase.from('chat_messages').insert({
         session_id: activeSessionId,
-        user_id: user.id, // Redondant mais peut être utile pour certaines politiques RLS directes
+        user_id: user.id,
         role: 'agent',
         content: result.responseMessage,
         actions_taken: result.actionsTaken || null,
       });
 
     } catch (e: any) {
-      // ... (gestion d'erreur existante) ...
       const errorMessage = `Erreur de l'agent: ${e.message || "Une erreur inconnue est survenue."}`;
       setError(errorMessage);
       const agentErrorMessage: DisplayMessage = {id: `agent-error-${Date.now()}`, role: 'agent', content: errorMessage, timestamp: new Date() };
-      setConversation(prev => [...prev.filter(m => !m.isLoading), agentErrorMessage]);
+      setConversation(prev => [...prev.filter(m => !m.isLoading && m.id !== tempUserMessageId), userMessage, agentErrorMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()));
       toast({ title: "Erreur de l'Agent", description: e.message || "Une erreur est survenue.", variant: "destructive" });
     } finally {
       setIsLoadingAgent(false);
+       // Ensure the original user message is definitely in the conversation
+       setConversation(prev => {
+        if (!prev.find(m => m.id === tempUserMessageId)) {
+          const finalConvo = [...prev, userMessage].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime());
+          return finalConvo.filter(m => m.id !== loadingAgentMessage.id || !m.isLoading);
+        }
+        return prev.filter(m => m.id !== loadingAgentMessage.id || !m.isLoading);
+      });
     }
   };
   
@@ -410,30 +418,32 @@ export function ChatGPTPromptLogPanel() {
   const handleSelectSession = (sessionId: string | null) => {
     if (sessionId === 'new_chat') {
       setCurrentSessionId(null);
-      setConversation([]);
-      setCurrentSessionTitle("Nouvelle Discussion");
     } else {
       setCurrentSessionId(sessionId);
-      // Les messages seront chargés par le useEffect qui écoute currentSessionId
     }
   };
   
   const handleDeleteSession = async () => {
-    if (!currentSessionId || !user) return;
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette session de discussion ?")) return;
-
+    if (!currentSessionId || !user || isDeletingSession) return;
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette session de discussion et tous ses messages ? Cette action est irréversible.")) return;
+    
+    setIsDeletingSession(true);
     try {
+      // La suppression en cascade devrait gérer les messages.
       const { error } = await supabase.from('chat_sessions').delete().eq('id', currentSessionId).eq('user_id', user.id);
       if (error) throw error;
       toast({ title: "Session supprimée" });
-      setCurrentSessionId(null); // Déclenchera le re-fetch des sessions et la sélection d'une nouvelle session
-      fetchChatSessions(); // Pour rafraîchir la liste immédiatement
+      setCurrentSessionId(null); 
+      fetchChatSessions(); // Rafraîchit la liste et sélectionne la plus récente ou nouvelle discussion.
     } catch (e: any) {
       toast({ title: "Erreur", description: "Impossible de supprimer la session.", variant: "destructive" });
+      console.error("Erreur handleDeleteSession:", e);
+    } finally {
+      setIsDeletingSession(false);
     }
   };
 
-  const sessionDropdownTitle = currentSessionTitle || (isFetchingSessions ? "Chargement..." : "Sélectionner une discussion");
+  const sessionDropdownTitle = currentSessionId ? (chatSessions.find(s => s.id === currentSessionId)?.title || "Chargement...") : "Nouvelle Discussion";
 
   return (
     <div className="flex flex-col h-full p-1 md:p-2 bg-background">
@@ -441,16 +451,16 @@ export function ChatGPTPromptLogPanel() {
         <CardHeader className="border-b p-3 md:p-4 flex flex-row justify-between items-center">
           <div className="flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary" />
-            <CardTitle className="text-sm md:text-base">Assistant IA ThesisFlow</CardTitle>
+            <CardTitle className="text-sm md:text-base">Assistant IA ThesisBot</CardTitle>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto h-8 text-xs md:text-sm whitespace-nowrap max-w-[200px] truncate">
-                <span className="truncate">{sessionDropdownTitle}</span>
+              <Button variant="outline" size="sm" className="ml-auto h-8 text-xs md:text-sm whitespace-nowrap max-w-[180px] truncate" disabled={isFetchingSessions || isCreatingSession || isDeletingSession}>
+                {isFetchingSessions ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="truncate">{sessionDropdownTitle}</span> }
                 <ChevronsUpDown className="ml-2 h-3 w-3 opacity-50 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto custom-scrollbar">
               <DropdownMenuLabel className="text-xs">Discussions</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => handleSelectSession('new_chat')} className="text-sm cursor-pointer">
                 <Plus className="mr-2 h-4 w-4" /> Nouvelle Discussion
@@ -458,17 +468,21 @@ export function ChatGPTPromptLogPanel() {
               {isFetchingSessions && <DropdownMenuItem disabled className="text-sm"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Chargement...</DropdownMenuItem>}
               {!isFetchingSessions && chatSessions.length > 0 && <DropdownMenuSeparator />}
               {chatSessions.map(session => (
-                <DropdownMenuItem key={session.id} onSelect={() => handleSelectSession(session.id)} className={cn("text-sm cursor-pointer", currentSessionId === session.id && "bg-accent")}>
-                  <MessageSquare className="mr-2 h-4 w-4 opacity-70" />
-                  <span className="truncate" title={session.title}>{session.title}</span>
+                <DropdownMenuItem key={session.id} onSelect={() => handleSelectSession(session.id)} className={cn("text-sm cursor-pointer justify-between", currentSessionId === session.id && "bg-accent/80 font-semibold")}>
+                  <div className="flex items-center truncate">
+                    <MessageSquare className="mr-2 h-4 w-4 opacity-70 shrink-0" />
+                    <span className="truncate" title={session.title}>{session.title}</span>
+                  </div>
+                   {currentSessionId === session.id && <Check className="h-4 w-4 text-primary" />}
                 </DropdownMenuItem>
               ))}
                {!isFetchingSessions && chatSessions.length === 0 && <DropdownMenuItem disabled className="text-xs italic text-muted-foreground">Aucune session</DropdownMenuItem>}
                {currentSessionId && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={handleDeleteSession} className="text-destructive focus:text-destructive text-sm cursor-pointer">
-                    <Trash2 className="mr-2 h-4 w-4"/> Supprimer la session active
+                  <DropdownMenuItem onSelect={handleDeleteSession} disabled={isDeletingSession} className="text-destructive focus:text-destructive text-sm cursor-pointer">
+                    {isDeletingSession ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4"/>} 
+                    Supprimer la session active
                   </DropdownMenuItem>
                 </>
                )}
@@ -476,7 +490,7 @@ export function ChatGPTPromptLogPanel() {
           </DropdownMenu>
         </CardHeader>
         
-        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 p-3 md:p-4 overflow-hidden"> {/* overflow-hidden ici */}
+        <CardContent className="pt-3 md:pt-4 flex-grow flex flex-col gap-3 md:gap-4 p-3 md:p-4 overflow-hidden">
           <ScrollArea className="flex-grow pr-2 -mr-2 mb-2 border rounded-md p-2 bg-muted/30 custom-scrollbar">
             {isFetchingMessages ? (
               <div className="flex justify-center items-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mr-2"/>Chargement des messages...</div>
@@ -518,24 +532,24 @@ export function ChatGPTPromptLogPanel() {
             </div>
           </ScrollArea>
 
-          <div className="space-y-2 border-t pt-3 mt-auto shrink-0"> {/* shrink-0 ici */}
+          <div className="space-y-2 border-t pt-3 mt-auto shrink-0">
             <Textarea
               id="agent-input-textarea"
               value={currentUserRequest}
               onChange={(e) => setCurrentUserRequest(e.target.value)}
               placeholder={user ? (isCreatingSession ? "Création de la session..." : "Demandez à ThesisBot...") : "Veuillez vous connecter pour utiliser l'assistant."}
               rows={2}
-              className="text-sm min-h-[60px] resize-none"
-              disabled={isLoadingAgent || !user || isCreatingSession || isFetchingMessages}
+              className="text-sm min-h-[60px] resize-none custom-scrollbar"
+              disabled={isLoadingAgent || !user || isCreatingSession || isFetchingMessages || isFetchingSessions}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && user && !isCreatingSession && !isFetchingMessages) {
+                if (e.key === 'Enter' && !e.shiftKey && user && !isCreatingSession && !isFetchingMessages && !isFetchingSessions) {
                   e.preventDefault();
                   handleSendToAgent();
                 }
               }}
             />
             <div className="flex gap-2">
-              <Button onClick={handleSendToAgent} disabled={isLoadingAgent || !currentUserRequest.trim() || !user || isCreatingSession || isFetchingMessages} className="flex-1">
+              <Button onClick={handleSendToAgent} disabled={isLoadingAgent || !currentUserRequest.trim() || !user || isCreatingSession || isFetchingMessages || isFetchingSessions} className="flex-1">
                 {isLoadingAgent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                 {isLoadingAgent ? 'Envoi...' : 'Envoyer'}
               </Button>
@@ -545,7 +559,7 @@ export function ChatGPTPromptLogPanel() {
             )}
           </div>
           
-          <details className="border-t pt-3 shrink-0"> {/* shrink-0 ici */}
+          <details className="border-t pt-3 shrink-0">
             <summary className="text-sm font-medium flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
               <History className="h-4 w-4" /> Historique des Prompts Affinés (5 derniers)
             </summary>
@@ -576,3 +590,4 @@ export function ChatGPTPromptLogPanel() {
     </div>
   );
 }
+
