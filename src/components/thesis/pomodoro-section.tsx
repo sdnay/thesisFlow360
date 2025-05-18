@@ -15,12 +15,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
-import PomodoroLogItem from './pomodoro-components/PomodoroLogItem'; // Import du nouveau composant
+import PomodoroLogItem from './pomodoro-components/PomodoroLogItem';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const DEFAULT_SESSION_DURATION = 25;
 const MAX_SESSION_DURATION = 120;
 const MIN_SESSION_DURATION = 5;
+const NONE_VALUE = "none"; // Constant for "none" selection
 
 export function PomodoroSection() {
   const { user } = useAuth();
@@ -45,7 +46,7 @@ export function PomodoroSection() {
   const [objectives, setObjectives] = useState<Pick<DailyObjective, 'id' | 'text'>[]>([]);
   const [chapters, setChapters] = useState<Pick<Chapter, 'id' | 'name'>[]>([]);
 
-  const [isLogging, setIsLogging] = useState(false); // Pour l'enregistrement de session et suppression de log
+  const [isLogging, setIsLogging] = useState(false);
   const [isFetchingLog, setIsFetchingLog] = useState(true);
   const [isFetchingLinkableItems, setIsFetchingLinkableItems] = useState(true);
 
@@ -54,6 +55,9 @@ export function PomodoroSection() {
   const fetchLinkableItems = useCallback(async () => {
     if (!user) {
       setIsFetchingLinkableItems(false);
+      setTasks([]);
+      setObjectives([]);
+      setChapters([]);
       return;
     }
     setIsFetchingLinkableItems(true);
@@ -82,13 +86,10 @@ export function PomodoroSection() {
     const taskIdParam = searchParams.get('taskId');
     const taskTextParam = searchParams.get('taskText');
     const objectiveIdParam = searchParams.get('objectiveId');
-    // const objectiveTextParam = searchParams.get('objectiveText'); // Non utilisé pour l'instant
     const chapterIdParam = searchParams.get('chapterId');
-    // const chapterNameParam = searchParams.get('chapterName'); // Non utilisé pour l'instant
 
     let newContextText = '';
     if (taskTextParam) newContextText = `Pomodoro pour la tâche : ${decodeURIComponent(taskTextParam)}`;
-    // Pourrait ajouter la logique pour objectiveText et chapterName si nécessaire
     setContextText(newContextText);
 
     setLinkedTaskId(taskIdParam || undefined);
@@ -98,8 +99,7 @@ export function PomodoroSection() {
     if (user) {
       fetchLinkableItems();
     }
-    // Clear searchParams after use to avoid re-triggering on refresh if not desired
-    // router.replace(pathname, undefined); // Optionnel, selon le comportement souhaité
+    // Optionnel: router.replace(pathname, undefined);
   }, [searchParams, user, fetchLinkableItems, router]);
 
 
@@ -128,8 +128,10 @@ export function PomodoroSection() {
   }, [toast, user]);
 
   useEffect(() => {
-    fetchPomodoroLog();
-  }, [fetchPomodoroLog]);
+    if(user) { // Ensure user is available before fetching
+        fetchPomodoroLog();
+    }
+  }, [user, fetchPomodoroLog]); // Add user as a dependency
 
   useEffect(() => {
     if (!user) return;
@@ -137,7 +139,6 @@ export function PomodoroSection() {
       .channel(`db-pomodoro-section-user-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pomodoro_sessions', filter: `user_id=eq.${user.id}` }, 
         (payload) => {
-          console.log("Pomodoro log change detected", payload);
           fetchPomodoroLog();
         })
       .subscribe();
@@ -156,7 +157,7 @@ export function PomodoroSection() {
       const newSessionPayload = {
         user_id: user.id,
         start_time: sessionStartTime.toISOString(),
-        duration: actualDurationUsed > 0 ? actualDurationUsed : durationMinutes,
+        duration: actualDurationUsed > 0 ? actualDurationUsed : durationMinutes, // Log the intended duration if reset before 1 min
         notes: sessionNotes.trim() || null,
         task_id: linkedTaskId || null,
         daily_objective_id: linkedObjectiveId || null,
@@ -172,11 +173,10 @@ export function PomodoroSection() {
       if (error) throw error;
 
       if (newSession) {
-        // Realtime devrait gérer la mise à jour, mais on peut l'ajouter manuellement pour une UI plus rapide
-        setPomodoroLog(prevLog => [{ ...newSession, user_id: user.id }, ...prevLog.slice(0, 19)]);
+        setPomodoroLog(prevLog => [{ ...newSession, user_id: user.id } as PomodoroSession, ...prevLog.slice(0, 19)]);
       }
 
-      setSessionNotes(contextText || '');
+      setSessionNotes(contextText || ''); // Reset notes to context or empty
       toast({ title: "Session enregistrée" });
     } catch (e: any) {
       toast({ title: "Erreur d'enregistrement", description: (e as Error).message, variant: "destructive" });
@@ -195,7 +195,7 @@ export function PomodoroSection() {
             setIsActive(false);
             logSession(true);
             toast({ title: "Session Pomodoro terminée !", description: "Prenez une petite pause." });
-            audioRef.current?.play();
+            audioRef.current?.play().catch(e => console.warn("Erreur lecture audio:", e));
             return 0;
           }
           return prevTime - 1;
@@ -223,24 +223,23 @@ export function PomodoroSection() {
     }
     if (!isActive) {
       setIsActive(true); setIsPaused(false); setTimeLeft(durationMinutes * 60);
-      if (contextText && !sessionNotes) setSessionNotes(contextText);
+      if (contextText && !sessionNotes) setSessionNotes(contextText); // Pre-fill notes if context exists and notes are empty
     } else {
       setIsPaused(!isPaused);
     }
   };
 
   const resetTimer = () => {
-    if (isActive) { logSession(false); } // Log la session même si réinitialisée avant la fin
+    if (isActive) { logSession(false); }
     setIsActive(false); setIsPaused(false); setTimeLeft(durationMinutes * 60);
   };
 
   const deleteLogItem = async (id: string) => {
     if (!user || isLogging) return;
-    setIsLogging(true);
+    setIsLogging(true); // Use isLogging to disable delete button during any logging/deleting operation
     try {
       const { error } = await supabase.from('pomodoro_sessions').delete().eq('id', id).eq('user_id', user.id);
       if (error) throw error;
-      // Realtime devrait gérer, ou mise à jour manuelle:
       setPomodoroLog(prevLog => prevLog.filter(session => session.id !== id));
       toast({ title: "Session supprimée du journal" });
     } catch (e: any) {
@@ -290,29 +289,50 @@ export function PomodoroSection() {
             <Label htmlFor="duration" className="text-sm font-medium whitespace-nowrap">Durée (min) :</Label>
             <Input id="duration" type="number" value={durationMinutes} onChange={handleDurationChange} min={MIN_SESSION_DURATION} max={MAX_SESSION_DURATION} className="w-full sm:w-24 text-center text-sm h-9" disabled={isActive || isLogging} />
           </div>
-          <Textarea placeholder="Sur quoi travaillez-vous ? (Optionnel)" value={sessionNotes} onChange={(e) => setSessionNotes(e.target.value)} rows={2} className="text-sm" disabled={isLogging} />
+          <Textarea placeholder="Sur quoi travaillez-vous ? (Optionnel)" value={sessionNotes} onChange={(e) => setSessionNotes(e.target.value)} rows={2} className="text-sm" disabled={isLogging || !user} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t">
-            <Select onValueChange={setLinkedTaskId} value={linkedTaskId || ""} disabled={isActive || !!searchParams.get('taskId') || isFetchingLinkableItems}>
+            <Select 
+              onValueChange={(value) => setLinkedTaskId(value === NONE_VALUE ? undefined : value)} 
+              value={linkedTaskId || NONE_VALUE} 
+              disabled={isActive || !!searchParams.get('taskId') || isFetchingLinkableItems || !user}
+            >
               <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Lier à une Tâche..." /></SelectTrigger>
-              <SelectContent><SelectItem value="">Aucune Tâche</SelectItem>{tasks.map(t => <SelectItem key={t.id} value={t.id}>{t.text.substring(0, 30)}{t.text.length > 30 ? '...' : ''}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>Aucune Tâche</SelectItem>
+                {tasks.map(t => <SelectItem key={t.id} value={t.id}>{t.text.substring(0, 30)}{t.text.length > 30 ? '...' : ''}</SelectItem>)}
+              </SelectContent>
             </Select>
-            <Select onValueChange={setLinkedObjectiveId} value={linkedObjectiveId || ""} disabled={isActive || !!searchParams.get('objectiveId') || isFetchingLinkableItems}>
+            <Select 
+              onValueChange={(value) => setLinkedObjectiveId(value === NONE_VALUE ? undefined : value)} 
+              value={linkedObjectiveId || NONE_VALUE} 
+              disabled={isActive || !!searchParams.get('objectiveId') || isFetchingLinkableItems || !user}
+            >
               <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Lier à un Objectif..." /></SelectTrigger>
-              <SelectContent><SelectItem value="">Aucun Objectif</SelectItem>{objectives.map(o => <SelectItem key={o.id} value={o.id}>{o.text.substring(0, 30)}{o.text.length > 30 ? '...' : ''}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>Aucun Objectif</SelectItem>
+                {objectives.map(o => <SelectItem key={o.id} value={o.id}>{o.text.substring(0, 30)}{o.text.length > 30 ? '...' : ''}</SelectItem>)}
+              </SelectContent>
             </Select>
-            <Select onValueChange={setLinkedChapterId} value={linkedChapterId || ""} disabled={isActive || !!searchParams.get('chapterId') || isFetchingLinkableItems}>
+            <Select 
+              onValueChange={(value) => setLinkedChapterId(value === NONE_VALUE ? undefined : value)} 
+              value={linkedChapterId || NONE_VALUE} 
+              disabled={isActive || !!searchParams.get('chapterId') || isFetchingLinkableItems || !user}
+            >
               <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Lier à un Chapitre..." /></SelectTrigger>
-              <SelectContent><SelectItem value="">Aucun Chapitre</SelectItem>{chapters.map(c => <SelectItem key={c.id} value={c.id}>{c.name.substring(0, 30)}{c.name.length > 30 ? '...' : ''}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>Aucun Chapitre</SelectItem>
+                {chapters.map(c => <SelectItem key={c.id} value={c.id}>{c.name.substring(0, 30)}{c.name.length > 30 ? '...' : ''}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3 p-4 md:p-6 border-t">
-          <Button onClick={toggleTimer} size="lg" className="w-full sm:w-40 text-base py-3" disabled={isLogging}>
+          <Button onClick={toggleTimer} size="lg" className="w-full sm:w-40 text-base py-3" disabled={isLogging || !user}>
             {isActive && !isPaused ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
             {isActive && !isPaused ? 'Pause' : (isActive && isPaused ? 'Reprendre' : 'Démarrer')}
           </Button>
-          <Button onClick={resetTimer} variant="outline" size="lg" disabled={isLogging || (!isActive && timeLeft === durationMinutes * 60)} className="w-full sm:w-40 text-base py-3">
+          <Button onClick={resetTimer} variant="outline" size="lg" disabled={isLogging || (!isActive && timeLeft === durationMinutes * 60) || !user} className="w-full sm:w-40 text-base py-3">
             <RotateCcw className="mr-2 h-5 w-5" /> Réinitialiser
           </Button>
         </CardFooter>
@@ -341,7 +361,7 @@ export function PomodoroSection() {
                   <Hourglass className="mx-auto h-12 w-12 opacity-40 mb-3" />
                   <p className="font-medium text-lg mb-1">Aucune session enregistrée.</p>
                   <p className="text-sm mb-4">Utilisez le minuteur pour commencer à suivre vos sessions de travail !</p>
-                  <Button onClick={() => document.getElementById('duration')?.focus()} size="sm">
+                  <Button onClick={() => document.getElementById('duration')?.focus()} size="sm" disabled={!user}>
                     <Timer className="mr-2 h-4 w-4" /> Démarrer une session
                   </Button>
                 </div>
