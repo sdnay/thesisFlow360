@@ -24,7 +24,6 @@ import { cookies } from 'next/headers';
 const AddChapterInputSchema = z.object({
   name: z.string().describe("Le nom du chapitre à ajouter."),
 });
-// Les OutputSchemas des outils peuvent rester tels quels, ils décrivent le résultat de l'outil.
 const AddChapterOutputSchema = z.object({
   chapterId: z.string().optional().describe("ID du chapitre nouvellement créé, si réussi."),
   message: z.string().describe("Un message de confirmation ou d'erreur."),
@@ -224,7 +223,6 @@ async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanT
 
 
 // --- Définitions des Outils pour Genkit (pour la découverte par l'IA) ---
-// La fonction d'implémentation ici est une coquille. L'appel réel se fera manuellement dans le flux.
 const addChapterToolForAI = ai.defineTool(
   { name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
@@ -256,12 +254,12 @@ const createThesisPlanToolForAI = ai.defineTool(
 
 
 // --- Schéma d'Entrée/Sortie pour l'Agent Principal ---
-export const ThesisAgentInputSchema = z.object({
+const ThesisAgentInputSchema = z.object({ // Non exporté
   userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
 });
 export type ThesisAgentInput = z.infer<typeof ThesisAgentInputSchema>;
 
-export const ThesisAgentOutputSchema = z.object({
+const ThesisAgentOutputSchema = z.object({ // Non exporté
   responseMessage: z.string().describe("La réponse de l'agent IA à l'utilisateur, résumant les actions entreprises ou fournissant des informations."),
   actionsTaken: z.array(z.object({
     toolName: z.string(),
@@ -349,14 +347,11 @@ const thesisAgentFlow = ai.defineFlow(
     let finalResponseMessage = "";
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
 
-    // Gérer les appels d'outils si l'IA en demande
     if (llmResponse.toolRequests && llmResponse.toolRequests.length > 0) {
       const toolResponsesPromises = llmResponse.toolRequests.map(async (toolRequest) => {
         let toolOutput: any;
         console.log(`[ThesisAgentFlow] Appel de l'outil demandé par l'IA: ${toolRequest.toolName} avec input:`, toolRequest.input);
 
-        // Appel manuel des fonctions logiques avec injection de userId
-        // L'input ici est celui généré par le LLM, SANS userId.
         switch (toolRequest.toolName) {
           case 'addChapterTool':
             toolOutput = await addChapterToolLogic(toolRequest.input as z.infer<typeof AddChapterInputSchema>, userId);
@@ -374,11 +369,9 @@ const thesisAgentFlow = ai.defineFlow(
             toolOutput = await addSourceToolLogic(toolRequest.input as z.infer<typeof AddSourceInputSchema>, userId);
             break;
           case 'refinePromptTool':
-            // Note: refinePromptToolLogic a besoin de userId pour logger, pas pour sa logique principale d'affinage.
             toolOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId);
             break;
           case 'createThesisPlanTool':
-            // createThesisPlanToolLogic n'a pas besoin de userId pour sa logique principale
             toolOutput = await createThesisPlanToolLogic(toolRequest.input as z.infer<typeof CreateThesisPlanToolInputSchema>);
             break;
           default:
@@ -388,31 +381,27 @@ const thesisAgentFlow = ai.defineFlow(
         
         actionsTakenDetails.push({
           toolName: toolRequest.toolName,
-          toolInput: toolRequest.input, // Input original de l'IA
+          toolInput: toolRequest.input,
           toolOutput: toolOutput,
         });
-        return ai.toolResponse(toolRequest.ref, toolOutput); // Construire la réponse de l'outil pour Genkit
+        return ai.toolResponse(toolRequest.ref, toolOutput);
       });
 
       const toolResponses = await Promise.all(toolResponsesPromises);
 
-      // Deuxième appel au LLM avec les réponses des outils pour obtenir une réponse finale
       console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale.");
       llmResponse = await thesisAgentMainPrompt({
-        // userRequest, // Peut-être pas nécessaire, l'historique suffit
         history: [
           ai.userMessage(userRequest),
-          llmResponse.candidates[0].message, // Premier message du LLM (qui incluait les toolRequests)
-          ...toolResponses // Réponses des outils formatées par ai.toolResponse
+          llmResponse.candidates[0].message,
+          ...toolResponses
         ],
       });
     }
 
-    // Construire la réponse finale
     if (llmResponse.output?.responseMessage) {
         finalResponseMessage = llmResponse.output.responseMessage;
     } else if (actionsTakenDetails.length > 0) {
-        // Fallback si le LLM ne fournit pas de message final après les outils
         const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
         if (firstSuccessfulAction?.toolOutput?.plan && firstSuccessfulAction.toolName === 'createThesisPlanTool') {
              finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
@@ -440,8 +429,6 @@ const thesisAgentFlow = ai.defineFlow(
 
 // --- Fonction Principale Exportée (Server Action) ---
 export async function processUserRequest(input: ThesisAgentInput): Promise<ThesisAgentOutput> {
-  'use server';
-
   const cookieStore = cookies();
   const supabaseServer = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
