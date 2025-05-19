@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { supabase } from '@/lib/supabaseClient'; // Utilisé pour les fonctions logiques des outils
 
-// Import des flux et types nécessaires (s'ils sont dans des fichiers séparés)
+// Import des flux et types nécessaires
 import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { generateThesisPlan, type GenerateThesisPlanInput, type GenerateThesisPlanOutput } from '@/ai/flows/generate-thesis-plan-flow';
 
@@ -94,6 +94,7 @@ const CreateThesisPlanToolOutputSchema = z.object({
 
 // --- Fonctions Logiques des Outils (prennent l'input de l'IA ET userId) ---
 async function addChapterToolLogic(input: z.infer<typeof AddChapterInputSchema>, userId: string): Promise<z.infer<typeof AddChapterOutputSchema>> {
+  console.log(`[ThesisAgentToolLogic] addChapterToolLogic - Input:`, input, `UserId: ${userId}`);
   try {
     const { data, error } = await supabase
       .from('chapters')
@@ -103,42 +104,45 @@ async function addChapterToolLogic(input: z.infer<typeof AddChapterInputSchema>,
     if (error) throw error;
     return { chapterId: data.id, message: `Chapitre "${input.name}" ajouté avec succès.`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addChapterToolLogic:", e.message);
+    console.error("[ThesisAgentToolLogic] Erreur addChapterToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout du chapitre: ${e.message}`, success: false };
   }
 }
 
 async function addBrainDumpEntryToolLogic(input: z.infer<typeof AddBrainDumpEntryInputSchema>, userId: string): Promise<z.infer<typeof AddBrainDumpEntryOutputSchema>> {
+  console.log(`[ThesisAgentToolLogic] addBrainDumpEntryToolLogic - Input:`, input, `UserId: ${userId}`);
   try {
     const { data, error } = await supabase
       .from('brain_dump_entries')
-      .insert([{ text: input.text, status: input.status || 'captured', user_id: userId }])
+      .insert([{ text: input.text, status: input.status || 'captured', user_id: userId, chapter_id: null }]) // Assurez-vous que chapter_id est géré
       .select('id')
       .single();
     if (error) throw error;
     return { entryId: data.id, message: `Note ajoutée au vide-cerveau: "${input.text.substring(0,30)}...".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addBrainDumpEntryToolLogic:", e.message);
+    console.error("[ThesisAgentToolLogic] Erreur addBrainDumpEntryToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout au vide-cerveau: ${e.message}`, success: false };
   }
 }
 
 async function addDailyObjectiveToolLogic(input: z.infer<typeof AddDailyObjectiveInputSchema>, userId: string): Promise<z.infer<typeof AddDailyObjectiveOutputSchema>> {
+  console.log(`[ThesisAgentToolLogic] addDailyObjectiveToolLogic - Input:`, input, `UserId: ${userId}`);
   try {
     const { data, error } = await supabase
       .from('daily_objectives')
-      .insert([{ text: input.text, completed: false, user_id: userId, objective_date: new Date().toISOString().split('T')[0] }])
+      .insert([{ text: input.text, completed: false, user_id: userId, objective_date: new Date().toISOString().split('T')[0] , chapter_id: null}]) // Assurez-vous que chapter_id est géré
       .select('id')
       .single();
     if (error) throw error;
     return { objectiveId: data.id, message: `Objectif du jour ajouté: "${input.text}".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addDailyObjectiveToolLogic:", e.message);
+    console.error("[ThesisAgentToolLogic] Erreur addDailyObjectiveToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de l'objectif du jour: ${e.message}`, success: false };
   }
 }
 
 async function addSourceToolLogic(input: z.infer<typeof AddSourceInputSchema>, userId: string): Promise<z.infer<typeof AddSourceOutputSchema>> {
+  console.log(`[ThesisAgentToolLogic] addSourceToolLogic - Input:`, input, `UserId: ${userId}`);
   try {
     const { data, error } = await supabase
       .from('sources')
@@ -148,27 +152,29 @@ async function addSourceToolLogic(input: z.infer<typeof AddSourceInputSchema>, u
     if (error) throw error;
     return { sourceId: data.id, message: `Source "${input.title}" ajoutée à la bibliothèque.`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addSourceToolLogic:", e.message);
+    console.error("[ThesisAgentToolLogic] Erreur addSourceToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de la source: ${e.message}`, success: false };
   }
 }
 
 async function addTaskToolLogic(input: z.infer<typeof AddTaskInputSchema>, userId: string): Promise<z.infer<typeof AddTaskOutputSchema>> {
+  console.log(`[ThesisAgentToolLogic] addTaskToolLogic - Input:`, input, `UserId: ${userId}`);
   try {
     const { data, error } = await supabase
       .from('tasks')
-      .insert([{ text: input.text, type: input.type || 'secondary', completed: false, user_id: userId }])
+      .insert([{ text: input.text, type: input.type || 'secondary', completed: false, user_id: userId, chapter_id: null }]) // Assurez-vous que chapter_id est géré
       .select('id')
       .single();
     if (error) throw error;
     return { taskId: data.id, message: `Tâche ajoutée : "${input.text}".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addTaskToolLogic:", e.message);
+    console.error("[ThesisAgentToolLogic] Erreur addTaskToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de la tâche: ${e.message}`, success: false };
   }
 }
 
 async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInputSchema>, userId: string): Promise<z.infer<typeof RefinePromptToolOutputSchema>> {
+    console.log(`[ThesisAgentToolLogic] refinePromptToolLogic - Input:`, input, `UserId: ${userId}`);
     try {
       const { data: logEntries, error: logError } = await supabase
         .from('prompt_log_entries')
@@ -177,7 +183,7 @@ async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInput
         .order('timestamp', { ascending: false })
         .limit(10);
 
-      if (logError) console.warn("[ThesisAgent] Impossible de récupérer l'historique des prompts pour l'affinage:", logError.message);
+      if (logError) console.warn("[ThesisAgentToolLogic] Impossible de récupérer l'historique des prompts pour l'affinage:", logError.message);
 
       const historyPrompts = (logEntries || [])
         .map(p => p.refined_prompt || p.original_prompt)
@@ -199,18 +205,19 @@ async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInput
       };
       const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
       if (insertError) {
-          console.error("[ThesisAgent] Erreur lors de l'enregistrement du prompt affiné:", insertError);
+          console.error("[ThesisAgentToolLogic] Erreur lors de l'enregistrement du prompt affiné:", insertError);
           return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné, mais erreur lors de la consignation.", success: true };
       }
 
       return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné et consigné avec succès.", success: true };
     } catch (e: any) {
-      console.error("[ThesisAgent] Erreur refinePromptToolLogic:", e.message);
+      console.error("[ThesisAgentToolLogic] Erreur refinePromptToolLogic:", e.message);
       return { refinedPrompt: input.promptToRefine, reasoning: "", message: `Erreur lors de l'affinage du prompt: ${e.message}`, success: false };
     }
 }
 
 async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanToolInputSchema>): Promise<z.infer<typeof CreateThesisPlanToolOutputSchema>> {
+    console.log(`[ThesisAgentToolLogic] createThesisPlanToolLogic - Input:`, input);
     try {
       const result: GenerateThesisPlanOutput = await generateThesisPlan({ topicOrInstructions: input.topicOrInstructions });
       if (result.plan) {
@@ -219,13 +226,14 @@ async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanT
         return { plan: "", message: "La génération du plan n'a pas retourné de contenu.", success: false };
       }
     } catch (e: any) {
-      console.error("[ThesisAgent] Erreur createThesisPlanToolLogic:", e.message);
+      console.error("[ThesisAgentToolLogic] Erreur createThesisPlanToolLogic:", e.message);
       return { plan: "", message: `Erreur lors de la génération du plan de thèse: ${e.message}`, success: false };
     }
 }
 
 
 // --- Définitions des Outils pour Genkit (pour la découverte par l'IA) ---
+// La fonction d'implémentation ici est une coquille. L'appel réel se fera manuellement dans le flux.
 const addChapterToolForAI = ai.defineTool(
   { name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
@@ -261,22 +269,22 @@ const createThesisPlanToolForAI = ai.defineTool(
 // Ce que le CLIENT envoie à la Server Action processUserRequest
 const ProcessUserRequestInputSchema = z.object({
   userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
-  // Structure attendue du client : un tableau d'objets avec role et content (string)
-  chatHistory: z.array(z.object({
+  chatHistory: z.array(z.object({ // Doit correspondre à ce que le client envoie
     role: z.enum(['user', 'agent']), // 'agent' pour ThesisBot dans l'historique client
-    content: z.string(),
-  })).nullable().optional().describe("L'historique des messages de la session de chat actuelle, formaté par le client."),
+    content: z.string(), // Simplement 'content' ici, sera transformé en 'parts' sur le serveur
+  })).nullable().optional().describe("L'historique des messages de la session de chat actuelle, envoyé par le client."),
 });
 export type ThesisAgentInput = z.infer<typeof ProcessUserRequestInputSchema>;
 
-// Ce que le FLUX thesisAgentFlow reçoit (après que processUserRequest ait ajouté userId, etc.)
+
+// Ce que le FLUX thesisAgentFlow reçoit (après que processUserRequest ait ajouté userId, userNameForAgent etc.)
 const ThesisAgentFlowInputSchema = z.object({
   userRequest: z.string(),
   userId: z.string(),
   userNameForAgent: z.string().optional(),
   chatHistoryForLLM: z.array(z.object({ // Format attendu par Genkit pour l'historique
       role: z.enum(['user', 'model']),
-      parts: z.array(z.object({ text: z.string() })) // 'text' est requis ici
+      parts: z.array(z.object({ text: z.string() }))
   })).optional(),
 });
 
@@ -286,7 +294,7 @@ const ThesisAgentPromptInputSchema = z.object({
   userNameForAgent: z.string().optional().describe("Nom/Identifiant de l'utilisateur pour personnaliser la salutation."),
   history: z.array(z.object({
       role: z.enum(['user', 'model']),
-      parts: z.array(z.object({ text: z.string() })) // 'text' est requis ici
+      parts: z.array(z.object({ text: z.string() }))
   })).optional(),
 });
 
@@ -307,7 +315,7 @@ export type ThesisAgentOutput = z.infer<typeof ThesisAgentOutputSchema>;
 // --- Prompt Principal de l'Agent ---
 const thesisAgentMainPrompt = ai.definePrompt({
   name: 'thesisAgentMainPrompt',
-  input: { schema: ThesisAgentPromptInputSchema },
+  input: { schema: ThesisAgentPromptInputSchema }, // Utilise le schéma avec userNameForAgent et history formaté
   output: { schema: ThesisAgentOutputSchema },
   tools: [
     addChapterToolForAI,
@@ -318,56 +326,45 @@ const thesisAgentMainPrompt = ai.definePrompt({
     refinePromptToolForAI,
     createThesisPlanToolForAI
   ],
-  prompt: `Tu es ThesisBot, un assistant IA expert intégré à l'application ThesisFlow360. Ton rôle est d'aider les étudiants à organiser et à progresser dans la rédaction de leur thèse ou mémoire. Tu dois comprendre leurs requêtes en langage naturel (français) et utiliser les outils mis à ta disposition pour effectuer des actions concrètes dans l'application ou fournir des informations pertinentes. Toutes les actions de création de données (chapitres, tâches, etc.) doivent être associées à l'utilisateur qui fait la requête ; tu n'as pas besoin de demander son ID, il sera géré automatiquement par le système lors de l'exécution de l'outil.
+  prompt: `Tu es ThesisBot, un assistant IA expert intégré à l'application ThesisFlow360. Ton rôle est d'aider les étudiants à organiser et à progresser dans la rédaction de leur thèse ou mémoire. Tu dois comprendre leurs requêtes en langage naturel (français) et utiliser les outils mis à ta disposition pour effectuer des actions concrètes dans l'application ou fournir des informations pertinentes. Toutes les actions de création de données (chapitres, tâches, etc.) seront automatiquement associées à l'utilisateur qui fait la requête via le système ; tu n'as pas besoin de demander son ID ou de le manipuler.
 
-**Informations sur l'Utilisateur Actuel :**
-{{#if userNameForAgent}}Nom/Identifiant : {{{userNameForAgent}}}{{/if}}
+**Informations sur l'Utilisateur Actuel (Si fournies au prompt) :**
+{{#if userNameForAgent}}Nom/Identifiant : {{{userNameForAgent}}}{{else}}Utilisateur{{/if}}
 
 **Contexte de l'Application ThesisFlow360 :**
-
-L'application permet de gérer :
-* **Chapitres de la thèse** : Suivi de la progression, commentaires du superviseur.
-* **Tâches** : Listes de choses à faire, classées par type (urgent, important, lecture, etc.).
-* **Objectifs Journaliers** : Cibles quotidiennes pour rester concentré.
-* **Vide-Cerveau (Brain Dump)** : Capture rapide d'idées brutes, de notes, de citations.
-* **Sources** : Bibliothèque de références (PDF, sites web, entretiens).
-* **Sessions Pomodoro** : Suivi du temps de travail focalisé.
-* **Prompts IA** : Historique et affinage de prompts pour interagir avec d'autres IA.
+L'application permet de gérer : Chapitres, Tâches (urgent, important, lecture, etc.), Objectifs Journaliers, Vide-Cerveau (notes, idées), Sources bibliographiques, Sessions Pomodoro, Prompts IA.
 
 **Tes Capacités (Outils Disponibles) :**
-* \`addChapterTool\` : Ajoute un nouveau chapitre. (Input: \`{ name: string }\`). Le \`user_id\` sera automatiquement lié.
-* \`addBrainDumpEntryTool\` : Ajoute une note au vide-cerveau. (Input: \`{ text: string, status?: "captured"|"task"|"idea" }\`). Le \`user_id\` sera automatiquement lié.
-* \`addDailyObjectiveTool\` : Ajoute un objectif au plan du jour. (Input: \`{ text: string }\`). Le \`user_id\` sera automatiquement lié.
-* \`addSourceTool\` : Enregistre une nouvelle source. (Input: \`{ title: string, type: "pdf"|"website"|"interview"|"field_notes"|"other", source_link_or_path?: string, notes?: string }\`). Le \`user_id\` sera automatiquement lié.
-* \`addTaskTool\` : Ajoute une tâche. Si l'utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: \`{ text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }\`). Le \`user_id\` sera automatiquement lié.
-* \`refinePromptTool\` : Améliore un prompt fourni par l'utilisateur. (Input: \`{ promptToRefine: string }\`). Cette action enregistre également le prompt original et affiné.
-* \`createThesisPlanTool\` : Génère un plan de thèse ou de mémoire structuré. (Input: \`{ topicOrInstructions: string }\`).
-    * **Note Spéciale pour \`createThesisPlanTool\`** : Si cet outil est utilisé avec succès, ta \`responseMessage\` principale DOIT être le plan généré par l'outil.
+* \`addChapterTool\`: Ajoute un nouveau chapitre. (Input: \`{ name: string }\`). Si l'utilisateur dit 'ajoute chapitre X' où X est un numéro, considère 'chapitre X' comme le nom littéral.
+* \`addBrainDumpEntryTool\`: Ajoute une note au vide-cerveau. (Input: \`{ text: string, status?: "captured"|"task"|"idea" }\`). Statut par défaut: "captured".
+* \`addDailyObjectiveTool\`: Ajoute un objectif au plan du jour. (Input: \`{ text: string }\`).
+* \`addSourceTool\`: Enregistre une nouvelle source. (Input: \`{ title: string, type: "pdf"|"website"|"interview"|"field_notes"|"other", source_link_or_path?: string, notes?: string }\`). Si type non clair, demande ou utilise "other".
+* \`addTaskTool\`: Ajoute une tâche. Si l'utilisateur mentionne "chrono" ou "pomodoro", le texte de la tâche doit être "Démarrer Pomodoro pour : [description]". (Input: \`{ text: string, type?: "urgent"|"important"|"reading"|"chatgpt"|"secondary" }\`). Type par défaut: "secondary".
+* \`refinePromptTool\`: Améliore un prompt fourni. (Input: \`{ promptToRefine: string }\`).
+* \`createThesisPlanTool\`: Utilise cet outil pour **générer un nouveau plan de thèse** basé sur un sujet ou des instructions, OU pour **aider à structurer ou reformater un plan existant fourni par l'utilisateur**. (Input: \`{ topicOrInstructions: string }`).
+    * **Note Spéciale pour \`createThesisPlanTool\`** : Si cet outil est utilisé, ta \`responseMessage\` principale DOIT être le plan généré/traité ou un message confirmant le traitement du plan fourni.
 
 **Instructions Générales pour Interagir :**
+0.  **Personnalisation**: Si {{{userNameForAgent}}} est disponible, utilise-le pour une salutation personnalisée lors de la première réponse. Exemple: "Bonjour {{{userNameForAgent}}}, comment puis-je vous aider ?"
+1.  **Analyse la Requête** : Comprends l'intention. Cherche des mots-clés. Prends en compte l'historique de la conversation (fourni dans \`history\`).
+2.  **Sélection de l'Outil** : Choisis l'outil approprié. Si vague, demande des clarifications (ex: "Que souhaites-tu faire avec ton introduction ?").
+3.  **Extraction des Paramètres** : Extrais les infos pour l'input de l'outil. N'invente PAS de \`user_id\`.
+4.  **Exécution de l'Outil et Réponse** : Si un outil est appelé, le système l'exécutera. Ta tâche sera de formuler une \`responseMessage\` basée sur le résultat de l'outil. Si l'outil a réussi, confirme l'action (ex: "Chapitre 'X' ajouté."). Si l'outil échoue, explique l'échec en te basant sur le message d'erreur de l'outil.
+5.  **Interaction Conversationnelle** : Si aucun outil n'est directement applicable ou si plus d'informations sont nécessaires, pose une question pertinente à l'utilisateur.
+6.  **Gestion des Plans Fournis par l'Utilisateur** : Si l'utilisateur fournit un plan de thèse complet, ne te contente pas de l'ignorer. Propose d'utiliser \`createThesisPlanTool\` pour le "traiter" ou le "structurer", ou suggère d'ajouter les chapitres individuellement avec \`addChapterTool\`, ou de sauvegarder le texte brut dans le vide-cerveau avec \`addBrainDumpEntryTool\`. Demande clairement à l'utilisateur ce qu'il souhaite faire avec le plan fourni.
+7.  **Confirmation et Exécution d'Actions** : Si TU proposes une action spécifique (surtout si elle implique un outil) et que l'utilisateur répond affirmativement (ex: "oui", "ok", "d'accord", "vasy", etc.), TU DOIS ensuite initier l'appel à l'outil correspondant avec les informations contextuelles. Ne reviens pas à une question générale si l'utilisateur vient de confirmer une action que tu as suggérée. Par exemple, si tu demandes "Souhaitez-vous que je crée ce chapitre ?" et que l'utilisateur dit "oui", appelle \`addChapterTool\`. Si tu demandes "Souhaitez-vous que je traite/structure ce plan ?" et qu'il dit "oui", appelle \`createThesisPlanTool\` avec le plan.
+8.  **Si Confus** : Si tu es perdu ou si l'utilisateur semble frustré par tes réponses, réponds par : "Je suis désolé, je crois que je me suis un peu perdu. Pourriez-vous s'il vous plaît reformuler votre dernière demande clairement ?" et N'appelle PAS d'outil.
 
-0.  **Personnalisation** : Si le nom de l'utilisateur ({{#if userNameForAgent}}{{{userNameForAgent}}}{{else}}l'utilisateur{{/if}}) est fourni, commence ta première réponse par une salutation personnalisée (ex: "Bonjour {{{userNameForAgent}}}, en quoi puis-je vous aider aujourd'hui ?"). Pour les réponses suivantes dans une conversation, une personnalisation n'est pas nécessaire à chaque fois.
-1.  **Analyse la Requête** : Comprends l'intention principale de l'utilisateur. Cherche des mots-clés relatifs aux fonctionnalités de ThesisFlow360 (chapitre, tâche, idée, source, plan, etc.). Prends en compte l'historique de la conversation (si fourni et pertinent) pour mieux comprendre le contexte.
-2.  **Sélection de l'Outil** : Choisis l'outil le plus approprié pour répondre à la requête.
-    * Si la requête est vague (ex: "aide-moi avec mon intro"), demande des clarifications avant de choisir un outil (ex: "Que souhaites-tu faire avec ton introduction ? Créer un chapitre, ajouter une tâche, ou noter une idée ?").
-    * Si l'utilisateur veut créer quelque chose, utilise l'outil "add" correspondant.
-    * Si l'utilisateur veut de l'aide pour structurer son travail, comme un plan de thèse, utilise \`createThesisPlanTool\`.
-    * Si l'utilisateur demande d'améliorer un prompt pour une autre IA, utilise \`refinePromptTool\`.
-3.  **Extraction des Paramètres** : Extrais les informations nécessaires de la requête pour les passer en input à l'outil. Sois attentif aux détails (nom du chapitre, description de la tâche, type de source, etc.). N'inclus PAS de user_id, il sera géré par le système.
-    * Pour \`addTaskTool\`, si l'utilisateur dit "chrono pour relire mon chapitre 2", le \`text\` de la tâche sera "Démarrer Pomodoro pour : relire le chapitre 2".
-    * Pour \`addBrainDumpEntryTool\`, si le statut n'est pas spécifié, utilise "captured" par défaut.
-    * Pour \`addSourceTool\`, si le type n'est pas clair, demande une clarification ou utilise "other" et suggère à l'utilisateur de le préciser plus tard.
-4.  **Exécution de l'Outil et Réponse** :
-    * Si l'outil est exécuté avec succès, formule une \`responseMessage\` claire et concise confirmant l'action et incluant les informations clés retournées par l'outil (ex: "J'ai ajouté le chapitre nommé 'Revue de Littérature'." ou "Voici le plan de thèse que j'ai généré : \n\n[Plan de l'outil ici]").
-    * Si l'outil échoue, explique l'échec à l'utilisateur en te basant sur le message d'erreur de l'outil.
-    * Si aucun outil n'est approprié ou si la requête est trop ambiguë, réponds poliment en demandant plus de précisions ou en expliquant tes limites actuelles.
-5.  **Format de Sortie JSON** : Ta réponse FINALE DOIT être un objet JSON valide avec \`responseMessage\` (string) et optionnellement \`actionsTaken\` (array d'objets détaillant les appels aux outils).
+**RAPPEL CRUCIAL SUR LE FORMAT DE SORTIE JSON :**
+Ta réponse FINALE DOIT TOUJOURS être un objet JSON valide avec au minimum la clé \`responseMessage\` (string). Si des outils sont appelés par toi et exécutés par le système, le système te fournira leurs résultats pour que tu formules ta \`responseMessage\` finale. N'inclus \`actionsTaken\` que si le système le requiert explicitement pour le formatage de ta réponse (ce qui n'est pas le cas ici, concentre-toi sur \`responseMessage\` après que les outils aient été appelés par le système). Si tu ne sais pas quoi faire ou si aucun outil n'est approprié, retourne un JSON comme \`{ "responseMessage": "Je ne suis pas sûr de comment vous aider avec cela. Pouvez-vous préciser ?" }\`.
 
-**Exemples d'Interactions Attendues (le \`user_id\` est géré en arrière-plan) :**
-* Utilisateur: "Ajoute un chapitre sur la discussion des résultats."
-    * ThesisBot (réponse JSON) : \`{ "responseMessage": "Le chapitre 'Discussion des résultats' a été ajouté avec succès.", "actionsTaken": [{ "toolName": "addChapterTool", "input": {"name": "Discussion des résultats"}, "toolOutput": {"chapterId": "uuid-ici", "message": "Chapitre 'Discussion des résultats' ajouté avec succès.", "success": true} }] }\`
-* Utilisateur: "Crée-moi un plan de thèse sur l'éthique de l'IA générative."
-    * ThesisBot (réponse JSON) : \`{ "responseMessage": "Voici un plan de thèse pour 'éthique de l'IA générative' :\\n\\n1. Introduction\\n   [... reste du plan généré par l'outil ...]", "actionsTaken": [{ "toolName": "createThesisPlanTool", "input": {"topicOrInstructions": "éthique de l'IA générative"}, "toolOutput": {"plan": "1. Introduction...", "message": "Plan de thèse généré...", "success": true} }] }\`
+Historique de la conversation (si disponible) :
+{{#if history}}
+{{#each history}}
+{{#if (eq role "user")}}Utilisateur : {{parts.0.text}}{{/if}}
+{{#if (eq role "model")}}ThesisBot : {{parts.0.text}}{{/if}}
+{{/each}}
+{{/if}}
 
 Requête actuelle de l'utilisateur :
 {{{userRequest}}}
@@ -384,11 +381,9 @@ const thesisAgentFlow = ai.defineFlow(
   },
   async (flowInput) => {
     const { userRequest, userId, userNameForAgent, chatHistoryForLLM } = flowInput;
-    console.log(`[ThesisAgentFlow - Flow Start] Received userRequest: "${userRequest}", userId: ${userId}, userNameForAgent: ${userNameForAgent}`);
-    if (chatHistoryForLLM && chatHistoryForLLM.length > 0) {
-      console.log(`[ThesisAgentFlow - Flow Start] Received chatHistoryForLLM:`, JSON.stringify(chatHistoryForLLM, null, 2));
-    } else {
-      console.log(`[ThesisAgentFlow - Flow Start] No chatHistoryForLLM received.`);
+    console.log(`[ThesisAgentFlow - Flow Start] UserRequest: "${userRequest}", UserId: ${userId}, UserName: ${userNameForAgent}`);
+    if (chatHistoryForLLM) {
+      console.log(`[ThesisAgentFlow - Flow Start] ChatHistoryForLLM:`, JSON.stringify(chatHistoryForLLM, null, 2));
     }
 
     // Premier appel au LLM avec la requête utilisateur et l'historique formaté
@@ -397,6 +392,7 @@ const thesisAgentFlow = ai.defineFlow(
         userNameForAgent,
         history: chatHistoryForLLM,
     });
+    console.log(`[ThesisAgentFlow] Réponse initiale du LLM (avant exécution outils):`, JSON.stringify(llmResponse.candidates[0], null, 2));
 
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
 
@@ -407,7 +403,6 @@ const thesisAgentFlow = ai.defineFlow(
         let toolLogicOutput: any;
         console.log(`[ThesisAgentFlow] Appel de l'outil demandé par l'IA: ${toolRequest.toolName} avec input:`, JSON.stringify(toolRequest.input, null, 2));
 
-        // Appel manuel de la fonction logique de l'outil avec injection de userId
         switch (toolRequest.toolName) {
           case 'addChapterTool':
             toolLogicOutput = await addChapterToolLogic(toolRequest.input as z.infer<typeof AddChapterInputSchema>, userId);
@@ -434,7 +429,7 @@ const thesisAgentFlow = ai.defineFlow(
             console.warn(`[ThesisAgentFlow] Outil inconnu demandé: ${toolRequest.toolName}`);
             toolLogicOutput = { message: `Outil ${toolRequest.toolName} non reconnu.`, success: false };
         }
-
+        console.log(`[ThesisAgentFlow] Résultat de l'outil ${toolRequest.toolName}:`, toolLogicOutput);
         actionsTakenDetails.push({
           toolName: toolRequest.toolName,
           toolInput: toolRequest.input,
@@ -445,48 +440,46 @@ const thesisAgentFlow = ai.defineFlow(
 
       const toolResponses = await Promise.all(toolExecutionPromises);
 
-      console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale.");
-      // Deuxième appel au LLM, incluant l'historique original, la première réponse du LLM (qui contenait les toolRequests), et les réponses des outils
+      console.log("[ThesisAgentFlow] Envoi des résultats des outils au LLM pour réponse finale. ToolResponses:", JSON.stringify(toolResponses, null, 2));
       llmResponse = await thesisAgentMainPrompt({
         userRequest, // Peut être utile de le repasser, ou se fier à l'historique
         userNameForAgent,
-        history: [
+        history: [ // Construction de l'historique pour le 2eme appel
           ...(chatHistoryForLLM || []),
-          ai.userMessage(userRequest),
-          llmResponse.candidates[0].message,
-          ...toolResponses
+          { role: 'user', parts: [{ text: userRequest }] }, // Message original de l'utilisateur
+          llmResponse.candidates[0].message, // Le message du LLM qui a demandé les outils
+          ...toolResponses // Les réponses des outils
         ],
       });
+      console.log(`[ThesisAgentFlow] Réponse finale du LLM (après exécution outils):`, JSON.stringify(llmResponse.candidates[0], null, 2));
     }
 
-    let finalResponseMessage = llmResponse.output?.responseMessage;
-    if (!finalResponseMessage) {
+    let finalResponseMessage: string;
+    const llmOutput = llmResponse.output;
+
+    if (!llmOutput || typeof llmOutput.responseMessage !== 'string' || llmOutput.responseMessage.trim() === "") {
+      console.warn("[ThesisAgentFlow] Sortie LLM invalide ou responseMessage vide. Tentative de fallback. LLM Output:", llmOutput);
       if (actionsTakenDetails.length > 0) {
-        const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
-        if (firstSuccessfulAction) {
-          if (firstSuccessfulAction.toolName === 'createThesisPlanTool' && firstSuccessfulAction.toolOutput?.plan) {
-            finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
-          } else if (firstSuccessfulAction.toolOutput?.message) {
-            finalResponseMessage = firstSuccessfulAction.toolOutput.message;
-          } else {
-            finalResponseMessage = `L'action '${firstSuccessfulAction.toolName}' a été effectuée avec succès.`;
-          }
-        } else if (actionsTakenDetails.length > 0) {
-          finalResponseMessage = actionsTakenDetails[0].toolOutput?.message || "J'ai tenté d'effectuer une action mais j'ai rencontré un problème.";
+        const lastAction = actionsTakenDetails[actionsTakenDetails.length - 1];
+        if (lastAction.toolName === 'createThesisPlanTool' && lastAction.toolOutput?.success && lastAction.toolOutput?.plan) {
+          finalResponseMessage = `Voici le plan que j'ai traité/généré pour vous :\n\n${lastAction.toolOutput.plan}`;
+        } else if (lastAction.toolOutput?.message) {
+          finalResponseMessage = lastAction.toolOutput.message;
         } else {
-          finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
+          finalResponseMessage = `L'action '${lastAction.toolName}' a été effectuée.`;
         }
-      } else if (llmResponse.text) {
-        finalResponseMessage = llmResponse.text;
       } else {
-        finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
+        finalResponseMessage = "Je suis désolé, je n'ai pas pu traiter votre demande. Pourriez-vous essayer de reformuler ?";
       }
+      console.warn(`[ThesisAgentFlow] Fallback responseMessage: "${finalResponseMessage}"`);
+    } else {
+      finalResponseMessage = llmOutput.responseMessage;
     }
     
     console.log("[ThesisAgentFlow] Réponse finale construite:", finalResponseMessage);
     return {
       responseMessage: finalResponseMessage,
-      actionsTaken: actionsTakenDetails.length > 0 ? actionsTakenDetails : (llmResponse.output?.actionsTaken || undefined),
+      actionsTaken: actionsTakenDetails.length > 0 ? actionsTakenDetails : undefined,
     };
   }
 );
@@ -502,9 +495,13 @@ export async function processUserRequest(clientInput: ThesisAgentInput): Promise
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: {
-        get: (name) => cookieStore.get(name)?.value,
-        set: (name, value, options) => cookieStore.set({ name, value, ...options }),
-        remove: (name, options) => cookieStore.set({ name, value: '', ...options }),
+        get: (name: string) => cookieStore.get(name)?.value,
+        set: (name: string, value: string, options: CookieOptions) => {
+          try { cookieStore.set({ name, value, ...options }); } catch (error) { console.error('[ThesisAgentFlow - processUserRequest] Error setting cookie:', error); }
+        },
+        remove: (name: string, options: CookieOptions) => {
+          try { cookieStore.set({ name, value: '', ...options }); } catch (error) { console.error('[ThesisAgentFlow - processUserRequest] Error removing cookie:', error); }
+        },
       }
     }
   );
@@ -517,7 +514,7 @@ export async function processUserRequest(clientInput: ThesisAgentInput): Promise
   }
 
   if (!userId) {
-    console.warn("[ThesisAgentFlow - processUserRequest] Tentative d'action sans utilisateur authentifié.");
+    console.warn("[ThesisAgentFlow - processUserRequest] Utilisateur non authentifié.");
     return { responseMessage: "Erreur d'authentification : Utilisateur non identifié. Veuillez vous connecter." };
   }
 
@@ -525,18 +522,14 @@ export async function processUserRequest(clientInput: ThesisAgentInput): Promise
   
   // Transform clientInput.chatHistory (from client) to chatHistoryForLLM (Genkit format)
   const chatHistoryForLLM = clientInput.chatHistory?.map(msg => {
-    // Ensure textContent is always a string, defaulting to an empty string if msg.content is null/undefined/empty
     const textContent = msg.content || ""; 
     console.log(`[ThesisAgentFlow - processUserRequest] Mapping client msg to LLM history. Role: ${msg.role}, Original client content: "${msg.content}", Text for LLM part: "${textContent}"`);
     return {
-      role: msg.role === 'agent' ? 'model' : 'user', // Transform 'agent' (from client UI) to 'model' (for Genkit)
-      parts: [{ text: textContent }], // Ensure 'parts' is an array with an object containing a 'text' property
+      role: msg.role === 'agent' ? 'model' : 'user',
+      parts: [{ text: textContent }],
     };
-  }).filter( // Defensive filter: ensure entries have the correct structure, especially the text part.
-    entry => 
-      entry.parts && 
-      entry.parts.length > 0 && 
-      typeof entry.parts[0].text === 'string'
+  }).filter(
+    entry => entry.parts && entry.parts.length > 0 && typeof entry.parts[0].text === 'string'
   ) as Array<{role: 'user' | 'model'; parts: {text: string}[]}> | undefined;
 
   console.log('[ThesisAgentFlow - processUserRequest] chatHistoryForLLM (format LLM) préparé pour le flux:', JSON.stringify(chatHistoryForLLM, null, 2));
@@ -546,16 +539,25 @@ export async function processUserRequest(clientInput: ThesisAgentInput): Promise
       userRequest: clientInput.userRequest, 
       userId, 
       userNameForAgent,
-      chatHistoryForLLM // Transmettre l'historique formaté au flux
+      chatHistoryForLLM
     });
+    // S'assurer que le résultat du flux est valide avant de le retourner
+    if (!result || typeof result.responseMessage !== 'string') {
+        console.error("[ThesisAgentFlow - processUserRequest] Le flux thesisAgentFlow a retourné un résultat invalide:", result);
+        return { responseMessage: "L'agent IA a rencontré une difficulté interne. Veuillez réessayer." };
+    }
     console.log("[ThesisAgentFlow - processUserRequest] Réponse du flux de l'agent:", JSON.stringify(result, null, 2));
     return result;
   } catch (error: any) {
     console.error("[ThesisAgentFlow - processUserRequest] Erreur critique dans le flux de l'agent:", error);
-    // Transmettre l'erreur au client de manière plus structurée
-    if (error.name === 'GenkitError' && error.details?.parseErrors) {
-        return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message}. Détails de validation: ${JSON.stringify(error.details.parseErrors)}`};
+    let errorMessage = "Une erreur majeure est survenue lors du traitement de votre demande.";
+    if (error.message) {
+      errorMessage += `: ${error.message}`;
     }
-    return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message || 'Erreur inconnue du serveur'}` };
+    if (error.name === 'GenkitError' && error.details?.parseErrors) {
+        errorMessage += `. Détails de validation: ${JSON.stringify(error.details.parseErrors)}`;
+    }
+    return { responseMessage: errorMessage };
   }
 }
+
