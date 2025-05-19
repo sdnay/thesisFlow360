@@ -2,7 +2,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -16,9 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronRight, EllipsisVertical, PlusCircle, ListChecks, Target as TargetIcon, NotebookText, FileText, TimerIcon, MessageSquare, Edit, Tags as TagsIcon, Link2, Info } from 'lucide-react';
+import { ChevronRight, ListChecks, Target as TargetIcon, NotebookText, FileText, TimerIcon, MessageSquare, Info, FolderOpen, Edit, Tags as TagsIcon } from 'lucide-react';
 import type { Chapter, Task, DailyObjective, PomodoroSession, BrainDumpEntry, Source, Tag } from '@/types';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -26,12 +25,11 @@ import { cn } from '@/lib/utils';
 
 import SupervisorCommentsSection from '@/components/thesis/chapter-detail-components/SupervisorCommentsSection';
 import ChapterActionsController from '@/components/thesis/chapter-detail-components/ChapterActionsController';
-import AddChapterTaskModal from '@/components/thesis/chapter-detail-components/AddChapterTaskModal';
-import AddChapterObjectiveModal from '@/components/thesis/chapter-detail-components/AddChapterObjectiveModal';
-import AddChapterBrainDumpNote from '@/components/thesis/chapter-detail-components/AddChapterBrainDumpNote';
-import ManageChapterSources from '@/components/thesis/chapter-detail-components/ManageChapterSources';
+import ChapterAddTask from '@/components/thesis/chapter-detail-components/ChapterAddTask';
+import ChapterAddObjective from '@/components/thesis/chapter-detail-components/ChapterAddObjective';
+import ChapterAddBrainDumpNoteWrapper from '@/components/thesis/chapter-detail-components/ChapterAddBrainDumpNoteWrapper';
+import ChapterManageSourcesWrapper from '@/components/thesis/chapter-detail-components/ChapterManageSourcesWrapper';
 
-// Helper function to calculate chapter progress
 function calculateChapterProgress(tasks: Pick<Task, 'completed'>[] | undefined): number {
   if (!tasks || tasks.length === 0) {
     return 0;
@@ -54,39 +52,41 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    redirect(`/login?redirectTo=/thesis-plan/${params.chapterId}`);
+    // This should ideally be handled by middleware, but as a fallback:
+    // redirect(`/login?redirectTo=/thesis-plan/${params.chapterId}`);
+    // For Server Components, it's better to throw notFound or a custom error if middleware isn't catching this.
+    // Or, if middleware is in place, this check might be redundant unless for specific UI if user somehow bypasses middleware.
+    // For now, we assume middleware handles unauthenticated access. If not, this page might error or show limited data.
+    console.warn("[ChapterDetailPage] No user session found. Page might not render correctly or show all data.");
   }
 
-  const { data: chapterData, error: chapterError } = await supabase
-    .from('chapters')
-    .select('*, tags:chapter_tags(tags(id, name, color))')
-    .eq('id', params.chapterId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (chapterError || !chapterData) {
-    console.error("Erreur récupération chapitre ou chapitre non trouvé:", chapterError);
-    notFound();
-  }
-  const chapter: Chapter = { ...chapterData, tags: chapterData.tags?.map((t: any) => t.tags) || [] };
+  const chapterId = params.chapterId;
 
   const [
+    chapterRes,
     tasksRes,
     objectivesRes,
     brainDumpsRes,
     pomodorosRes,
     linkedSourcesRes,
-    allUserSourcesRes,
-    availableTagsRes
+    allUserSourcesRes, // For the "Manage Sources" modal
+    availableTagsRes    // For various "Add/Manage Tag" modals
   ] = await Promise.all([
-    supabase.from('tasks').select('*, tags:task_tags(tags(id, name, color))').eq('chapter_id', params.chapterId).eq('user_id', user.id).order('created_at', { ascending: false }),
-    supabase.from('daily_objectives').select('*, tags:daily_objective_tags(tags(id, name, color))').eq('chapter_id', params.chapterId).eq('user_id', user.id).order('objective_date', { ascending: false }),
-    supabase.from('brain_dump_entries').select('*, tags:brain_dump_entry_tags(tags(id, name, color))').eq('chapter_id', params.chapterId).eq('user_id', user.id).order('created_at', { ascending: false }),
-    supabase.from('pomodoro_sessions').select('*').eq('chapter_id', params.chapterId).eq('user_id', user.id).order('start_time', { ascending: false }),
-    supabase.from('chapter_sources').select('sources(*, tags:source_tags(tags(id, name, color)))').eq('chapter_id', params.chapterId).eq('user_id', user.id), // user_id sur la table de jonction
-    supabase.from('sources').select('*').eq('user_id', user.id).order('title'),
-    supabase.from('tags').select('*').eq('user_id', user.id).order('name')
+    supabase.from('chapters').select('*, tags:chapter_tags(tags(id, name, color))').eq('id', chapterId).eq('user_id', user?.id || '').single(),
+    supabase.from('tasks').select('*, tags:task_tags(tags(id, name, color))').eq('chapter_id', chapterId).eq('user_id', user?.id || '').order('created_at', { ascending: false }),
+    supabase.from('daily_objectives').select('*, tags:daily_objective_tags(tags(id, name, color))').eq('chapter_id', chapterId).eq('user_id', user?.id || '').order('objective_date', { ascending: false }),
+    supabase.from('brain_dump_entries').select('*, tags:brain_dump_entry_tags(tags(id, name, color))').eq('chapter_id', chapterId).eq('user_id', user?.id || '').order('created_at', { ascending: false }),
+    supabase.from('pomodoro_sessions').select('*').eq('chapter_id', chapterId).eq('user_id', user?.id || '').order('start_time', { ascending: false }),
+    supabase.from('chapter_sources').select('sources(*, tags:source_tags(tags(id, name, color)))').eq('chapter_id', chapterId).eq('user_id', user?.id || ''),
+    supabase.from('sources').select('*').eq('user_id', user?.id || '').order('title'),
+    supabase.from('tags').select('*').eq('user_id', user?.id || '').order('name')
   ]);
+
+  if (chapterRes.error || !chapterRes.data) {
+    console.error("Erreur récupération chapitre ou chapitre non trouvé:", chapterRes.error);
+    notFound();
+  }
+  const chapter: Chapter = { ...chapterRes.data, tags: chapterRes.data.tags?.map((t: any) => t.tags) || [] };
 
   const tasks: Task[] = (tasksRes.data || []).map((t: any) => ({ ...t, tags: t.tags?.map((tg: any) => tg.tags) || [] }));
   const objectives: DailyObjective[] = (objectivesRes.data || []).map((o: any) => ({ ...o, tags: o.tags?.map((tg: any) => tg.tags) || [] }));
@@ -98,7 +98,6 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
 
   const chapterProgress = calculateChapterProgress(tasks);
   const today_yyyy_mm_dd = format(startOfDay(new Date()), 'yyyy-MM-dd');
-  const currentPath = `/thesis-plan/${params.chapterId}`;
 
   return (
     <div className="p-4 md:p-6 space-y-6 h-full flex flex-col">
@@ -133,40 +132,35 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
               <Progress value={chapterProgress} className="h-3" />
             </div>
           </div>
-          <ChapterActionsController
-            chapter={chapter}
-            userId={user.id}
-            availableTags={availableTags}
-            revalidationPath={currentPath}
-            revalidationListPath="/thesis-plan"
-          />
+          {user && (
+            <ChapterActionsController
+              chapter={chapter}
+              userId={user.id}
+              availableTags={availableTags}
+            />
+          )}
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="tasks" className="flex-grow flex flex-col min-h-0"> {/* min-h-0 pour flex-grow dans flex-col */}
+      <Tabs defaultValue="tasks" className="flex-grow flex flex-col min-h-0">
         <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 mb-4 shrink-0">
-          <TabsTrigger value="tasks"><ListChecks className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Tâches</TabsTrigger>
-          <TabsTrigger value="objectives"><TargetIcon className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Objectifs</TabsTrigger>
-          <TabsTrigger value="notes"><NotebookText className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Notes</TabsTrigger>
-          <TabsTrigger value="sources"><FileText className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Sources</TabsTrigger>
-          <TabsTrigger value="pomodoros"><TimerIcon className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Pomodoros</TabsTrigger>
-          <TabsTrigger value="comments"><MessageSquare className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Commentaires</TabsTrigger>
+          <TabsTrigger value="tasks"><ListChecks className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Tâches ({tasks.length})</TabsTrigger>
+          <TabsTrigger value="objectives"><TargetIcon className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Objectifs ({objectives.length})</TabsTrigger>
+          <TabsTrigger value="notes"><NotebookText className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Notes ({brainDumps.length})</TabsTrigger>
+          <TabsTrigger value="sources"><FileText className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Sources ({linkedSources.length})</TabsTrigger>
+          <TabsTrigger value="pomodoros"><TimerIcon className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Pomodoros ({pomodoros.length})</TabsTrigger>
+          <TabsTrigger value="comments"><MessageSquare className="mr-1 h-4 w-4 sm:hidden md:inline-block" />Commentaires ({chapter.supervisor_comments?.length || 0})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tasks" className="flex-grow flex flex-col overflow-hidden space-y-3 p-1">
           <div className="flex justify-end mb-2 shrink-0">
-             <AddChapterTaskModal
-              chapterId={chapter.id}
-              userId={user.id}
-              availableTags={availableTags}
-              revalidationPath={currentPath}
-            />
+            {user && <ChapterAddTask chapterId={chapter.id} userId={user.id} availableTags={availableTags} />}
           </div>
           {tasks.length > 0 ? (
             <ScrollArea className="flex-grow custom-scrollbar pr-2 -mr-2">
               <div className="space-y-2">
                 {tasks.map((task) => (
-                  <Card key={task.id} className={cn("p-3 text-sm border-l-4", task.completed && "opacity-60", 
+                  <Card key={task.id} className={cn("p-3 text-sm border-l-4", task.completed && "opacity-60",
                     task.type === 'urgent' ? 'border-red-500' :
                     task.type === 'important' ? 'border-orange-500' :
                     task.type === 'reading' ? 'border-blue-500' :
@@ -174,7 +168,7 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
                     'border-gray-400'
                   )}>
                     <div className="flex items-start gap-2">
-                      <Checkbox id={`task-${task.id}`} checked={task.completed} className="mt-1" disabled /> {/* Consider making this interactive with a client component */}
+                      <Checkbox id={`task-${task.id}`} checked={task.completed} className="mt-1" disabled />
                       <div className="flex-grow">
                         <label htmlFor={`task-${task.id}`} className={cn("font-medium", task.completed && "line-through")}>{task.text}</label>
                         <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-1">
@@ -182,26 +176,22 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
                           {task.tags?.map(tag => <Badge key={tag.id} variant="secondary" className="text-xs" style={tag.color ? {backgroundColor: tag.color, color: 'hsl(var(--secondary-foreground))'} : {}}>{tag.name}</Badge>)}
                         </div>
                       </div>
-                      {/* TODO: Add actions for task (edit, delete) - would need a client component wrapper for the list */}
                     </div>
                   </Card>
                 ))}
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Aucune tâche liée à ce chapitre.</p>
+            <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center justify-center h-full">
+                <ListChecks className="h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p>Aucune tâche liée à ce chapitre pour le moment.</p>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="objectives" className="flex-grow flex flex-col overflow-hidden space-y-3 p-1">
           <div className="flex justify-end mb-2 shrink-0">
-            <AddChapterObjectiveModal
-              chapterId={chapter.id}
-              userId={user.id}
-              objectiveDate={today_yyyy_mm_dd}
-              availableTags={availableTags}
-              revalidationPath={currentPath}
-            />
+            {user && <ChapterAddObjective chapterId={chapter.id} userId={user.id} availableTags={availableTags} objectiveDate={today_yyyy_mm_dd} />}
           </div>
           {objectives.length > 0 ? (
             <ScrollArea className="flex-grow custom-scrollbar pr-2 -mr-2">
@@ -213,7 +203,7 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
                       <div className="flex-grow">
                         <label htmlFor={`obj-${obj.id}`} className={cn("font-medium", obj.completed && "line-through")}>{obj.text}</label>
                         <p className="text-xs text-muted-foreground">Pour le: {format(parseISO(obj.objective_date), "d MMM yyyy", { locale: fr })}</p>
-                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-1">
+                         <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-1">
                            {obj.tags?.map(tag => <Badge key={tag.id} variant="secondary" className="text-xs" style={tag.color ? {backgroundColor: tag.color, color: 'hsl(var(--secondary-foreground))'} : {}}>{tag.name}</Badge>)}
                         </div>
                       </div>
@@ -223,18 +213,16 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Aucun objectif lié à ce chapitre.</p>
+             <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center justify-center h-full">
+                <TargetIcon className="h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p>Aucun objectif lié à ce chapitre.</p>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="notes" className="flex-grow flex flex-col overflow-hidden space-y-3 p-1">
-          <div className="flex justify-end mb-2 shrink-0">
-            <AddChapterBrainDumpNote
-              chapterId={chapter.id}
-              userId={user.id}
-              availableTags={availableTags}
-              revalidationPath={currentPath}
-            />
+           <div className="flex justify-end mb-2 shrink-0">
+            {user && <ChapterAddBrainDumpNoteWrapper chapterId={chapter.id} userId={user.id} availableTags={availableTags} />}
           </div>
           {brainDumps.length > 0 ? (
             <ScrollArea className="flex-grow custom-scrollbar pr-2 -mr-2">
@@ -251,19 +239,16 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Aucune note du vide-cerveau liée à ce chapitre.</p>
+            <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center justify-center h-full">
+                <NotebookText className="h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p>Aucune note du vide-cerveau liée à ce chapitre.</p>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="sources" className="flex-grow flex flex-col overflow-hidden space-y-3 p-1">
            <div className="flex justify-end mb-2 shrink-0">
-            <ManageChapterSources
-              chapterId={chapter.id}
-              userId={user.id}
-              allUserSources={allUserSources}
-              initiallyLinkedSourceIds={new Set(linkedSources.map(s => s.id))}
-              revalidationPath={currentPath}
-            />
+             {user && <ChapterManageSourcesWrapper chapterId={chapter.id} userId={user.id} allUserSources={allUserSources} initiallyLinkedSourceIds={new Set(linkedSources.map(s => s.id))} />}
           </div>
           {linkedSources.length > 0 ? (
              <ScrollArea className="flex-grow custom-scrollbar pr-2 -mr-2">
@@ -280,14 +265,17 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Aucune source liée à ce chapitre.</p>
+            <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center justify-center h-full">
+                <FileText className="h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p>Aucune source associée à ce chapitre.</p>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="pomodoros" className="flex-grow flex flex-col overflow-hidden space-y-3 p-1">
            <div className="flex justify-end mb-2 shrink-0">
             <Button size="sm" asChild>
-                <Link href={`/pomodoro?chapterId=${chapter.id}`}><TimerIcon className="mr-2 h-4 w-4"/>Enregistrer un Pomodoro</Link>
+                <Link href={`/pomodoro?chapterId=${chapter.id}&chapterName=${encodeURIComponent(chapter.name)}`}><TimerIcon className="mr-2 h-4 w-4"/>Enregistrer un Pomodoro</Link>
             </Button>
            </div>
           {pomodoros.length > 0 ? (
@@ -302,15 +290,17 @@ export default async function ChapterDetailPage({ params }: ChapterDetailPagePro
                 </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Aucune session Pomodoro liée à ce chapitre.</p>
+            <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center justify-center h-full">
+                <TimerIcon className="h-12 w-12 text-muted-foreground/50 mb-3"/>
+                <p>Aucune session Pomodoro enregistrée pour ce chapitre.</p>
+            </div>
           )}
         </TabsContent>
 
         <TabsContent value="comments" className="flex-grow flex flex-col overflow-hidden p-1">
-          <SupervisorCommentsSection chapterId={chapter.id} userId={user.id} initialComments={chapter.supervisor_comments || []} revalidationPath={currentPath} />
+          {user && <SupervisorCommentsSection chapterId={chapter.id} userId={user.id} initialComments={chapter.supervisor_comments || []} />}
         </TabsContent>
       </Tabs>
     </div>
   );
 }
-

@@ -7,29 +7,33 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, PlusCircle, Save } from 'lucide-react';
+import { Loader2, PlusCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { Tag, TaskType } from '@/types';
 import TaskTypeSelector from '@/components/thesis/task-manager-components/TaskTypeSelector';
 import TagManager from '@/components/ui/tag-manager';
-import { revalidatePath } from 'next/cache';
+import { useRouter } from 'next/navigation';
 
 interface AddChapterTaskModalProps {
   chapterId: string;
   userId: string;
   availableTags: Tag[];
-  revalidationPath: string; // Path to revalidate after adding
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onTaskAdded?: () => void; 
 }
 
 const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
   chapterId,
   userId,
   availableTags,
-  revalidationPath: pathForRevalidation,
+  isOpen,
+  onOpenChange,
+  onTaskAdded,
 }) => {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
   const [taskText, setTaskText] = useState('');
   const [taskType, setTaskType] = useState<TaskType>('secondary');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -46,11 +50,11 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
     setSelectedTags([]);
   };
 
-  const handleOpenChange = (open: boolean) => {
+  const handleOpenChangeInternal = (open: boolean) => {
     if (!open) {
       resetForm();
     }
-    setIsOpen(open);
+    onOpenChange(open);
   };
 
   const handleSaveTask = async () => {
@@ -82,23 +86,16 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
         const { error: tagLinkError } = await supabase.from('task_tags').insert(tagLinks);
         if (tagLinkError) {
           console.error("Erreur liaison tags pour tâche:", tagLinkError);
-          toast({ title: "Erreur Tags", description: "La tâche a été créée mais les tags n'ont pas pu être liés.", variant: "destructive" });
+          // Ne pas bloquer le flux principal pour une erreur de tag
+          toast({ title: "Avertissement Tags", description: "La tâche a été créée mais certains tags n'ont pas pu être liés.", variant: "default" });
         }
       }
 
       toast({ title: "Tâche ajoutée", description: `"${taskText.trim()}" ajoutée au chapitre.` });
       resetForm();
-      setIsOpen(false);
-      // Revalidate the path to refresh data on the server component
-      if (pathForRevalidation) {
-        // This is a server-side action, ideally called from a server action
-        // For client component, this call would be ineffective.
-        // We assume this modal might be used in a context where revalidation is passed down
-        // or this component itself will be refactored into a server action form submission.
-        // For now, we rely on parent component re-rendering or Supabase realtime.
-        // The parent Server Component (ChapterDetailPage) should use revalidatePath in its actions or callbacks.
-      }
-      // TODO: Consider a more robust revalidation strategy, possibly prop callback or server action
+      onOpenChange(false); // Ferme la modale
+      if (onTaskAdded) onTaskAdded(); // Appelle le callback du parent
+      router.refresh(); // Rafraîchit les données du Server Component parent
     } catch (e: any) {
       console.error("Erreur sauvegarde tâche depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Tâche", description: e.message, variant: "destructive" });
@@ -141,19 +138,17 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Ajouter Tâche</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={handleOpenChangeInternal}>
+      {/* Le DialogTrigger est géré par le composant parent (ChapterAddTask) */}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter une Tâche à ce Chapitre</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div>
-            <Label htmlFor="taskTextModalChapter" className="mb-1.5 block text-sm">Description de la tâche</Label>
+            <Label htmlFor="taskTextModalChapterDetail" className="mb-1.5 block text-sm">Description de la tâche</Label>
             <Textarea
-              id="taskTextModalChapter"
+              id="taskTextModalChapterDetail"
               value={taskText}
               onChange={(e) => setTaskText(e.target.value)}
               placeholder="Que devez-vous faire ?"
@@ -163,12 +158,13 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
             />
           </div>
           <div>
-            <Label htmlFor="taskTypeModalChapter" className="mb-1.5 block text-sm">Type de tâche</Label>
+            <Label htmlFor="taskTypeModalChapterDetail" className="mb-1.5 block text-sm">Type de tâche</Label>
             <TaskTypeSelector
               selectedType={taskType}
               onSelectType={setTaskType}
               disabled={isSaving}
-              size="sm"
+              size="default" 
+              buttonClassName="w-full"
             />
           </div>
           <div>
@@ -185,7 +181,7 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <DialogClose asChild><Button variant="outline" disabled={isSaving}>Annuler</Button></DialogClose>
+          <Button variant="outline" onClick={() => handleOpenChangeInternal(false)} disabled={isSaving}>Annuler</Button>
           <Button onClick={handleSaveTask} disabled={isSaving || !taskText.trim()}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Ajouter la Tâche

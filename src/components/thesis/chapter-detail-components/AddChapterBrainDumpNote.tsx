@@ -4,7 +4,7 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,25 +13,29 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { Tag, BrainDumpEntryStatus } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
-import { revalidatePath } from 'next/cache';
+import { useRouter } from 'next/navigation';
 
-const brainDumpStatuses: BrainDumpEntryStatus[] = ["captured", "idea", "task"];
+const brainDumpStatuses: BrainDumpEntryStatus[] = ["captured", "idea", "task", "discarded"];
 
 interface AddChapterBrainDumpNoteProps {
   chapterId: string;
   userId: string;
   availableTags: Tag[];
-  revalidationPath: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onNoteAdded?: () => void;
 }
 
 const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
   chapterId,
   userId,
   availableTags,
-  revalidationPath: pathForRevalidation,
+  isOpen,
+  onOpenChange,
+  onNoteAdded,
 }) => {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
   const [noteText, setNoteText] = useState('');
   const [noteStatus, setNoteStatus] = useState<BrainDumpEntryStatus>('captured');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -48,11 +52,11 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
     setSelectedTags([]);
   };
 
-  const handleOpenChange = (open: boolean) => {
+  const handleOpenChangeInternal = (open: boolean) => {
     if (!open) {
       resetForm();
     }
-    setIsOpen(open);
+    onOpenChange(open);
   };
 
   const handleSaveNote = async () => {
@@ -83,14 +87,15 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
         const { error: tagLinkError } = await supabase.from('brain_dump_entry_tags').insert(tagLinks);
         if (tagLinkError) {
           console.error("Erreur liaison tags pour note:", tagLinkError);
-          toast({ title: "Erreur Tags", description: "La note a été créée mais les tags n'ont pas pu être liés.", variant: "destructive" });
+          toast({ title: "Avertissement Tags", description: "La note a été créée mais les tags n'ont pas pu être liés.", variant: "default" });
         }
       }
 
       toast({ title: "Note ajoutée", description: "Note ajoutée au vide-cerveau et liée à ce chapitre." });
       resetForm();
-      setIsOpen(false);
-      // Revalidation logic to be handled by parent or specific mechanism if this is a server action form
+      onOpenChange(false);
+      if (onNoteAdded) onNoteAdded();
+      router.refresh(); 
     } catch (e: any) {
       console.error("Erreur sauvegarde note depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Note", description: e.message, variant: "destructive" });
@@ -132,19 +137,16 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Ajouter Note (Vide-Cerveau)</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={handleOpenChangeInternal}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter une Note au Vide-Cerveau pour ce Chapitre</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div>
-            <Label htmlFor="noteTextModalChapter" className="mb-1.5 block text-sm">Contenu de la note</Label>
+            <Label htmlFor="noteTextModalChapterDetail" className="mb-1.5 block text-sm">Contenu de la note</Label>
             <Textarea
-              id="noteTextModalChapter"
+              id="noteTextModalChapterDetail"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Votre idée, pensée, citation..."
@@ -154,9 +156,9 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
             />
           </div>
           <div>
-            <Label htmlFor="noteStatusModalChapter" className="mb-1.5 block text-sm">Statut initial</Label>
+            <Label htmlFor="noteStatusModalChapterDetail" className="mb-1.5 block text-sm">Statut initial</Label>
             <Select value={noteStatus} onValueChange={(value) => setNoteStatus(value as BrainDumpEntryStatus)} disabled={isSaving}>
-              <SelectTrigger id="noteStatusModalChapter" className="text-sm">
+              <SelectTrigger id="noteStatusModalChapterDetail" className="text-sm">
                 <SelectValue placeholder="Choisir un statut" />
               </SelectTrigger>
               <SelectContent>
@@ -180,7 +182,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <DialogClose asChild><Button variant="outline" disabled={isSaving}>Annuler</Button></DialogClose>
+          <Button variant="outline" onClick={() => handleOpenChangeInternal(false)} disabled={isSaving}>Annuler</Button>
           <Button onClick={handleSaveNote} disabled={isSaving || !noteText.trim()}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Ajouter la Note
@@ -192,3 +194,4 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
 };
 
 export default AddChapterBrainDumpNote;
+

@@ -5,41 +5,39 @@ import type { FC, ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Save, Edit, Tags as TagsIcon, EllipsisVertical, Trash2 } from 'lucide-react';
+import { Loader2, Save, Edit, Tags as TagsIcon, EllipsisVertical } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { Chapter, Tag } from '@/types';
-import TagManager from '@/components/ui/tag-manager'; // Assuming TagManager is for global use
-import { revalidatePath } from 'next/cache'; // Only works in Server Actions / Route Handlers
+import TagManager from '@/components/ui/tag-manager';
+import { useRouter } from 'next/navigation'; // Pour router.refresh()
 
 interface ChapterActionsControllerProps {
   chapter: Chapter;
   userId: string;
   availableTags: Tag[];
-  revalidationPath: string;
-  revalidationListPath?: string;
-  trigger?: ReactNode; // Optional custom trigger for the DropdownMenu
+  trigger?: ReactNode;
+  onChapterUpdated?: () => void; // Callback pour rafraîchir la page parente
 }
 
 const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
   chapter,
   userId,
   availableTags: initialAvailableTags,
-  revalidationPath: pathToRevalidate,
-  revalidationListPath,
   trigger,
+  onChapterUpdated,
 }) => {
   const { toast } = useToast();
+  const router = useRouter();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
   
   const [editableChapterName, setEditableChapterName] = useState(chapter.name);
   const [editableChapterStatus, setEditableChapterStatus] = useState(chapter.status);
-  // Progress is calculated dynamically, so not directly editable here
-
+  
   const [selectedTags, setSelectedTags] = useState<Tag[]>(chapter.tags || []);
   const [localAvailableTags, setLocalAvailableTags] = useState<Tag[]>(initialAvailableTags);
   
@@ -66,7 +64,6 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       const chapterPayload = {
         name: editableChapterName.trim(),
         status: editableChapterStatus.trim() || 'Non commencé',
-        // progress, supervisor_comments are not edited here
       };
       const { error } = await supabase
         .from('chapters')
@@ -77,9 +74,8 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       if (error) throw error;
       toast({ title: "Chapitre Mis à Jour", description: "Les détails du chapitre ont été sauvegardés." });
       setIsEditModalOpen(false);
-      // Server Action or API route would call revalidatePath(pathToRevalidate) and revalidatePath(revalidationListPath)
-      // For client-side, we rely on parent re-fetching or Supabase subscriptions.
-      // Or pass a callback from the parent Server Component that calls revalidatePath.
+      if (onChapterUpdated) onChapterUpdated(); // Appelle le callback du parent si fourni
+      router.refresh(); // Rafraîchit les données du Server Component
     } catch (e: any) {
       toast({ title: "Erreur Sauvegarde", description: e.message, variant: "destructive" });
     } finally {
@@ -91,14 +87,8 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
     if (!userId) return;
     setIsSavingTags(true);
     try {
-      // 1. Delete existing tag links for this chapter
-      const { error: deleteError } = await supabase
-        .from('chapter_tags')
-        .delete()
-        .eq('chapter_id', chapter.id);
-      if (deleteError) throw deleteError;
-
-      // 2. Insert new tag links
+      await supabase.from('chapter_tags').delete().eq('chapter_id', chapter.id); // Il est plus sûr de ne pas filtrer par user_id ici, RLS s'en charge
+      
       if (selectedTags.length > 0) {
         const newLinks = selectedTags.map(tag => ({ chapter_id: chapter.id, tag_id: tag.id }));
         const { error: insertError } = await supabase.from('chapter_tags').insert(newLinks);
@@ -106,7 +96,8 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       }
       toast({ title: "Tags Mis à Jour", description: "Les tags du chapitre ont été sauvegardés." });
       setIsTagsModalOpen(false);
-       // Similar revalidation note as above
+      if (onChapterUpdated) onChapterUpdated();
+      router.refresh();
     } catch (e: any) {
       toast({ title: "Erreur Tags", description: e.message, variant: "destructive" });
     } finally {
@@ -132,7 +123,12 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
           toast({ title: "Erreur Création Tag", description: tagError?.message, variant: "destructive" });
           return;
         }
-        finalTag = newTagFromDb as Tag; // Cast as Tag
+        finalTag = newTagFromDb as Tag;
+        // Le parent (ChapterDetailPage) doit mettre à jour sa liste de availableTags
+        // ou nous comptons sur un router.refresh() pour re-fetcher availableTags.
+        // Pour une UI plus réactive, un callback au parent pour mettre à jour localAvailableTags
+        // et la liste globale dans ChapterDetailPage serait mieux.
+        // Pour l'instant, router.refresh() mettra à jour tout.
         setLocalAvailableTags(prev => [...prev, finalTag!].sort((a, b) => a.name.localeCompare(b.name)));
       }
     } else {
@@ -166,11 +162,9 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
             <TagsIcon className="mr-2 h-4 w-4" />
             Gérer les Tags
           </DropdownMenuItem>
-          {/* Consider adding Delete Chapter option here if appropriate */}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Edit Chapter Details Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -178,16 +172,16 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div>
-              <Label htmlFor="chapterNameEdit" className="mb-1.5 block text-sm">Nom du Chapitre</Label>
-              <Input id="chapterNameEdit" value={editableChapterName} onChange={(e) => setEditableChapterName(e.target.value)} disabled={isSavingDetails} className="text-sm" />
+              <Label htmlFor="chapterNameEditDetail" className="mb-1.5 block text-sm">Nom du Chapitre</Label>
+              <Input id="chapterNameEditDetail" value={editableChapterName} onChange={(e) => setEditableChapterName(e.target.value)} disabled={isSavingDetails} className="text-sm" />
             </div>
             <div>
-              <Label htmlFor="chapterStatusEdit" className="mb-1.5 block text-sm">Statut</Label>
-              <Input id="chapterStatusEdit" value={editableChapterStatus} onChange={(e) => setEditableChapterStatus(e.target.value)} disabled={isSavingDetails} className="text-sm" placeholder="ex: En cours, Terminé..." />
+              <Label htmlFor="chapterStatusEditDetail" className="mb-1.5 block text-sm">Statut</Label>
+              <Input id="chapterStatusEditDetail" value={editableChapterStatus} onChange={(e) => setEditableChapterStatus(e.target.value)} disabled={isSavingDetails} className="text-sm" placeholder="ex: En cours, Terminé..." />
             </div>
           </div>
           <DialogFooter className="mt-2">
-            <DialogClose asChild><Button variant="outline" disabled={isSavingDetails}>Annuler</Button></DialogClose>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)} disabled={isSavingDetails}>Annuler</Button>
             <Button onClick={handleSaveChapterDetails} disabled={isSavingDetails || !editableChapterName.trim()}>
               {isSavingDetails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Enregistrer
@@ -196,7 +190,6 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Manage Chapter Tags Modal */}
       <Dialog open={isTagsModalOpen} onOpenChange={setIsTagsModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -209,12 +202,12 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
               onTagAdd={handleAddTag}
               onTagRemove={handleRemoveTag}
               disabled={isSavingTags}
-              triggerLabel="Gérer les tags du chapitre" // This won't be visible if PopoverTrigger is not used
+              triggerLabel="Gérer les tags du chapitre"
               allowTagCreation={true}
             />
           </div>
           <DialogFooter className="mt-2">
-            <DialogClose asChild><Button variant="outline" disabled={isSavingTags}>Annuler</Button></DialogClose>
+            <Button variant="outline" onClick={() => setIsTagsModalOpen(false)} disabled={isSavingTags}>Annuler</Button>
             <Button onClick={handleSaveChapterTags} disabled={isSavingTags}>
               {isSavingTags ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Enregistrer les Tags

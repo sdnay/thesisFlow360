@@ -4,7 +4,7 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, PlusCircle } from 'lucide-react';
@@ -13,15 +13,16 @@ import { useToast } from '@/hooks/use-toast';
 import type { Tag } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
 import { format } from 'date-fns';
-import { revalidatePath } from 'next/cache';
-
+import { useRouter } from 'next/navigation';
 
 interface AddChapterObjectiveModalProps {
   chapterId: string;
   userId: string;
   objectiveDate: string; // YYYY-MM-DD string
   availableTags: Tag[];
-  revalidationPath: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onObjectiveAdded?: () => void;
 }
 
 const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
@@ -29,10 +30,12 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   userId,
   objectiveDate,
   availableTags,
-  revalidationPath: pathForRevalidation,
+  isOpen,
+  onOpenChange,
+  onObjectiveAdded,
 }) => {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
   const [objectiveText, setObjectiveText] = useState('');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,11 +50,11 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
     setSelectedTags([]);
   };
 
-  const handleOpenChange = (open: boolean) => {
+  const handleOpenChangeInternal = (open: boolean) => {
     if (!open) {
       resetForm();
     }
-    setIsOpen(open);
+    onOpenChange(open);
   };
 
   const handleSaveObjective = async () => {
@@ -64,7 +67,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       const objectivePayload = {
         user_id: userId,
         text: objectiveText.trim(),
-        objective_date: objectiveDate,
+        objective_date: objectiveDate, // Utilise la date passée en prop
         completed: false,
         chapter_id: chapterId,
       };
@@ -83,14 +86,15 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
         const { error: tagLinkError } = await supabase.from('daily_objective_tags').insert(tagLinks);
         if (tagLinkError) {
             console.error("Erreur liaison tags pour objectif:", tagLinkError);
-            toast({ title: "Erreur Tags", description: "L'objectif a été créé mais les tags n'ont pas pu être liés.", variant: "destructive" });
+            toast({ title: "Avertissement Tags", description: "L'objectif a été créé mais certains tags n'ont pas pu être liés.", variant: "default" });
         }
       }
 
-      toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(new Date(objectiveDate+'T00:00:00'), 'd MMM yyyy')}.` });
+      toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(new Date(objectiveDate+'T00:00:00'), 'd MMM yyyy', {locale: fr})}.` });
       resetForm();
-      setIsOpen(false);
-      // Revalidation logic to be handled by parent or specific mechanism if this is a server action form
+      onOpenChange(false); // Ferme la modale
+      if (onObjectiveAdded) onObjectiveAdded();
+      router.refresh(); // Rafraîchit les données
     } catch (e: any) {
       console.error("Erreur sauvegarde objectif depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Objectif", description: e.message, variant: "destructive" });
@@ -133,20 +137,17 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm"><PlusCircle className="mr-2 h-4 w-4" /> Ajouter Objectif</Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={handleOpenChangeInternal}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter un Objectif à ce Chapitre</DialogTitle>
-          <p className="text-sm text-muted-foreground">Pour le {format(new Date(objectiveDate+'T00:00:00'), 'eeee d MMMM yyyy')}</p>
+          <p className="text-sm text-muted-foreground">Pour le {format(new Date(objectiveDate+'T00:00:00'), 'eeee d MMMM yyyy', {locale: fr})}</p>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div>
-            <Label htmlFor="objectiveTextModalChapter" className="mb-1.5 block text-sm">Description de l'objectif</Label>
+            <Label htmlFor="objectiveTextModalChapterDetail" className="mb-1.5 block text-sm">Description de l'objectif</Label>
             <Input
-              id="objectiveTextModalChapter"
+              id="objectiveTextModalChapterDetail"
               value={objectiveText}
               onChange={(e) => setObjectiveText(e.target.value)}
               placeholder="Quel est votre objectif ?"
@@ -168,7 +169,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <DialogClose asChild><Button variant="outline" disabled={isSaving}>Annuler</Button></DialogClose>
+          <Button variant="outline" onClick={() => handleOpenChangeInternal(false)} disabled={isSaving}>Annuler</Button>
           <Button onClick={handleSaveObjective} disabled={isSaving || !objectiveText.trim()}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Ajouter l'Objectif
@@ -180,4 +181,3 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
 };
 
 export default AddChapterObjectiveModal;
-
