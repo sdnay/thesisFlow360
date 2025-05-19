@@ -4,7 +4,7 @@
 import type { FC, ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,14 +13,14 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { Chapter, Tag } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
-import { useRouter } from 'next/navigation'; // Pour router.refresh()
+import { useRouter } from 'next/navigation';
 
 interface ChapterActionsControllerProps {
   chapter: Chapter;
   userId: string;
   availableTags: Tag[];
   trigger?: ReactNode;
-  onChapterUpdated?: () => void; // Callback pour rafraîchir la page parente
+  // onChapterUpdated?: () => void; // Replaced by router.refresh()
 }
 
 const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
@@ -28,7 +28,6 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
   userId,
   availableTags: initialAvailableTags,
   trigger,
-  onChapterUpdated,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -45,10 +44,18 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
   const [isSavingTags, setIsSavingTags] = useState(false);
 
   useEffect(() => {
-    setEditableChapterName(chapter.name);
-    setEditableChapterStatus(chapter.status);
-    setSelectedTags(chapter.tags || []);
-  }, [chapter]);
+    if (isEditModalOpen) {
+        setEditableChapterName(chapter.name);
+        setEditableChapterStatus(chapter.status);
+    }
+  }, [chapter, isEditModalOpen]);
+
+  useEffect(() => {
+    if (isTagsModalOpen) {
+        setSelectedTags(chapter.tags || []);
+    }
+  }, [chapter, isTagsModalOpen]);
+
 
   useEffect(() => {
     setLocalAvailableTags(initialAvailableTags);
@@ -74,8 +81,7 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       if (error) throw error;
       toast({ title: "Chapitre Mis à Jour", description: "Les détails du chapitre ont été sauvegardés." });
       setIsEditModalOpen(false);
-      if (onChapterUpdated) onChapterUpdated(); // Appelle le callback du parent si fourni
-      router.refresh(); // Rafraîchit les données du Server Component
+      router.refresh(); // Refresh server component data
     } catch (e: any) {
       toast({ title: "Erreur Sauvegarde", description: e.message, variant: "destructive" });
     } finally {
@@ -87,17 +93,18 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
     if (!userId) return;
     setIsSavingTags(true);
     try {
-      await supabase.from('chapter_tags').delete().eq('chapter_id', chapter.id); // Il est plus sûr de ne pas filtrer par user_id ici, RLS s'en charge
+      // Delete existing links for this chapter (ensure user_id is part of the condition if your RLS on junction table is not enough)
+      // For simplicity, RLS on 'chapter_tags' based on 'chapters.user_id' should be sufficient.
+      await supabase.from('chapter_tags').delete().eq('chapter_id', chapter.id); 
       
       if (selectedTags.length > 0) {
-        const newLinks = selectedTags.map(tag => ({ chapter_id: chapter.id, tag_id: tag.id }));
+        const newLinks = selectedTags.map(tag => ({ chapter_id: chapter.id, tag_id: tag.id, user_id: userId })); // Add user_id for junction table RLS
         const { error: insertError } = await supabase.from('chapter_tags').insert(newLinks);
         if (insertError) throw insertError;
       }
       toast({ title: "Tags Mis à Jour", description: "Les tags du chapitre ont été sauvegardés." });
       setIsTagsModalOpen(false);
-      if (onChapterUpdated) onChapterUpdated();
-      router.refresh();
+      router.refresh(); // Refresh server component data
     } catch (e: any) {
       toast({ title: "Erreur Tags", description: e.message, variant: "destructive" });
     } finally {
@@ -116,7 +123,7 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       } else {
         const { data: newTagFromDb, error: tagError } = await supabase
           .from('tags')
-          .insert({ name: tagOrNewName, user_id: userId, color: null })
+          .insert({ name: tagOrNewName, user_id: userId, color: null }) // Ensure user_id is set for new tags
           .select()
           .single();
         if (tagError || !newTagFromDb) {
@@ -124,11 +131,6 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
           return;
         }
         finalTag = newTagFromDb as Tag;
-        // Le parent (ChapterDetailPage) doit mettre à jour sa liste de availableTags
-        // ou nous comptons sur un router.refresh() pour re-fetcher availableTags.
-        // Pour une UI plus réactive, un callback au parent pour mettre à jour localAvailableTags
-        // et la liste globale dans ChapterDetailPage serait mieux.
-        // Pour l'instant, router.refresh() mettra à jour tout.
         setLocalAvailableTags(prev => [...prev, finalTag!].sort((a, b) => a.name.localeCompare(b.name)));
       }
     } else {

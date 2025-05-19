@@ -4,7 +4,7 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'; // Removed DialogTrigger and DialogClose as they are managed by wrapper
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, PlusCircle } from 'lucide-react';
@@ -21,7 +21,7 @@ interface AddChapterTaskModalProps {
   availableTags: Tag[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onTaskAdded?: () => void; 
+  onSuccess?: () => void; 
 }
 
 const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
@@ -30,7 +30,7 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
   availableTags,
   isOpen,
   onOpenChange,
-  onTaskAdded,
+  onSuccess,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -82,20 +82,18 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
       if (!newTaskData) throw new Error("La création de la tâche a échoué.");
 
       if (selectedTags.length > 0) {
-        const tagLinks = selectedTags.map(tag => ({ task_id: newTaskData.id, tag_id: tag.id }));
+        const tagLinks = selectedTags.map(tag => ({ task_id: newTaskData.id, tag_id: tag.id, user_id: userId })); // ensure user_id for RLS on junction
         const { error: tagLinkError } = await supabase.from('task_tags').insert(tagLinks);
         if (tagLinkError) {
           console.error("Erreur liaison tags pour tâche:", tagLinkError);
-          // Ne pas bloquer le flux principal pour une erreur de tag
           toast({ title: "Avertissement Tags", description: "La tâche a été créée mais certains tags n'ont pas pu être liés.", variant: "default" });
         }
       }
 
       toast({ title: "Tâche ajoutée", description: `"${taskText.trim()}" ajoutée au chapitre.` });
       resetForm();
-      onOpenChange(false); // Ferme la modale
-      if (onTaskAdded) onTaskAdded(); // Appelle le callback du parent
-      router.refresh(); // Rafraîchit les données du Server Component parent
+      if (onSuccess) onSuccess(); // Call the success callback which should trigger router.refresh()
+      onOpenChange(false); 
     } catch (e: any) {
       console.error("Erreur sauvegarde tâche depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Tâche", description: e.message, variant: "destructive" });
@@ -139,7 +137,6 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChangeInternal}>
-      {/* Le DialogTrigger est géré par le composant parent (ChapterAddTask) */}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter une Tâche à ce Chapitre</DialogTitle>
@@ -193,3 +190,4 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
 };
 
 export default AddChapterTaskModal;
+

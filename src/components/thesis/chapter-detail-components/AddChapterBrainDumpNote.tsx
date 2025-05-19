@@ -23,7 +23,7 @@ interface AddChapterBrainDumpNoteProps {
   availableTags: Tag[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onNoteAdded?: () => void;
+  onSuccess?: () => void;
 }
 
 const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
@@ -32,7 +32,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
   availableTags,
   isOpen,
   onOpenChange,
-  onNoteAdded,
+  onSuccess,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -83,7 +83,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
       if (!newNoteData) throw new Error("La création de la note a échoué.");
 
       if (selectedTags.length > 0) {
-        const tagLinks = selectedTags.map(tag => ({ brain_dump_entry_id: newNoteData.id, tag_id: tag.id }));
+        const tagLinks = selectedTags.map(tag => ({ brain_dump_entry_id: newNoteData.id, tag_id: tag.id, user_id: userId }));
         const { error: tagLinkError } = await supabase.from('brain_dump_entry_tags').insert(tagLinks);
         if (tagLinkError) {
           console.error("Erreur liaison tags pour note:", tagLinkError);
@@ -93,9 +93,8 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
 
       toast({ title: "Note ajoutée", description: "Note ajoutée au vide-cerveau et liée à ce chapitre." });
       resetForm();
+      if (onSuccess) onSuccess();
       onOpenChange(false);
-      if (onNoteAdded) onNoteAdded();
-      router.refresh(); 
     } catch (e: any) {
       console.error("Erreur sauvegarde note depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Note", description: e.message, variant: "destructive" });
@@ -163,7 +162,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {brainDumpStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="text-sm">{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>
+                  <SelectItem key={status} value={status} className="text-sm">{statusConfigDefinition[status as keyof typeof statusConfigDefinition]?.label || status}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -194,4 +193,3 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
 };
 
 export default AddChapterBrainDumpNote;
-

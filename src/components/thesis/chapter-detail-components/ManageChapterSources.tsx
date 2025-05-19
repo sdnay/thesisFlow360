@@ -18,11 +18,11 @@ import { useRouter } from 'next/navigation';
 interface ManageChapterSourcesProps {
   chapterId: string;
   userId: string;
-  allUserSources: Source[]; // Tous les sources de l'utilisateur
-  initiallyLinkedSourceIds: Set<string>; // IDs des sources déjà liées à ce chapitre
+  allUserSources: Source[]; 
+  initiallyLinkedSourceIds: Set<string>;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onAssociationsUpdated?: () => void;
+  onSuccess?: () => void;
 }
 
 const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
@@ -32,16 +32,17 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
   initiallyLinkedSourceIds,
   isOpen,
   onOpenChange,
-  onAssociationsUpdated,
+  onSuccess,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set(initiallyLinkedSourceIds));
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mettre à jour les IDs sélectionnés si les IDs initialement liés changent (quand la modale se ré-ouvre pour le même chapitre)
   useEffect(() => {
-    setSelectedSourceIds(new Set(initiallyLinkedSourceIds));
+    if (isOpen) { // Reset selected IDs when modal opens
+      setSelectedSourceIds(new Set(initiallyLinkedSourceIds));
+    }
   }, [initiallyLinkedSourceIds, isOpen]);
 
   const handleToggleSource = (sourceId: string) => {
@@ -84,9 +85,8 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
       }
 
       toast({ title: "Associations Mises à Jour", description: "Les sources liées à ce chapitre ont été mises à jour." });
-      onOpenChange(false); // Ferme la modale
-      if (onAssociationsUpdated) onAssociationsUpdated();
-      router.refresh();
+      if(onSuccess) onSuccess();
+      onOpenChange(false);
     } catch (e: any) {
       console.error("Erreur gestion associations sources-chapitre:", e);
       toast({ title: "Erreur", description: e.message, variant: "destructive" });

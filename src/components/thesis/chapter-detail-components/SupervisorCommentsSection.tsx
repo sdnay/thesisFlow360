@@ -10,23 +10,22 @@ import { Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 interface SupervisorCommentsSectionProps {
   chapterId: string;
   userId: string;
   initialComments: string[];
-  onCommentsUpdated?: () => void;
+  // onCommentsUpdated?: () => void; // We'll use router.refresh()
 }
 
 const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
   chapterId,
   userId,
   initialComments,
-  onCommentsUpdated,
 }) => {
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useRouter(); // Initialize router
   const [comments, setComments] = useState<string[]>(initialComments);
   const [newCommentText, setNewCommentText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -53,11 +52,10 @@ const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
 
       if (error) throw error;
 
-      setComments(updatedComments);
+      // No local state update needed for comments, router.refresh() will handle it
       setNewCommentText('');
       toast({ title: "Commentaire Ajouté" });
-      if (onCommentsUpdated) onCommentsUpdated();
-      router.refresh();
+      router.refresh(); // Refresh server component data
     } catch (e: any) {
       console.error("Erreur sauvegarde commentaire:", e);
       toast({ title: "Erreur Sauvegarde Commentaire", description: e.message, variant: "destructive" });
@@ -79,10 +77,9 @@ const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
       
       if (error) throw error;
       
-      setComments(updatedComments);
+      // No local state update needed
       toast({ title: "Commentaire Supprimé" });
-      if (onCommentsUpdated) onCommentsUpdated();
-      router.refresh();
+      router.refresh(); // Refresh server component data
     } catch (e:any) {
       toast({ title: "Erreur Suppression Commentaire", description: e.message, variant: "destructive" });
     } finally {

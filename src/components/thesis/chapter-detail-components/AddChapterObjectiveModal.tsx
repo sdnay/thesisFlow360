@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Tag } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 
 interface AddChapterObjectiveModalProps {
@@ -22,7 +23,7 @@ interface AddChapterObjectiveModalProps {
   availableTags: Tag[];
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onObjectiveAdded?: () => void;
+  onSuccess?: () => void;
 }
 
 const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
@@ -32,7 +33,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   availableTags,
   isOpen,
   onOpenChange,
-  onObjectiveAdded,
+  onSuccess,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -67,7 +68,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       const objectivePayload = {
         user_id: userId,
         text: objectiveText.trim(),
-        objective_date: objectiveDate, // Utilise la date passée en prop
+        objective_date: objectiveDate,
         completed: false,
         chapter_id: chapterId,
       };
@@ -82,7 +83,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       if (!newObjectiveData) throw new Error("La création de l'objectif a échoué.");
 
       if (selectedTags.length > 0) {
-        const tagLinks = selectedTags.map(tag => ({ daily_objective_id: newObjectiveData.id, tag_id: tag.id }));
+        const tagLinks = selectedTags.map(tag => ({ daily_objective_id: newObjectiveData.id, tag_id: tag.id, user_id: userId }));
         const { error: tagLinkError } = await supabase.from('daily_objective_tags').insert(tagLinks);
         if (tagLinkError) {
             console.error("Erreur liaison tags pour objectif:", tagLinkError);
@@ -92,9 +93,8 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
 
       toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(new Date(objectiveDate+'T00:00:00'), 'd MMM yyyy', {locale: fr})}.` });
       resetForm();
-      onOpenChange(false); // Ferme la modale
-      if (onObjectiveAdded) onObjectiveAdded();
-      router.refresh(); // Rafraîchit les données
+      if (onSuccess) onSuccess();
+      onOpenChange(false); 
     } catch (e: any) {
       console.error("Erreur sauvegarde objectif depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Objectif", description: e.message, variant: "destructive" });
@@ -181,3 +181,4 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
 };
 
 export default AddChapterObjectiveModal;
+
