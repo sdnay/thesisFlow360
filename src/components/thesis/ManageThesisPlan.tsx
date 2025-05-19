@@ -13,18 +13,19 @@ import { PlusCircle, Loader2, ListTree, FolderOpen, AlertTriangle } from 'lucide
 import type { Chapter, Task, Tag } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-
-import ChapterCardItem from './manage-plan-components/ChapterCardItem';
-import LinkedItemsModal from './manage-plan-components/LinkedItemsModal';
-import ManageTagsModal from './manage-plan-components/ManageTagsModal';
 import { Textarea } from '../ui/textarea';
 
-// Fonction de calcul de progression
+import ChapterCardItem from './manage-plan-components/ChapterCardItem';
+// Retiré car la page de détail gère cela directement : import LinkedItemsModal from './manage-plan-components/LinkedItemsModal';
+import ManageTagsModal from './manage-plan-components/ManageTagsModal';
+
+
+// Fonction de calcul de progression (pourrait être dans un fichier utils)
 function calculateChapterProgress(chapterId: string, allTasks: Task[]): number {
   if (!allTasks || allTasks.length === 0) return 0;
   const tasksForChapter = allTasks.filter(task => task.chapter_id === chapterId);
   if (tasksForChapter.length === 0) {
-    return 0;
+    return 0; // Ou une autre valeur par défaut si aucune tâche n'est liée
   }
   const completedTasks = tasksForChapter.filter(task => task.completed).length;
   return Math.round((completedTasks / tasksForChapter.length) * 100);
@@ -35,39 +36,38 @@ export default function ManageThesisPlan() {
   const { user } = useAuth();
   const router = useRouter();
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [allUserTasks, setAllUserTasks] = useState<Task[]>([]);
+  const [allUserTasks, setAllUserTasks] = useState<Task[]>([]); // Pour calculer la progression
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
-  // Retiré car la page de détail gère cela : const [isLinkedItemsModalOpen, setIsLinkedItemsModalOpen] = useState(false);
   const [isManageTagsModalOpen, setIsManageTagsModalOpen] = useState(false);
 
   const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> & { id?: string } | null>(null);
   const [chapterForComment, setChapterForComment] = useState<Chapter | null>(null);
-  // Retiré : const [chapterForLinkedItems, setChapterForLinkedItems] = useState<Chapter | null>(null);
   const [chapterForTags, setChapterForTags] = useState<Chapter | null>(null);
-
-  // Retiré : const [linkedTasks, setLinkedTasks] = useState<Task[]>([]);
 
   const [newCommentText, setNewCommentText] = useState('');
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(true);
   const [isLoadingChapterActionsForId, setIsLoadingChapterActionsForId] = useState<string | null>(null);
-  // Retiré : const [isLoadingLinkedItems, setIsLoadingLinkedItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchPageData = useCallback(async () => {
     if (!user) {
-      setChapters([]); setAllUserTasks([]); setAvailableTags([]);
-      setIsFetchingData(false); return;
+      setChapters([]);
+      setAllUserTasks([]);
+      setAvailableTags([]);
+      setIsFetchingData(false);
+      return;
     }
-    setIsFetchingData(true); setError(null);
+    setIsFetchingData(true);
+    setError(null);
     try {
       const [chaptersRes, tasksRes, tagsRes] = await Promise.all([
         supabase.from('chapters').select('*, chapter_tags(tags(*))').eq('user_id', user.id).order('name', { ascending: true }),
-        supabase.from('tasks').select('*').eq('user_id', user.id), // Récupérer toutes les tâches de l'utilisateur
+        supabase.from('tasks').select('id, chapter_id, completed').eq('user_id', user.id), // Seulement les champs nécessaires pour la progression
         supabase.from('tags').select('*').eq('user_id', user.id).order('name')
       ]);
 
@@ -75,7 +75,11 @@ export default function ManageThesisPlan() {
       if (tasksRes.error) throw tasksRes.error;
       if (tagsRes.error) throw tagsRes.error;
       
-      setChapters((chaptersRes.data || []).map(ch => ({ ...ch, tags: ch.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] })));
+      const fetchedChapters = (chaptersRes.data || []).map(ch => ({ 
+        ...ch, 
+        tags: ch.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] 
+      }));
+      setChapters(fetchedChapters);
       setAllUserTasks(tasksRes.data || []);
       setAvailableTags(tagsRes.data || []);
 
@@ -83,6 +87,7 @@ export default function ManageThesisPlan() {
       const typedError = e as Error;
       const errorMessage = typedError.message || "Erreur de chargement des données.";
       setError(errorMessage);
+      console.error("Erreur fetchPageData (ManageThesisPlan):", typedError);
       toast({ title: "Erreur Chargement", description: errorMessage, variant: "destructive" });
     } finally {
       setIsFetchingData(false);
@@ -97,20 +102,21 @@ export default function ManageThesisPlan() {
     if (!user) return;
     const channels = [
       supabase.channel(`db-manage-thesis-plan-chapters-user-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Realtime chapters change:', payload); fetchPageData(); })
         .subscribe(),
       supabase.channel(`db-manage-thesis-plan-tasks-user-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Realtime tasks change:', payload); fetchPageData(); }) // Pour recalculer la progression
         .subscribe(),
-      supabase.channel(`db-manage-thesis-plan-chapter_tags-user-${user.id}`) // Assuming chapter_tags might not have user_id directly
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapter_tags' }, (payload) => {
-             // More complex: check if related chapter or tag concerns the user
+      supabase.channel(`db-manage-thesis-plan-chapter_tags-user-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapter_tags' }, (payload: any) => {
+             // Need to check if the change affects current user's chapters/tags
+             // This is a bit broad, ideally filter by chapter_id linked to the user
              console.log("Chapter_tags change, refetching page data for thesis plan", payload);
              fetchPageData();
         })
         .subscribe(),
        supabase.channel(`db-manage-thesis-plan-tags-user-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, (payload) => { console.log('Realtime tags change:', payload); fetchPageData(); })
         .subscribe()
     ];
     
@@ -123,12 +129,12 @@ export default function ManageThesisPlan() {
   const openModalForNew = () => { setCurrentChapter({ name: '', progress: 0, status: 'Non commencé', supervisor_comments: [], tags: [] }); setIsEditModalOpen(true); };
   const openModalForEdit = (chapter: Chapter) => { setCurrentChapter(JSON.parse(JSON.stringify(chapter))); setIsEditModalOpen(true); };
   const openCommentManager = (chapter: Chapter) => { setChapterForComment(JSON.parse(JSON.stringify(chapter))); setNewCommentText(''); setIsCommentModalOpen(true); };
-  
   const openManageTagsModal = (chapter: Chapter) => { setChapterForTags(chapter); setIsManageTagsModalOpen(true); };
 
   const handleSaveChapter = async () => {
     if (!currentChapter || !currentChapter.name?.trim() || !user) return;
     setIsFormLoading(true); setError(null);
+    
     const chapterPayload = {
       user_id: user.id,
       name: currentChapter.name.trim(),
@@ -136,35 +142,43 @@ export default function ManageThesisPlan() {
       status: currentChapter.status?.trim() || 'Non commencé',
       supervisor_comments: currentChapter.supervisor_comments || []
     };
-    try {
-      let savedChapter: Chapter | null = null;
-      if (currentChapter.id) {
-        const { data: updatedChapter, error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapter.id).select('*, chapter_tags(tags(*))').single();
-        if (error) throw error;
-        savedChapter = updatedChapter as Chapter;
-      } else {
-        const { data: newChapter, error } = await supabase.from('chapters').insert(chapterPayload).select('*, chapter_tags(tags(*))').single();
-        if (error) throw error;
-        savedChapter = newChapter as Chapter;
-      }
 
-      if (savedChapter) {
-        const processedChapter: Chapter = {
-          ...savedChapter,
-          tags: savedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || []
-        };
-        if (currentChapter.id) {
+    try {
+      if (currentChapter.id) { // Modification
+        const { data: updatedChapter, error } = await supabase
+          .from('chapters')
+          .update(chapterPayload)
+          .eq('id', currentChapter.id)
+          .eq('user_id', user.id) // Sécurité
+          .select('*, chapter_tags(tags(*))') // Récupérer avec les tags
+          .single();
+        if (error) throw error;
+        if (updatedChapter) {
+          const processedChapter: Chapter = { ...updatedChapter, tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
           setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a, b) => a.name.localeCompare(b.name)));
-        } else {
-          setChapters(prev => [...prev, processedChapter].sort((a, b) => a.name.localeCompare(b.name)));
+        }
+      } else { // Ajout
+        const { data: newChapter, error } = await supabase
+          .from('chapters')
+          .insert(chapterPayload)
+          .select('*, chapter_tags(tags(*))') // Récupérer avec les tags (sera vide au début)
+          .single();
+        if (error) throw error;
+        if (newChapter) {
+            const processedChapter: Chapter = { ...newChapter, tags: newChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
+            setChapters(prev => [...prev, processedChapter].sort((a, b) => a.name.localeCompare(b.name)));
         }
       }
       toast({ title: currentChapter.id ? "Chapitre Modifié" : "Chapitre Ajouté" });
       setIsEditModalOpen(false); setCurrentChapter(null);
     } catch (e: any) {
       const typedError = e as Error;
-      setError(typedError.message); toast({ title: "Erreur d'enregistrement", description: typedError.message, variant: "destructive" });
-    } finally { setIsFormLoading(false); }
+      setError(typedError.message); 
+      console.error("Erreur handleSaveChapter:", typedError);
+      toast({ title: "Erreur d'enregistrement", description: typedError.message, variant: "destructive" });
+    } finally {
+      setIsFormLoading(false);
+    }
   };
 
   const handleDeleteChapter = async (chapterId: string) => {
@@ -173,87 +187,100 @@ export default function ManageThesisPlan() {
     try {
       await supabase.from('tasks').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
       await supabase.from('daily_objectives').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
-      await supabase.from('chapter_tags').delete().eq('chapter_id', chapterId);
-      // Aussi délier les sources, notes, pomodoros si nécessaire
-      await supabase.from('chapter_sources').delete().eq('chapter_id', chapterId).eq('user_id', user.id);
+      await supabase.from('chapter_tags').delete().eq('chapter_id', chapterId); // Supabase RLS devrait gérer la sécurité user_id ici via la table chapters
+      await supabase.from('chapter_sources').delete().eq('chapter_id', chapterId); // Supabase RLS
       await supabase.from('brain_dump_entries').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
       await supabase.from('pomodoro_sessions').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
 
-
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId).eq('user_id', user.id);
       if (error) throw error;
-      setChapters(prev => prev.filter(ch => ch.id !== chapterId));
+      setChapters(prev => prev.filter(ch => ch.id !== chapterId)); // Mise à jour manuelle
       toast({ title: "Chapitre Supprimé" });
     } catch (e: any) {
       const typedError = e as Error;
-      setError(typedError.message); toast({ title: "Erreur de Suppression", description: typedError.message, variant: "destructive" });
-    } finally { setIsLoadingChapterActionsForId(null); }
+      setError(typedError.message); 
+      console.error("Erreur handleDeleteChapter:", typedError);
+      toast({ title: "Erreur de Suppression", description: typedError.message, variant: "destructive" });
+    } finally {
+      setIsLoadingChapterActionsForId(null);
+    }
+  };
+  
+  const handleGlobalTagUpdate = (newOrUpdatedTag: Tag) => {
+    setAvailableTags(prev => {
+      const tagExists = prev.some(t => t.id === newOrUpdatedTag.id);
+      if (tagExists) {
+        return prev.map(t => t.id === newOrUpdatedTag.id ? newOrUpdatedTag : t).sort((a,b) => a.name.localeCompare(b.name));
+      }
+      return [...prev, newOrUpdatedTag].sort((a,b) => a.name.localeCompare(b.name));
+    });
   };
 
   const handleSaveChapterTags = async (chapterId: string, tagsToSave: Tag[]) => {
     if (!user) return;
     setIsLoadingChapterActionsForId(chapterId); setError(null);
     try {
-      await supabase.from('chapter_tags').delete().eq('chapter_id', chapterId);
+      // 1. Supprimer les anciennes liaisons pour ce chapitre
+      // La politique RLS sur chapter_tags doit s'assurer que l'utilisateur ne peut supprimer que les liaisons
+      // pour les chapitres qui lui appartiennent.
+      const { error: deleteError } = await supabase.from('chapter_tags').delete().eq('chapter_id', chapterId);
+      if (deleteError) throw deleteError;
+
+      // 2. Insérer les nouvelles liaisons
       if (tagsToSave.length > 0) {
         const newLinks = tagsToSave.map(tag => ({ chapter_id: chapterId, tag_id: tag.id }));
         const { error: linkError } = await supabase.from('chapter_tags').insert(newLinks);
         if (linkError) throw linkError;
       }
       
-      // Rafraîchir les données du chapitre spécifique
-      const { data: updatedChapterData, error: chapterFetchError } = await supabase
-        .from('chapters')
-        .select('*, chapter_tags(tags(*))')
-        .eq('id', chapterId)
-        .single();
-
-      if (chapterFetchError) throw chapterFetchError;
-
-      if (updatedChapterData) {
-         const processedChapter: Chapter = {
-          ...updatedChapterData,
-          tags: updatedChapterData.chapter_tags?.map((ct: any) => ct.tags as Tag) || []
-        };
-        setChapters(prevChapters => prevChapters.map(ch => ch.id === chapterId ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
-      }
+      // 3. Mettre à jour l'état local du chapitre concerné
+      setChapters(prevChapters => 
+        prevChapters.map(ch => 
+          ch.id === chapterId ? { ...ch, tags: tagsToSave } : ch
+        ).sort((a,b) => a.name.localeCompare(b.name))
+      );
       
       toast({ title: "Tags Mis à Jour" });
       setIsManageTagsModalOpen(false); setChapterForTags(null);
-    } catch (e: any)
+    } catch (e: any) { // Accolade ouvrante ici
       const typedError = e as Error;
-      setError(typedError.message); toast({ title: "Erreur Tags", description: typedError.message, variant: "destructive" });
-    } finally { setIsLoadingChapterActionsForId(null); }
+      setError(typedError.message);
+      console.error("Erreur handleSaveChapterTags:", typedError);
+      toast({ title: "Erreur Tags", description: typedError.message, variant: "destructive" });
+    } finally {
+      setIsLoadingChapterActionsForId(null);
+    }
   };
   
-  const handleGlobalTagUpdate = (newTag: Tag) => {
-    setAvailableTags(prev => {
-      const tagExists = prev.some(t => t.id === newTag.id);
-      if (tagExists) {
-        return prev.map(t => t.id === newTag.id ? newTag : t).sort((a,b) => a.name.localeCompare(b.name));
-      }
-      return [...prev, newTag].sort((a,b) => a.name.localeCompare(b.name));
-    });
-  };
-
   const handleSaveComment = async () => {
     if (!chapterForComment || !newCommentText.trim() || !user) return;
     setIsLoadingChapterActionsForId(chapterForComment.id); setError(null);
     try {
       const updatedComments = [...(chapterForComment.supervisor_comments || []), newCommentText.trim()];
-      const { data: updatedChapter, error } = await supabase.from('chapters').update({ supervisor_comments: updatedComments }).eq('id', chapterForComment.id).select('*, chapter_tags(tags(*))').single();
+      const { data: updatedChapter, error } = await supabase
+        .from('chapters')
+        .update({ supervisor_comments: updatedComments })
+        .eq('id', chapterForComment.id)
+        .eq('user_id', user.id) // Sécurité
+        .select('*, chapter_tags(tags(*))')
+        .single();
+
       if (error) throw error;
       
       if (updatedChapter) {
-        const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
+        const processedChapter: Chapter = { ...updatedChapter, tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
         setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
-        setChapterForComment(processedChapter); // Mettre à jour la modale avec le chapitre frais
+        setChapterForComment(processedChapter);
       }
       toast({ title: "Commentaire Ajouté" }); setNewCommentText('');
     } catch (e: any) {
       const typedError = e as Error;
-      setError(typedError.message); toast({ title: "Erreur Commentaire", description: typedError.message, variant: "destructive" });
-    } finally { setIsLoadingChapterActionsForId(null); }
+      setError(typedError.message); 
+      console.error("Erreur handleSaveComment:", typedError);
+      toast({ title: "Erreur Commentaire", description: typedError.message, variant: "destructive" });
+    } finally {
+      setIsLoadingChapterActionsForId(null);
+    }
   };
 
   const handleDeleteComment = async (commentIndex: number) => {
@@ -261,18 +288,29 @@ export default function ManageThesisPlan() {
     setIsLoadingChapterActionsForId(chapterForComment.id); setError(null);
     try {
       const updatedComments = chapterForComment.supervisor_comments.filter((_, index) => index !== commentIndex);
-      const { data: updatedChapter, error } = await supabase.from('chapters').update({ supervisor_comments: updatedComments }).eq('id', chapterForComment.id).select('*, chapter_tags(tags(*))').single();
+      const { data: updatedChapter, error } = await supabase
+        .from('chapters')
+        .update({ supervisor_comments: updatedComments })
+        .eq('id', chapterForComment.id)
+        .eq('user_id', user.id) // Sécurité
+        .select('*, chapter_tags(tags(*))')
+        .single();
+
       if (error) throw error;
       if (updatedChapter) {
-        const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
+        const processedChapter: Chapter = { ...updatedChapter, tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
         setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
-        setChapterForComment(processedChapter); // Mettre à jour la modale
+        setChapterForComment(processedChapter);
       }
       toast({ title: "Commentaire Supprimé" });
     } catch (e: any) {
       const typedError = e as Error;
-      setError(typedError.message); toast({ title: "Erreur Suppression Commentaire", description: typedError.message, variant: "destructive" });
-    } finally { setIsLoadingChapterActionsForId(null); }
+      setError(typedError.message); 
+      console.error("Erreur handleDeleteComment:", typedError);
+      toast({ title: "Erreur Suppression Commentaire", description: typedError.message, variant: "destructive" });
+    } finally {
+      setIsLoadingChapterActionsForId(null);
+    }
   };
 
   if (!user && !isFetchingData) {
@@ -280,6 +318,7 @@ export default function ManageThesisPlan() {
       <div className="p-4 md:p-6 h-full flex flex-col items-center justify-center">
         <AlertTriangle className="h-12 w-12 text-destructive mb-3" />
         <p className="text-muted-foreground text-lg">Veuillez vous connecter pour gérer le plan de votre thèse.</p>
+        <Button asChild className="mt-4"><Link href="/login">Se connecter</Link></Button>
       </div>
     );
   }
@@ -311,7 +350,7 @@ export default function ManageThesisPlan() {
       ) : chapters.length === 0 ? (
         <Card className="flex-grow flex flex-col items-center justify-center text-center p-6 border-dashed bg-muted/20">
           <CardHeader className="items-center"><FolderOpen className="h-16 w-16 text-muted-foreground/50 mb-4" /><CardTitle className="text-xl">Commencez à structurer votre thèse !</CardTitle></CardHeader>
-          <CardContent><p className="text-muted-foreground mb-4 max-w-md mx-auto text-sm">Aucun chapitre défini. Cliquez ci-dessous pour créer votre premier chapitre.</p><Button onClick={openModalForNew} disabled={isFormLoading} size="lg"><PlusCircle className="mr-2 h-5 w-5" /> Créer le premier chapitre</Button></CardContent>
+          <CardContent><p className="text-muted-foreground mb-4 max-w-md mx-auto text-sm">Aucun chapitre défini. Cliquez ci-dessous pour créer votre premier chapitre.</p><Button onClick={openModalForNew} disabled={isFormLoading || !user} size="lg"><PlusCircle className="mr-2 h-5 w-5" /> Créer le premier chapitre</Button></CardContent>
         </Card>
       ) : (
         <div className="flex-grow grid gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 items-start overflow-y-auto custom-scrollbar pr-1 pb-4">
@@ -375,3 +414,6 @@ export default function ManageThesisPlan() {
     </div>
   );
 }
+
+
+    
