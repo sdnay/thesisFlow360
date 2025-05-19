@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { Tag } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns'; // Added parseISO here
 import { fr } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 
@@ -36,7 +36,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   onSuccess,
 }) => {
   const { toast } = useToast();
-  // const router = useRouter(); // Not directly needed if parent handles refresh
+  const router = useRouter();
   const [objectiveText, setObjectiveText] = useState('');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,17 +46,15 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
     setLocalAvailableTags(availableTags);
   }, [availableTags]);
 
-  const resetForm = () => {
-    setObjectiveText('');
-    setSelectedTags([]);
-  };
-  
-  const handleOpenChangeInternal = (open: boolean) => {
-    if (!open) {
-      resetForm();
+  useEffect(() => {
+    if (isOpen) {
+      // Reset form when modal opens, unless you want to preserve state across openings
+      // For now, we reset to ensure a fresh form for a new objective for this chapter/date.
+      setObjectiveText('');
+      setSelectedTags([]);
     }
-    onOpenChange(open);
-  };
+  }, [isOpen]);
+
 
   const handleSaveObjective = async () => {
     if (!userId || !objectiveText.trim()) {
@@ -68,7 +66,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       const objectivePayload = {
         user_id: userId,
         text: objectiveText.trim(),
-        objective_date: objectiveDate,
+        objective_date: objectiveDate, // Use the passed objectiveDate
         completed: false,
         chapter_id: chapterId,
       };
@@ -87,14 +85,15 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
         const { error: tagLinkError } = await supabase.from('daily_objective_tags').insert(tagLinks);
         if (tagLinkError) {
             console.error("Erreur liaison tags pour objectif:", tagLinkError);
-            toast({ title: "Avertissement Tags", description: "L'objectif a été créé mais certains tags n'ont pas pu être liés.", variant: "default" });
+            // Consider not throwing here, but logging and toasting an advisory
+            toast({ title: "Avertissement Tags", description: "L'objectif a été créé mais certains tags n'ont pas pu être liés: " + tagLinkError.message, variant: "default", duration: 5000 });
         }
       }
 
       toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(parseISO(objectiveDate), 'd MMM yyyy', {locale: fr})}.` });
-      resetForm();
+      
       if (onSuccess) onSuccess();
-      // onOpenChange(false); // Parent (ChapterDetailClientView) will close modal
+      onOpenChange(false); // Close modal on success
     } catch (e: any) {
       console.error("Erreur sauvegarde objectif depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Objectif", description: e.message, variant: "destructive" });
@@ -114,14 +113,14 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       } else {
         const { data: newTagFromDb, error: tagError } = await supabase
           .from('tags')
-          .insert({ name: tagOrNewName, user_id: userId })
+          .insert({ name: tagOrNewName, user_id: userId, color: null }) // Assuming default color or handle color later
           .select()
           .single();
         if (tagError || !newTagFromDb) {
           toast({ title: "Erreur Création Tag", description: tagError?.message, variant: "destructive" });
           return;
         }
-        finalTag = newTagFromDb;
+        finalTag = newTagFromDb as Tag; // Cast if necessary, ensure `user_id` is part of the select
         setLocalAvailableTags(prev => [...prev, finalTag!].sort((a, b) => a.name.localeCompare(b.name)));
       }
     } else {
@@ -137,7 +136,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChangeInternal}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter un Objectif à ce Chapitre</DialogTitle>
@@ -169,7 +168,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button variant="outline" onClick={() => handleOpenChangeInternal(false)} disabled={isSaving}>Annuler</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Annuler</Button>
           <Button onClick={handleSaveObjective} disabled={isSaving || !objectiveText.trim()}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Ajouter l'Objectif

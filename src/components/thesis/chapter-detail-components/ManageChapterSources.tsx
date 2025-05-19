@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Source } from '@/types';
 import { SourceTypeIcon, sourceTypeText } from '@/components/thesis/source-library-components/SourceTypeIcon';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
 interface ManageChapterSourcesProps {
   chapterId: string;
