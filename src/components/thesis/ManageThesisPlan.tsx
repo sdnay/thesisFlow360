@@ -10,17 +10,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Loader2, ListTree, FolderOpen, AlertTriangle } from 'lucide-react';
-import type { Chapter, Task, Tag } from '@/types'; // Assurez-vous que Task est importé
+import type { Chapter, Task, Tag } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 import ChapterCardItem from './manage-plan-components/ChapterCardItem';
 import LinkedItemsModal from './manage-plan-components/LinkedItemsModal';
 import ManageTagsModal from './manage-plan-components/ManageTagsModal';
-import { Textarea } from '../ui/textarea'; // Ajouté
+import { Textarea } from '../ui/textarea';
 
 // Fonction de calcul de progression
 function calculateChapterProgress(chapterId: string, allTasks: Task[]): number {
-  const tasksForChapter = allTasks.filter(task => task.chapter_id === chapterId && task.user_id === supabase.auth.getUser()?.then(u => u.data.user?.id).catch(() => null)); // Assurez-vous de filtrer par user_id si applicable
+  if (!allTasks || allTasks.length === 0) return 0;
+  const tasksForChapter = allTasks.filter(task => task.chapter_id === chapterId);
   if (tasksForChapter.length === 0) {
     return 0;
   }
@@ -31,28 +33,28 @@ function calculateChapterProgress(chapterId: string, allTasks: Task[]): number {
 
 export default function ManageThesisPlan() {
   const { user } = useAuth();
+  const router = useRouter();
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [allUserTasks, setAllUserTasks] = useState<Task[]>([]); // Pour calculer la progression
+  const [allUserTasks, setAllUserTasks] = useState<Task[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
-  const [isLinkedItemsModalOpen, setIsLinkedItemsModalOpen] = useState(false);
+  // Retiré car la page de détail gère cela : const [isLinkedItemsModalOpen, setIsLinkedItemsModalOpen] = useState(false);
   const [isManageTagsModalOpen, setIsManageTagsModalOpen] = useState(false);
 
   const [currentChapter, setCurrentChapter] = useState<Partial<Chapter> & { id?: string } | null>(null);
   const [chapterForComment, setChapterForComment] = useState<Chapter | null>(null);
-  const [chapterForLinkedItems, setChapterForLinkedItems] = useState<Chapter | null>(null);
+  // Retiré : const [chapterForLinkedItems, setChapterForLinkedItems] = useState<Chapter | null>(null);
   const [chapterForTags, setChapterForTags] = useState<Chapter | null>(null);
 
-  const [linkedTasks, setLinkedTasks] = useState<Task[]>([]);
-  // const [linkedObjectives, setLinkedObjectives] = useState<DailyObjective[]>([]); // DailyObjective non importé
+  // Retiré : const [linkedTasks, setLinkedTasks] = useState<Task[]>([]);
 
   const [newCommentText, setNewCommentText] = useState('');
   const [isFormLoading, setIsFormLoading] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(true);
   const [isLoadingChapterActionsForId, setIsLoadingChapterActionsForId] = useState<string | null>(null);
-  const [isLoadingLinkedItems, setIsLoadingLinkedItems] = useState(false);
+  // Retiré : const [isLoadingLinkedItems, setIsLoadingLinkedItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -73,12 +75,13 @@ export default function ManageThesisPlan() {
       if (tasksRes.error) throw tasksRes.error;
       if (tagsRes.error) throw tagsRes.error;
       
-      setChapters((chaptersRes.data || []).map(ch => ({ ...ch, tags: ch.chapter_tags?.map((ct: any) => ct.tags) || [] })));
+      setChapters((chaptersRes.data || []).map(ch => ({ ...ch, tags: ch.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] })));
       setAllUserTasks(tasksRes.data || []);
       setAvailableTags(tagsRes.data || []);
 
     } catch (e: any) {
-      const errorMessage = (e as Error).message || "Erreur de chargement des données.";
+      const typedError = e as Error;
+      const errorMessage = typedError.message || "Erreur de chargement des données.";
       setError(errorMessage);
       toast({ title: "Erreur Chargement", description: errorMessage, variant: "destructive" });
     } finally {
@@ -92,14 +95,28 @@ export default function ManageThesisPlan() {
   
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel(`db-manage-thesis-plan-user-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, () => fetchPageData()) // Écouter les tâches aussi
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapter_tags' }, () => fetchPageData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const channels = [
+      supabase.channel(`db-manage-thesis-plan-chapters-user-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .subscribe(),
+      supabase.channel(`db-manage-thesis-plan-tasks-user-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .subscribe(),
+      supabase.channel(`db-manage-thesis-plan-chapter_tags-user-${user.id}`) // Assuming chapter_tags might not have user_id directly
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chapter_tags' }, (payload) => {
+             // More complex: check if related chapter or tag concerns the user
+             console.log("Chapter_tags change, refetching page data for thesis plan", payload);
+             fetchPageData();
+        })
+        .subscribe(),
+       supabase.channel(`db-manage-thesis-plan-tags-user-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tags', filter: `user_id=eq.${user.id}` }, () => fetchPageData())
+        .subscribe()
+    ];
+    
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
   }, [user, fetchPageData]);
 
 
@@ -107,26 +124,6 @@ export default function ManageThesisPlan() {
   const openModalForEdit = (chapter: Chapter) => { setCurrentChapter(JSON.parse(JSON.stringify(chapter))); setIsEditModalOpen(true); };
   const openCommentManager = (chapter: Chapter) => { setChapterForComment(JSON.parse(JSON.stringify(chapter))); setNewCommentText(''); setIsCommentModalOpen(true); };
   
-  const openLinkedItemsManager = async (chapter: Chapter) => {
-    if (!user) return;
-    setChapterForLinkedItems(chapter);
-    setIsLoadingLinkedItems(true);
-    setIsLinkedItemsModalOpen(true);
-    try {
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('chapter_id', chapter.id)
-        .eq('user_id', user.id);
-      if (tasksError) throw tasksError;
-      setLinkedTasks(tasksData || []);
-      // TODO: Fetch linked objectives
-    } catch (e: any) {
-      toast({ title: "Erreur Éléments Liés", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setIsLoadingLinkedItems(false);
-    }
-  };
   const openManageTagsModal = (chapter: Chapter) => { setChapterForTags(chapter); setIsManageTagsModalOpen(true); };
 
   const handleSaveChapter = async () => {
@@ -140,20 +137,33 @@ export default function ManageThesisPlan() {
       supervisor_comments: currentChapter.supervisor_comments || []
     };
     try {
+      let savedChapter: Chapter | null = null;
       if (currentChapter.id) {
         const { data: updatedChapter, error } = await supabase.from('chapters').update(chapterPayload).eq('id', currentChapter.id).select('*, chapter_tags(tags(*))').single();
         if (error) throw error;
-        setChapters(prev => prev.map(ch => ch.id === updatedChapter?.id ? { ...(updatedChapter as Chapter), tags: updatedChapter?.chapter_tags?.map((ct: any) => ct.tags) || [] } : ch).sort((a, b) => a.name.localeCompare(b.name)));
+        savedChapter = updatedChapter as Chapter;
       } else {
         const { data: newChapter, error } = await supabase.from('chapters').insert(chapterPayload).select('*, chapter_tags(tags(*))').single();
         if (error) throw error;
-        setChapters(prev => [...prev, { ...(newChapter as Chapter), tags: newChapter?.chapter_tags?.map((ct: any) => ct.tags) || [] }].sort((a, b) => a.name.localeCompare(b.name)));
+        savedChapter = newChapter as Chapter;
+      }
+
+      if (savedChapter) {
+        const processedChapter: Chapter = {
+          ...savedChapter,
+          tags: savedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || []
+        };
+        if (currentChapter.id) {
+          setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a, b) => a.name.localeCompare(b.name)));
+        } else {
+          setChapters(prev => [...prev, processedChapter].sort((a, b) => a.name.localeCompare(b.name)));
+        }
       }
       toast({ title: currentChapter.id ? "Chapitre Modifié" : "Chapitre Ajouté" });
       setIsEditModalOpen(false); setCurrentChapter(null);
     } catch (e: any) {
-      const errorMessage = (e as Error).message;
-      setError(errorMessage); toast({ title: "Erreur d'enregistrement", description: errorMessage, variant: "destructive" });
+      const typedError = e as Error;
+      setError(typedError.message); toast({ title: "Erreur d'enregistrement", description: typedError.message, variant: "destructive" });
     } finally { setIsFormLoading(false); }
   };
 
@@ -162,15 +172,21 @@ export default function ManageThesisPlan() {
     setIsLoadingChapterActionsForId(chapterId); setError(null);
     try {
       await supabase.from('tasks').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
-      // await supabase.from('daily_objectives').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id); // DailyObjective non importé
+      await supabase.from('daily_objectives').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
       await supabase.from('chapter_tags').delete().eq('chapter_id', chapterId);
+      // Aussi délier les sources, notes, pomodoros si nécessaire
+      await supabase.from('chapter_sources').delete().eq('chapter_id', chapterId).eq('user_id', user.id);
+      await supabase.from('brain_dump_entries').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
+      await supabase.from('pomodoro_sessions').update({ chapter_id: null }).eq('chapter_id', chapterId).eq('user_id', user.id);
+
+
       const { error } = await supabase.from('chapters').delete().eq('id', chapterId).eq('user_id', user.id);
       if (error) throw error;
       setChapters(prev => prev.filter(ch => ch.id !== chapterId));
       toast({ title: "Chapitre Supprimé" });
     } catch (e: any) {
-      const errorMessage = (e as Error).message;
-      setError(errorMessage); toast({ title: "Erreur de Suppression", description: errorMessage, variant: "destructive" });
+      const typedError = e as Error;
+      setError(typedError.message); toast({ title: "Erreur de Suppression", description: typedError.message, variant: "destructive" });
     } finally { setIsLoadingChapterActionsForId(null); }
   };
 
@@ -184,17 +200,40 @@ export default function ManageThesisPlan() {
         const { error: linkError } = await supabase.from('chapter_tags').insert(newLinks);
         if (linkError) throw linkError;
       }
-      setChapters(prevChapters => prevChapters.map(ch => ch.id === chapterId ? { ...ch, tags: tagsToSave } : ch).sort((a,b) => a.name.localeCompare(b.name)));
+      
+      // Rafraîchir les données du chapitre spécifique
+      const { data: updatedChapterData, error: chapterFetchError } = await supabase
+        .from('chapters')
+        .select('*, chapter_tags(tags(*))')
+        .eq('id', chapterId)
+        .single();
+
+      if (chapterFetchError) throw chapterFetchError;
+
+      if (updatedChapterData) {
+         const processedChapter: Chapter = {
+          ...updatedChapterData,
+          tags: updatedChapterData.chapter_tags?.map((ct: any) => ct.tags as Tag) || []
+        };
+        setChapters(prevChapters => prevChapters.map(ch => ch.id === chapterId ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
+      }
+      
       toast({ title: "Tags Mis à Jour" });
       setIsManageTagsModalOpen(false); setChapterForTags(null);
-    } catch (e: any) {
-      const errorMessage = (e as Error).message;
-      setError(errorMessage); toast({ title: "Erreur Tags", description: errorMessage, variant: "destructive" });
+    } catch (e: any)
+      const typedError = e as Error;
+      setError(typedError.message); toast({ title: "Erreur Tags", description: typedError.message, variant: "destructive" });
     } finally { setIsLoadingChapterActionsForId(null); }
   };
   
   const handleGlobalTagUpdate = (newTag: Tag) => {
-    setAvailableTags(prev => [...prev.filter(t => t.id !== newTag.id), newTag].sort((a,b) => a.name.localeCompare(b.name)));
+    setAvailableTags(prev => {
+      const tagExists = prev.some(t => t.id === newTag.id);
+      if (tagExists) {
+        return prev.map(t => t.id === newTag.id ? newTag : t).sort((a,b) => a.name.localeCompare(b.name));
+      }
+      return [...prev, newTag].sort((a,b) => a.name.localeCompare(b.name));
+    });
   };
 
   const handleSaveComment = async () => {
@@ -204,13 +243,16 @@ export default function ManageThesisPlan() {
       const updatedComments = [...(chapterForComment.supervisor_comments || []), newCommentText.trim()];
       const { data: updatedChapter, error } = await supabase.from('chapters').update({ supervisor_comments: updatedComments }).eq('id', chapterForComment.id).select('*, chapter_tags(tags(*))').single();
       if (error) throw error;
-      const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter?.chapter_tags?.map((ct: any) => ct.tags) || [] };
-      setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
-      setChapterForComment(processedChapter);
+      
+      if (updatedChapter) {
+        const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
+        setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
+        setChapterForComment(processedChapter); // Mettre à jour la modale avec le chapitre frais
+      }
       toast({ title: "Commentaire Ajouté" }); setNewCommentText('');
     } catch (e: any) {
-      const errorMessage = (e as Error).message;
-      setError(errorMessage); toast({ title: "Erreur Commentaire", description: errorMessage, variant: "destructive" });
+      const typedError = e as Error;
+      setError(typedError.message); toast({ title: "Erreur Commentaire", description: typedError.message, variant: "destructive" });
     } finally { setIsLoadingChapterActionsForId(null); }
   };
 
@@ -221,13 +263,15 @@ export default function ManageThesisPlan() {
       const updatedComments = chapterForComment.supervisor_comments.filter((_, index) => index !== commentIndex);
       const { data: updatedChapter, error } = await supabase.from('chapters').update({ supervisor_comments: updatedComments }).eq('id', chapterForComment.id).select('*, chapter_tags(tags(*))').single();
       if (error) throw error;
-      const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter?.chapter_tags?.map((ct: any) => ct.tags) || [] };
-      setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
-      setChapterForComment(processedChapter);
+      if (updatedChapter) {
+        const processedChapter = { ...(updatedChapter as Chapter), tags: updatedChapter.chapter_tags?.map((ct: any) => ct.tags as Tag) || [] };
+        setChapters(prev => prev.map(ch => ch.id === processedChapter.id ? processedChapter : ch).sort((a,b) => a.name.localeCompare(b.name)));
+        setChapterForComment(processedChapter); // Mettre à jour la modale
+      }
       toast({ title: "Commentaire Supprimé" });
     } catch (e: any) {
-      const errorMessage = (e as Error).message;
-      setError(errorMessage); toast({ title: "Erreur Suppression Commentaire", description: errorMessage, variant: "destructive" });
+      const typedError = e as Error;
+      setError(typedError.message); toast({ title: "Erreur Suppression Commentaire", description: typedError.message, variant: "destructive" });
     } finally { setIsLoadingChapterActionsForId(null); }
   };
 
@@ -279,7 +323,6 @@ export default function ManageThesisPlan() {
               onDeleteRequest={handleDeleteChapter}
               onCommentManagerRequest={openCommentManager}
               isLoadingActionsForId={isLoadingChapterActionsForId}
-              onViewLinkedItemsRequest={openLinkedItemsManager}
               onManageTagsRequest={openManageTagsModal}
             />
           ))}
@@ -291,7 +334,11 @@ export default function ManageThesisPlan() {
           <div className="space-y-4 py-4">
             <div><Label htmlFor="chapterNameModal" className="mb-1.5 block text-sm">Nom</Label><Input id="chapterNameModal" value={currentChapter?.name || ''} onChange={(e) => setCurrentChapter(prev => prev ? ({ ...prev, name: e.target.value }) : null)} disabled={isFormLoading} className="text-sm" /></div>
             <div><Label htmlFor="chapterStatusModal" className="mb-1.5 block text-sm">Statut</Label><Input id="chapterStatusModal" value={currentChapter?.status || ''} onChange={(e) => setCurrentChapter(prev => prev ? ({ ...prev, status: e.target.value }) : null)} disabled={isFormLoading} className="text-sm" /></div>
-            {/* La progression est calculée, donc on ne la modifie plus manuellement ici */}
+            <div>
+              <Label htmlFor="chapterProgressModal" className="mb-1.5 block text-sm">Progression Manuelle (%)</Label>
+              <Input id="chapterProgressModal" type="number" min="0" max="100" value={currentChapter?.progress === undefined ? '' : currentChapter.progress} onChange={(e) => setCurrentChapter(prev => prev ? ({ ...prev, progress: e.target.value === '' ? undefined : parseInt(e.target.value, 10) || 0 }) : null)} disabled={isFormLoading} className="text-sm" />
+              <p className="text-xs text-muted-foreground mt-1">La progression peut aussi être calculée automatiquement en fonction des tâches liées. Ce champ permet un ajustement manuel.</p>
+            </div>
           </div>
           <DialogFooter className="mt-2"><Button variant="outline" onClick={() => { if (!isFormLoading) { setIsEditModalOpen(false); setCurrentChapter(null); } }} disabled={isFormLoading}>Annuler</Button><Button onClick={handleSaveChapter} disabled={isFormLoading || !currentChapter?.name?.trim()}><Loader2 className={isFormLoading ? "mr-2 h-4 w-4 animate-spin" : "hidden"} />{currentChapter?.id ? 'Mettre à Jour' : 'Ajouter'}</Button></DialogFooter>
         </DialogContent>
@@ -315,9 +362,16 @@ export default function ManageThesisPlan() {
           <DialogFooter className="mt-2"><DialogClose asChild><Button variant="outline" disabled={isLoadingChapterActionsForId === chapterForComment?.id}>Fermer</Button></DialogClose><Button onClick={handleSaveComment} disabled={isLoadingChapterActionsForId === chapterForComment?.id || !newCommentText.trim()}><Loader2 className={isLoadingChapterActionsForId === chapterForComment?.id ? "mr-2 h-4 w-4 animate-spin" : "hidden"} />Enregistrer</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <LinkedItemsModal isOpen={isLinkedItemsModalOpen} onOpenChange={(open) => { setIsLinkedItemsModalOpen(open); if (!open) setChapterForLinkedItems(null); }} chapter={chapterForLinkedItems} tasks={linkedTasks} objectives={[] /* TODO: Passer les objectifs liés */} isLoadingLinkedItems={isLoadingLinkedItems}/>
-      <ManageTagsModal isOpen={isManageTagsModalOpen} onOpenChange={(open) => { setIsManageTagsModalOpen(open); if (!open) setChapterForTags(null); }} chapter={chapterForTags} availableTags={availableTags.filter(t => t.user_id === user?.id)} onGlobalTagsUpdate={handleGlobalTagUpdate} onSaveTags={handleSaveChapterTags} isLoading={isLoadingChapterActionsForId === chapterForTags?.id}/>
+      
+      <ManageTagsModal 
+        isOpen={isManageTagsModalOpen} 
+        onOpenChange={(open) => { if (isLoadingChapterActionsForId !== chapterForTags?.id) { setIsManageTagsModalOpen(open); if (!open) setChapterForTags(null); }}}
+        chapter={chapterForTags} 
+        availableTags={availableTags.filter(t => t.user_id === user?.id)} 
+        onGlobalTagsUpdate={handleGlobalTagUpdate} 
+        onSaveTags={handleSaveChapterTags} 
+        isLoading={isLoadingChapterActionsForId === chapterForTags?.id}
+      />
     </div>
   );
 }
