@@ -4,7 +4,7 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'; // Removed DialogTrigger and DialogClose as they are managed by wrapper
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, PlusCircle } from 'lucide-react';
@@ -33,7 +33,7 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
   onSuccess,
 }) => {
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useRouter(); // Keep for potential direct refresh if needed, though parent handles it
   const [taskText, setTaskText] = useState('');
   const [taskType, setTaskType] = useState<TaskType>('secondary');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -82,7 +82,7 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
       if (!newTaskData) throw new Error("La création de la tâche a échoué.");
 
       if (selectedTags.length > 0) {
-        const tagLinks = selectedTags.map(tag => ({ task_id: newTaskData.id, tag_id: tag.id, user_id: userId })); // ensure user_id for RLS on junction
+        const tagLinks = selectedTags.map(tag => ({ task_id: newTaskData.id, tag_id: tag.id, user_id: userId }));
         const { error: tagLinkError } = await supabase.from('task_tags').insert(tagLinks);
         if (tagLinkError) {
           console.error("Erreur liaison tags pour tâche:", tagLinkError);
@@ -92,8 +92,8 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
 
       toast({ title: "Tâche ajoutée", description: `"${taskText.trim()}" ajoutée au chapitre.` });
       resetForm();
-      if (onSuccess) onSuccess(); // Call the success callback which should trigger router.refresh()
-      onOpenChange(false); 
+      if (onSuccess) onSuccess();
+      // onOpenChange(false); // Parent (ChapterDetailClientView) will close modal via its state
     } catch (e: any) {
       console.error("Erreur sauvegarde tâche depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Tâche", description: e.message, variant: "destructive" });
@@ -190,4 +190,3 @@ const AddChapterTaskModal: FC<AddChapterTaskModalProps> = ({
 };
 
 export default AddChapterTaskModal;
-

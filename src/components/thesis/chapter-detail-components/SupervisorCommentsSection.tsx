@@ -10,13 +10,13 @@ import { Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 
 interface SupervisorCommentsSectionProps {
   chapterId: string;
   userId: string;
   initialComments: string[];
-  // onCommentsUpdated?: () => void; // We'll use router.refresh()
+  // No need for onSuccess here if we use router.refresh() directly
 }
 
 const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
@@ -25,7 +25,7 @@ const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
   initialComments,
 }) => {
   const { toast } = useToast();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
   const [comments, setComments] = useState<string[]>(initialComments);
   const [newCommentText, setNewCommentText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -52,10 +52,9 @@ const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
 
       if (error) throw error;
 
-      // No local state update needed for comments, router.refresh() will handle it
       setNewCommentText('');
       toast({ title: "Commentaire Ajouté" });
-      router.refresh(); // Refresh server component data
+      router.refresh(); 
     } catch (e: any) {
       console.error("Erreur sauvegarde commentaire:", e);
       toast({ title: "Erreur Sauvegarde Commentaire", description: e.message, variant: "destructive" });
@@ -77,9 +76,8 @@ const SupervisorCommentsSection: FC<SupervisorCommentsSectionProps> = ({
       
       if (error) throw error;
       
-      // No local state update needed
       toast({ title: "Commentaire Supprimé" });
-      router.refresh(); // Refresh server component data
+      router.refresh(); 
     } catch (e:any) {
       toast({ title: "Erreur Suppression Commentaire", description: e.message, variant: "destructive" });
     } finally {

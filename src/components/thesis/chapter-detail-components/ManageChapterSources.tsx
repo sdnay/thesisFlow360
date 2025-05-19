@@ -35,12 +35,12 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
   onSuccess,
 }) => {
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Not directly needed if parent handles refresh
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set(initiallyLinkedSourceIds));
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (isOpen) { // Reset selected IDs when modal opens
+    if (isOpen) {
       setSelectedSourceIds(new Set(initiallyLinkedSourceIds));
     }
   }, [initiallyLinkedSourceIds, isOpen]);
@@ -69,7 +69,7 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
           .from('chapter_sources')
           .delete()
           .eq('chapter_id', chapterId)
-          .eq('user_id', userId)
+          .eq('user_id', userId) // Important for RLS on junction table
           .in('source_id', sourcesToUnlink);
         if (deleteError) throw new Error(`Erreur lors de la dissociation des sources: ${deleteError.message}`);
       }
@@ -78,7 +78,7 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
         const newLinks = sourcesToLink.map(sourceId => ({
           chapter_id: chapterId,
           source_id: sourceId,
-          user_id: userId,
+          user_id: userId, // Important for RLS on junction table
         }));
         const { error: insertError } = await supabase.from('chapter_sources').insert(newLinks);
         if (insertError) throw new Error(`Erreur lors de l'association des nouvelles sources: ${insertError.message}`);
@@ -86,7 +86,7 @@ const ManageChapterSources: FC<ManageChapterSourcesProps> = ({
 
       toast({ title: "Associations Mises à Jour", description: "Les sources liées à ce chapitre ont été mises à jour." });
       if(onSuccess) onSuccess();
-      onOpenChange(false);
+      // onOpenChange(false); // Parent (ChapterDetailClientView) will close modal
     } catch (e: any) {
       console.error("Erreur gestion associations sources-chapitre:", e);
       toast({ title: "Erreur", description: e.message, variant: "destructive" });

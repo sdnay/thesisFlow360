@@ -36,7 +36,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
   onSuccess,
 }) => {
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Not directly needed if parent handles refresh
   const [objectiveText, setObjectiveText] = useState('');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,7 +50,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
     setObjectiveText('');
     setSelectedTags([]);
   };
-
+  
   const handleOpenChangeInternal = (open: boolean) => {
     if (!open) {
       resetForm();
@@ -91,10 +91,10 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
         }
       }
 
-      toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(new Date(objectiveDate+'T00:00:00'), 'd MMM yyyy', {locale: fr})}.` });
+      toast({ title: "Objectif ajouté", description: `"${objectiveText.trim()}" ajouté pour le ${format(parseISO(objectiveDate), 'd MMM yyyy', {locale: fr})}.` });
       resetForm();
       if (onSuccess) onSuccess();
-      onOpenChange(false); 
+      // onOpenChange(false); // Parent (ChapterDetailClientView) will close modal
     } catch (e: any) {
       console.error("Erreur sauvegarde objectif depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Objectif", description: e.message, variant: "destructive" });
@@ -141,7 +141,7 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-lg">Ajouter un Objectif à ce Chapitre</DialogTitle>
-          <p className="text-sm text-muted-foreground">Pour le {format(new Date(objectiveDate+'T00:00:00'), 'eeee d MMMM yyyy', {locale: fr})}</p>
+          <p className="text-sm text-muted-foreground">Pour le {format(parseISO(objectiveDate), 'eeee d MMMM yyyy', {locale: fr})}</p>
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div>
@@ -181,4 +181,3 @@ const AddChapterObjectiveModal: FC<AddChapterObjectiveModalProps> = ({
 };
 
 export default AddChapterObjectiveModal;
-

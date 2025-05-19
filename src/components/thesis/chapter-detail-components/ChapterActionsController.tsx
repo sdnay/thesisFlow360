@@ -20,7 +20,7 @@ interface ChapterActionsControllerProps {
   userId: string;
   availableTags: Tag[];
   trigger?: ReactNode;
-  // onChapterUpdated?: () => void; // Replaced by router.refresh()
+  // onSuccessCallback will be handled by router.refresh() internally
 }
 
 const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
@@ -37,25 +37,19 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
   const [editableChapterName, setEditableChapterName] = useState(chapter.name);
   const [editableChapterStatus, setEditableChapterStatus] = useState(chapter.status);
   
-  const [selectedTags, setSelectedTags] = useState<Tag[]>(chapter.tags || []);
+  const [selectedTagsForChapter, setSelectedTagsForChapter] = useState<Tag[]>(chapter.tags || []);
   const [localAvailableTags, setLocalAvailableTags] = useState<Tag[]>(initialAvailableTags);
   
   const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [isSavingTags, setIsSavingTags] = useState(false);
 
   useEffect(() => {
-    if (isEditModalOpen) {
+    if (chapter) {
         setEditableChapterName(chapter.name);
         setEditableChapterStatus(chapter.status);
+        setSelectedTagsForChapter(chapter.tags || []);
     }
-  }, [chapter, isEditModalOpen]);
-
-  useEffect(() => {
-    if (isTagsModalOpen) {
-        setSelectedTags(chapter.tags || []);
-    }
-  }, [chapter, isTagsModalOpen]);
-
+  }, [chapter]);
 
   useEffect(() => {
     setLocalAvailableTags(initialAvailableTags);
@@ -81,7 +75,7 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       if (error) throw error;
       toast({ title: "Chapitre Mis à Jour", description: "Les détails du chapitre ont été sauvegardés." });
       setIsEditModalOpen(false);
-      router.refresh(); // Refresh server component data
+      router.refresh(); 
     } catch (e: any) {
       toast({ title: "Erreur Sauvegarde", description: e.message, variant: "destructive" });
     } finally {
@@ -93,18 +87,16 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
     if (!userId) return;
     setIsSavingTags(true);
     try {
-      // Delete existing links for this chapter (ensure user_id is part of the condition if your RLS on junction table is not enough)
-      // For simplicity, RLS on 'chapter_tags' based on 'chapters.user_id' should be sufficient.
       await supabase.from('chapter_tags').delete().eq('chapter_id', chapter.id); 
       
-      if (selectedTags.length > 0) {
-        const newLinks = selectedTags.map(tag => ({ chapter_id: chapter.id, tag_id: tag.id, user_id: userId })); // Add user_id for junction table RLS
+      if (selectedTagsForChapter.length > 0) {
+        const newLinks = selectedTagsForChapter.map(tag => ({ chapter_id: chapter.id, tag_id: tag.id, user_id: userId }));
         const { error: insertError } = await supabase.from('chapter_tags').insert(newLinks);
         if (insertError) throw insertError;
       }
       toast({ title: "Tags Mis à Jour", description: "Les tags du chapitre ont été sauvegardés." });
       setIsTagsModalOpen(false);
-      router.refresh(); // Refresh server component data
+      router.refresh(); 
     } catch (e: any) {
       toast({ title: "Erreur Tags", description: e.message, variant: "destructive" });
     } finally {
@@ -112,7 +104,7 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
     }
   };
   
-  const handleAddTag = async (tagOrNewName: Tag | string) => {
+  const handleAddTagToChapter = async (tagOrNewName: Tag | string) => {
     if (!userId) return;
     let finalTag: Tag | undefined;
 
@@ -123,7 +115,7 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
       } else {
         const { data: newTagFromDb, error: tagError } = await supabase
           .from('tags')
-          .insert({ name: tagOrNewName, user_id: userId, color: null }) // Ensure user_id is set for new tags
+          .insert({ name: tagOrNewName, user_id: userId, color: null })
           .select()
           .single();
         if (tagError || !newTagFromDb) {
@@ -132,17 +124,18 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
         }
         finalTag = newTagFromDb as Tag;
         setLocalAvailableTags(prev => [...prev, finalTag!].sort((a, b) => a.name.localeCompare(b.name)));
+        // router.refresh(); // Could also refresh available tags list globally if needed, or parent passes it.
       }
     } else {
       finalTag = tagOrNewName;
     }
-    if (finalTag && !selectedTags.find(st => st.id === finalTag!.id)) {
-      setSelectedTags(prev => [...prev, finalTag!]);
+    if (finalTag && !selectedTagsForChapter.find(st => st.id === finalTag!.id)) {
+      setSelectedTagsForChapter(prev => [...prev, finalTag!]);
     }
   };
 
-  const handleRemoveTag = (tagId: string) => {
-    setSelectedTags(prev => prev.filter(t => t.id !== tagId));
+  const handleRemoveTagFromChapter = (tagId: string) => {
+    setSelectedTagsForChapter(prev => prev.filter(t => t.id !== tagId));
   };
 
   return (
@@ -200,9 +193,9 @@ const ChapterActionsController: FC<ChapterActionsControllerProps> = ({
           <div className="py-4 space-y-3">
             <TagManager
               availableTags={localAvailableTags}
-              selectedTags={selectedTags}
-              onTagAdd={handleAddTag}
-              onTagRemove={handleRemoveTag}
+              selectedTags={selectedTagsForChapter}
+              onTagAdd={handleAddTagToChapter}
+              onTagRemove={handleRemoveTagFromChapter}
               disabled={isSavingTags}
               triggerLabel="Gérer les tags du chapitre"
               allowTagCreation={true}

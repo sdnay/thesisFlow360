@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Tag, BrainDumpEntryStatus } from '@/types';
 import TagManager from '@/components/ui/tag-manager';
 import { useRouter } from 'next/navigation';
+import { statusConfigDefinition } from '@/components/thesis/brain-dump-components/brainDumpConstants';
 
 const brainDumpStatuses: BrainDumpEntryStatus[] = ["captured", "idea", "task", "discarded"];
 
@@ -35,7 +36,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
   onSuccess,
 }) => {
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Not directly needed if parent handles refresh
   const [noteText, setNoteText] = useState('');
   const [noteStatus, setNoteStatus] = useState<BrainDumpEntryStatus>('captured');
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -94,7 +95,7 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
       toast({ title: "Note ajoutée", description: "Note ajoutée au vide-cerveau et liée à ce chapitre." });
       resetForm();
       if (onSuccess) onSuccess();
-      onOpenChange(false);
+      // onOpenChange(false); // Parent (ChapterDetailClientView) will close modal
     } catch (e: any) {
       console.error("Erreur sauvegarde note depuis détail chapitre:", e);
       toast({ title: "Erreur Sauvegarde Note", description: e.message, variant: "destructive" });
@@ -162,7 +163,9 @@ const AddChapterBrainDumpNote: FC<AddChapterBrainDumpNoteProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {brainDumpStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="text-sm">{statusConfigDefinition[status as keyof typeof statusConfigDefinition]?.label || status}</SelectItem>
+                  <SelectItem key={status} value={status} className="text-sm">
+                    {statusConfigDefinition[status as keyof typeof statusConfigDefinition]?.label || status}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
