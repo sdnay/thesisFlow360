@@ -12,6 +12,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { supabase } from '@/lib/supabaseClient'; // Utilisé pour les fonctions logiques des outils
+
+// Import des flux et types nécessaires (s'ils sont dans des fichiers séparés)
 import { refinePrompt, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { generateThesisPlan, type GenerateThesisPlanInput, type GenerateThesisPlanOutput } from '@/ai/flows/generate-thesis-plan-flow';
 
@@ -96,12 +98,12 @@ async function addChapterToolLogic(input: z.infer<typeof AddChapterInputSchema>,
     const { data, error } = await supabase
       .from('chapters')
       .insert([{ name: input.name, user_id: userId, progress: 0, status: 'Non commencé', supervisor_comments: [] }])
-      .select('id') // Seulement l'ID est nécessaire ici pour le retour
+      .select('id')
       .single();
     if (error) throw error;
     return { chapterId: data.id, message: `Chapitre "${input.name}" ajouté avec succès.`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addChapterToolLogic:", e);
+    console.error("[ThesisAgent] Erreur addChapterToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout du chapitre: ${e.message}`, success: false };
   }
 }
@@ -116,7 +118,7 @@ async function addBrainDumpEntryToolLogic(input: z.infer<typeof AddBrainDumpEntr
     if (error) throw error;
     return { entryId: data.id, message: `Note ajoutée au vide-cerveau: "${input.text.substring(0,30)}...".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addBrainDumpEntryToolLogic:", e);
+    console.error("[ThesisAgent] Erreur addBrainDumpEntryToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout au vide-cerveau: ${e.message}`, success: false };
   }
 }
@@ -131,7 +133,7 @@ async function addDailyObjectiveToolLogic(input: z.infer<typeof AddDailyObjectiv
     if (error) throw error;
     return { objectiveId: data.id, message: `Objectif du jour ajouté: "${input.text}".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addDailyObjectiveToolLogic:", e);
+    console.error("[ThesisAgent] Erreur addDailyObjectiveToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de l'objectif du jour: ${e.message}`, success: false };
   }
 }
@@ -146,7 +148,7 @@ async function addSourceToolLogic(input: z.infer<typeof AddSourceInputSchema>, u
     if (error) throw error;
     return { sourceId: data.id, message: `Source "${input.title}" ajoutée à la bibliothèque.`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addSourceToolLogic:", e);
+    console.error("[ThesisAgent] Erreur addSourceToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de la source: ${e.message}`, success: false };
   }
 }
@@ -161,14 +163,13 @@ async function addTaskToolLogic(input: z.infer<typeof AddTaskInputSchema>, userI
     if (error) throw error;
     return { taskId: data.id, message: `Tâche ajoutée : "${input.text}".`, success: true };
   } catch (e: any) {
-    console.error("[ThesisAgent] Erreur addTaskToolLogic:", e);
+    console.error("[ThesisAgent] Erreur addTaskToolLogic:", e.message);
     return { message: `Erreur lors de l'ajout de la tâche: ${e.message}`, success: false };
   }
 }
 
 async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInputSchema>, userId: string): Promise<z.infer<typeof RefinePromptToolOutputSchema>> {
     try {
-      // Récupérer l'historique des prompts depuis Supabase pour l'utilisateur
       const { data: logEntries, error: logError } = await supabase
         .from('prompt_log_entries')
         .select('original_prompt, refined_prompt')
@@ -189,24 +190,22 @@ async function refinePromptToolLogic(input: z.infer<typeof RefinePromptToolInput
 
       const result: RefinePromptOutput = await refinePrompt(refineFlowInput);
 
-      // Enregistrer le prompt affiné dans le journal
       const newLogEntryPayload = {
         original_prompt: input.promptToRefine,
         refined_prompt: result.refinedPrompt,
         reasoning: result.reasoning,
         tags: ['affinage_par_agent'],
-        user_id: userId, // Assurer que user_id est inclus
+        user_id: userId,
       };
       const { error: insertError } = await supabase.from('prompt_log_entries').insert(newLogEntryPayload);
       if (insertError) {
           console.error("[ThesisAgent] Erreur lors de l'enregistrement du prompt affiné:", insertError);
-          // Ne pas faire échouer toute l'opération juste pour un log, mais notifier.
           return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné, mais erreur lors de la consignation.", success: true };
       }
 
       return { refinedPrompt: result.refinedPrompt, reasoning: result.reasoning, message: "Prompt affiné et consigné avec succès.", success: true };
     } catch (e: any) {
-      console.error("[ThesisAgent] Erreur refinePromptToolLogic:", e);
+      console.error("[ThesisAgent] Erreur refinePromptToolLogic:", e.message);
       return { refinedPrompt: input.promptToRefine, reasoning: "", message: `Erreur lors de l'affinage du prompt: ${e.message}`, success: false };
     }
 }
@@ -220,14 +219,13 @@ async function createThesisPlanToolLogic(input: z.infer<typeof CreateThesisPlanT
         return { plan: "", message: "La génération du plan n'a pas retourné de contenu.", success: false };
       }
     } catch (e: any) {
-      console.error("[ThesisAgent] Erreur createThesisPlanToolLogic:", e);
+      console.error("[ThesisAgent] Erreur createThesisPlanToolLogic:", e.message);
       return { plan: "", message: `Erreur lors de la génération du plan de thèse: ${e.message}`, success: false };
     }
 }
 
 
 // --- Définitions des Outils pour Genkit (pour la découverte par l'IA) ---
-// Ces schémas d'input NE contiennent PAS user_id.
 const addChapterToolForAI = ai.defineTool(
   { name: 'addChapterTool', description: 'Ajoute un nouveau chapitre. (Input: { name: string }). Le user_id sera automatiquement lié.', inputSchema: AddChapterInputSchema, outputSchema: AddChapterOutputSchema },
   async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux avec userId."); }
@@ -250,7 +248,7 @@ const addTaskToolForAI = ai.defineTool(
 );
 const refinePromptToolForAI = ai.defineTool(
   { name: 'refinePromptTool', description: "Améliore un prompt fourni par l'utilisateur. (Input: { promptToRefine: string }). Cette action enregistre également le prompt original et affiné.", inputSchema: RefinePromptToolInputSchema, outputSchema: RefinePromptToolOutputSchema },
-  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); } // La logique interne prendra userId
+  async (input) => { throw new Error("Cet outil doit être appelé via la logique du flux."); }
 );
 const createThesisPlanToolForAI = ai.defineTool(
   { name: 'createThesisPlanTool', description: 'Génère un plan de thèse ou de mémoire structuré. (Input: { topicOrInstructions: string }).', inputSchema: CreateThesisPlanToolInputSchema, outputSchema: CreateThesisPlanToolOutputSchema },
@@ -263,10 +261,10 @@ const createThesisPlanToolForAI = ai.defineTool(
 // Ce que le CLIENT envoie à la Server Action processUserRequest
 const ProcessUserRequestInputSchema = z.object({
   userRequest: z.string().describe("La requête de l'utilisateur en langage naturel."),
+  // Structure attendue du client : un tableau d'objets avec role et content (string)
   chatHistory: z.array(z.object({
     role: z.enum(['user', 'agent']), // 'agent' pour ThesisBot dans l'historique client
     content: z.string(),
-    // Les actions_taken sont pour l'affichage client, pas pour l'IA.
   })).nullable().optional().describe("L'historique des messages de la session de chat actuelle, formaté par le client."),
 });
 export type ThesisAgentInput = z.infer<typeof ProcessUserRequestInputSchema>;
@@ -277,8 +275,8 @@ const ThesisAgentFlowInputSchema = z.object({
   userId: z.string(),
   userNameForAgent: z.string().optional(),
   chatHistoryForLLM: z.array(z.object({ // Format attendu par Genkit pour l'historique
-      role: z.enum(['user', 'model']), // 'model' pour le rôle de l'IA dans l'historique Genkit
-      parts: z.array(z.object({ text: z.string() }))
+      role: z.enum(['user', 'model']),
+      parts: z.array(z.object({ text: z.string() })) // 'text' est requis ici
   })).optional(),
 });
 
@@ -288,7 +286,7 @@ const ThesisAgentPromptInputSchema = z.object({
   userNameForAgent: z.string().optional().describe("Nom/Identifiant de l'utilisateur pour personnaliser la salutation."),
   history: z.array(z.object({
       role: z.enum(['user', 'model']),
-      parts: z.array(z.object({ text: z.string() }))
+      parts: z.array(z.object({ text: z.string() })) // 'text' est requis ici
   })).optional(),
 });
 
@@ -309,9 +307,9 @@ export type ThesisAgentOutput = z.infer<typeof ThesisAgentOutputSchema>;
 // --- Prompt Principal de l'Agent ---
 const thesisAgentMainPrompt = ai.definePrompt({
   name: 'thesisAgentMainPrompt',
-  input: { schema: ThesisAgentPromptInputSchema }, // Utilise l'input préparé par le flux
+  input: { schema: ThesisAgentPromptInputSchema },
   output: { schema: ThesisAgentOutputSchema },
-  tools: [ // L'IA utilise ces définitions pour savoir quels outils sont disponibles et leur schéma d'input
+  tools: [
     addChapterToolForAI,
     addBrainDumpEntryToolForAI,
     addDailyObjectiveToolForAI,
@@ -348,7 +346,7 @@ L'application permet de gérer :
 
 **Instructions Générales pour Interagir :**
 
-0.  **Personnalisation** : Si le nom de l'utilisateur ({{{userNameForAgent}}}) est fourni, commence ta première réponse par une salutation personnalisée (ex: "Bonjour {{{userNameForAgent}}}, en quoi puis-je vous aider aujourd'hui ?"). Pour les réponses suivantes dans une conversation, une personnalisation n'est pas nécessaire à chaque fois.
+0.  **Personnalisation** : Si le nom de l'utilisateur ({{#if userNameForAgent}}{{{userNameForAgent}}}{{else}}l'utilisateur{{/if}}) est fourni, commence ta première réponse par une salutation personnalisée (ex: "Bonjour {{{userNameForAgent}}}, en quoi puis-je vous aider aujourd'hui ?"). Pour les réponses suivantes dans une conversation, une personnalisation n'est pas nécessaire à chaque fois.
 1.  **Analyse la Requête** : Comprends l'intention principale de l'utilisateur. Cherche des mots-clés relatifs aux fonctionnalités de ThesisFlow360 (chapitre, tâche, idée, source, plan, etc.). Prends en compte l'historique de la conversation (si fourni et pertinent) pour mieux comprendre le contexte.
 2.  **Sélection de l'Outil** : Choisis l'outil le plus approprié pour répondre à la requête.
     * Si la requête est vague (ex: "aide-moi avec mon intro"), demande des clarifications avant de choisir un outil (ex: "Que souhaites-tu faire avec ton introduction ? Créer un chapitre, ajouter une tâche, ou noter une idée ?").
@@ -381,26 +379,28 @@ Requête actuelle de l'utilisateur :
 const thesisAgentFlow = ai.defineFlow(
   {
     name: 'thesisAgentFlow',
-    inputSchema: ThesisAgentFlowInputSchema, // Utilise l'input enrichi par processUserRequest
+    inputSchema: ThesisAgentFlowInputSchema,
     outputSchema: ThesisAgentOutputSchema,
   },
   async (flowInput) => {
     const { userRequest, userId, userNameForAgent, chatHistoryForLLM } = flowInput;
-    console.log(`[ThesisAgentFlow] Début du flux pour userId: ${userId}, nom: ${userNameForAgent}, requête: "${userRequest}"`);
+    console.log(`[ThesisAgentFlow - Flow Start] Received userRequest: "${userRequest}", userId: ${userId}, userNameForAgent: ${userNameForAgent}`);
     if (chatHistoryForLLM && chatHistoryForLLM.length > 0) {
-      console.log(`[ThesisAgentFlow] Historique de chat (format LLM) reçu: ${chatHistoryForLLM.length} messages`);
+      console.log(`[ThesisAgentFlow - Flow Start] Received chatHistoryForLLM:`, JSON.stringify(chatHistoryForLLM, null, 2));
+    } else {
+      console.log(`[ThesisAgentFlow - Flow Start] No chatHistoryForLLM received.`);
     }
 
     // Premier appel au LLM avec la requête utilisateur et l'historique formaté
-    let llmResponse = await thesisAgentMainPrompt({ 
-        userRequest, 
+    let llmResponse = await thesisAgentMainPrompt({
+        userRequest,
         userNameForAgent,
-        history: chatHistoryForLLM // Passe l'historique formaté pour le LLM
+        history: chatHistoryForLLM,
     });
 
     const actionsTakenDetails: NonNullable<ThesisAgentOutput['actionsTaken']> = [];
 
-    // Gérer les demandes d'outils
+    // Gérer les demandes d'outils si présentes
     if (llmResponse.toolRequests && llmResponse.toolRequests.length > 0) {
       console.log(`[ThesisAgentFlow] ${llmResponse.toolRequests.length} demande(s) d'outil(s) reçue(s) du LLM.`);
       const toolExecutionPromises = llmResponse.toolRequests.map(async (toolRequest) => {
@@ -425,7 +425,7 @@ const thesisAgentFlow = ai.defineFlow(
             toolLogicOutput = await addSourceToolLogic(toolRequest.input as z.infer<typeof AddSourceInputSchema>, userId);
             break;
           case 'refinePromptTool':
-            toolLogicOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId); // userId est passé ici
+            toolLogicOutput = await refinePromptToolLogic(toolRequest.input as z.infer<typeof RefinePromptToolInputSchema>, userId);
             break;
           case 'createThesisPlanTool':
             toolLogicOutput = await createThesisPlanToolLogic(toolRequest.input as z.infer<typeof CreateThesisPlanToolInputSchema>);
@@ -437,10 +437,9 @@ const thesisAgentFlow = ai.defineFlow(
 
         actionsTakenDetails.push({
           toolName: toolRequest.toolName,
-          toolInput: toolRequest.input, // Ce que l'IA a demandé
-          toolOutput: toolLogicOutput,  // Le résultat de notre fonction logique
+          toolInput: toolRequest.input,
+          toolOutput: toolLogicOutput,
         });
-        // Fournir la réponse de l'outil à Genkit pour le prochain tour de LLM
         return ai.toolResponse(toolRequest.ref, toolLogicOutput);
       });
 
@@ -451,40 +450,37 @@ const thesisAgentFlow = ai.defineFlow(
       llmResponse = await thesisAgentMainPrompt({
         userRequest, // Peut être utile de le repasser, ou se fier à l'historique
         userNameForAgent,
-        history: [ // Construction de l'historique pour le deuxième appel
+        history: [
           ...(chatHistoryForLLM || []),
-          ai.userMessage(userRequest),      // Requête initiale de l'utilisateur
-          llmResponse.candidates[0].message, // La réponse du LLM qui a demandé les outils
-          ...toolResponses                   // Les réponses des outils exécutés
+          ai.userMessage(userRequest),
+          llmResponse.candidates[0].message,
+          ...toolResponses
         ],
       });
     }
 
-    // Construction de la réponse finale à partir de la sortie du LLM (après exécution des outils si nécessaire)
     let finalResponseMessage = llmResponse.output?.responseMessage;
-
     if (!finalResponseMessage) {
-        // Fallback si le LLM ne fournit pas de responseMessage explicite après les outils
-        if (actionsTakenDetails.length > 0) {
-            const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
-            if (firstSuccessfulAction) {
-                if (firstSuccessfulAction.toolName === 'createThesisPlanTool' && firstSuccessfulAction.toolOutput?.plan) {
-                    finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
-                } else if (firstSuccessfulAction.toolOutput?.message) {
-                    finalResponseMessage = firstSuccessfulAction.toolOutput.message;
-                } else {
-                     finalResponseMessage = `L'action '${firstSuccessfulAction.toolName}' a été effectuée avec succès.`;
-                }
-            } else if (actionsTakenDetails.length > 0) { // Si au moins une action a été tentée mais a échoué
-                finalResponseMessage = actionsTakenDetails[0].toolOutput?.message || "J'ai tenté d'effectuer une action mais j'ai rencontré un problème.";
-            } else {
-                 finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
-            }
-        } else if (llmResponse.text) { // Fallback au texte brut si aucune sortie structurée et aucune action
-            finalResponseMessage = llmResponse.text;
+      if (actionsTakenDetails.length > 0) {
+        const firstSuccessfulAction = actionsTakenDetails.find(a => a.toolOutput?.success);
+        if (firstSuccessfulAction) {
+          if (firstSuccessfulAction.toolName === 'createThesisPlanTool' && firstSuccessfulAction.toolOutput?.plan) {
+            finalResponseMessage = `Voici le plan que j'ai généré pour vous :\n\n${firstSuccessfulAction.toolOutput.plan}`;
+          } else if (firstSuccessfulAction.toolOutput?.message) {
+            finalResponseMessage = firstSuccessfulAction.toolOutput.message;
+          } else {
+            finalResponseMessage = `L'action '${firstSuccessfulAction.toolName}' a été effectuée avec succès.`;
+          }
+        } else if (actionsTakenDetails.length > 0) {
+          finalResponseMessage = actionsTakenDetails[0].toolOutput?.message || "J'ai tenté d'effectuer une action mais j'ai rencontré un problème.";
         } else {
-            finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
+          finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
         }
+      } else if (llmResponse.text) {
+        finalResponseMessage = llmResponse.text;
+      } else {
+        finalResponseMessage = "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?";
+      }
     }
     
     console.log("[ThesisAgentFlow] Réponse finale construite:", finalResponseMessage);
@@ -497,8 +493,9 @@ const thesisAgentFlow = ai.defineFlow(
 
 
 // --- Fonction Principale Exportée (Server Action) ---
-export async function processUserRequest(input: ThesisAgentInput): Promise<ThesisAgentOutput> {
-  console.log(`[ThesisAgent ServerAction] Reçu input du client:`, JSON.stringify(input, null, 2));
+export async function processUserRequest(clientInput: ThesisAgentInput): Promise<ThesisAgentOutput> {
+  'use server';
+  console.log('[ThesisAgentFlow - processUserRequest] Received client input:', JSON.stringify(clientInput, null, 2));
   
   const cookieStore = cookies();
   const supabaseServer = createServerClient(
@@ -520,31 +517,41 @@ export async function processUserRequest(input: ThesisAgentInput): Promise<Thesi
   }
 
   if (!userId) {
-    console.warn("[ThesisAgent ServerAction] Tentative d'action sans utilisateur authentifié.");
+    console.warn("[ThesisAgentFlow - processUserRequest] Tentative d'action sans utilisateur authentifié.");
     return { responseMessage: "Erreur d'authentification : Utilisateur non identifié. Veuillez vous connecter." };
   }
 
-  console.log(`[ThesisAgent ServerAction] Requête de l'utilisateur: "${input.userRequest}" pour userId: ${userId}, nom pour agent: ${userNameForAgent}`);
+  console.log(`[ThesisAgentFlow - processUserRequest] Processing for userId: ${userId}, userNameForAgent: ${userNameForAgent}`);
   
-  // Formatage de l'historique du chat client pour le format attendu par Genkit LLM
-  const chatHistoryForLLM = input.chatHistory?.map(msg => ({
-    role: msg.role === 'agent' ? 'model' : 'user', // 'agent' (de l'UI) devient 'model' pour le LLM
-    parts: [{ text: msg.content }], // Assurer que content est bien une string
-  })) as Array<{role: 'user' | 'model'; parts: {text: string}[]}> | undefined;
-  
-  console.log('[ThesisAgent ServerAction] Historique formaté pour LLM:', JSON.stringify(chatHistoryForLLM, null, 2));
+  // Transform clientInput.chatHistory (from client) to chatHistoryForLLM (Genkit format)
+  const chatHistoryForLLM = clientInput.chatHistory?.map(msg => {
+    // Ensure textContent is always a string, defaulting to an empty string if msg.content is null/undefined/empty
+    const textContent = msg.content || ""; 
+    console.log(`[ThesisAgentFlow - processUserRequest] Mapping client msg to LLM history. Role: ${msg.role}, Original client content: "${msg.content}", Text for LLM part: "${textContent}"`);
+    return {
+      role: msg.role === 'agent' ? 'model' : 'user', // Transform 'agent' (from client UI) to 'model' (for Genkit)
+      parts: [{ text: textContent }], // Ensure 'parts' is an array with an object containing a 'text' property
+    };
+  }).filter( // Defensive filter: ensure entries have the correct structure, especially the text part.
+    entry => 
+      entry.parts && 
+      entry.parts.length > 0 && 
+      typeof entry.parts[0].text === 'string'
+  ) as Array<{role: 'user' | 'model'; parts: {text: string}[]}> | undefined;
+
+  console.log('[ThesisAgentFlow - processUserRequest] chatHistoryForLLM (format LLM) préparé pour le flux:', JSON.stringify(chatHistoryForLLM, null, 2));
 
   try {
     const result = await thesisAgentFlow({ 
-      userRequest: input.userRequest, 
+      userRequest: clientInput.userRequest, 
       userId, 
       userNameForAgent,
       chatHistoryForLLM // Transmettre l'historique formaté au flux
     });
-    console.log("[ThesisAgent ServerAction] Réponse du flux de l'agent:", JSON.stringify(result, null, 2));
+    console.log("[ThesisAgentFlow - processUserRequest] Réponse du flux de l'agent:", JSON.stringify(result, null, 2));
     return result;
   } catch (error: any) {
-    console.error("[ThesisAgent ServerAction] Erreur critique dans le flux de l'agent:", error);
+    console.error("[ThesisAgentFlow - processUserRequest] Erreur critique dans le flux de l'agent:", error);
     // Transmettre l'erreur au client de manière plus structurée
     if (error.name === 'GenkitError' && error.details?.parseErrors) {
         return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message}. Détails de validation: ${JSON.stringify(error.details.parseErrors)}`};
@@ -552,5 +559,3 @@ export async function processUserRequest(input: ThesisAgentInput): Promise<Thesi
     return { responseMessage: `Une erreur majeure est survenue lors du traitement de votre demande: ${error.message || 'Erreur inconnue du serveur'}` };
   }
 }
-
-    
